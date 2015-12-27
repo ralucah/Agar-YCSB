@@ -5,7 +5,7 @@ package com.yahoo.ycsb.db;
  */
 public class Mapper {
 
-    public static int mapKeyToBucket(String key, int bucketsNum) {
+    public static int mapKeyToDatacenter(String key, int bucketsNum) {
         // hashcode is not safe!! collisions will occur
         return Math.abs(key.hashCode()) % bucketsNum;
     }

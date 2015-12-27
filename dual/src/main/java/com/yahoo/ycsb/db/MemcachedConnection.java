@@ -30,6 +30,7 @@ import org.codehaus.jackson.map.ObjectMapper;
 import org.codehaus.jackson.node.ObjectNode;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.StringWriter;
 import java.io.Writer;
 import java.net.InetSocketAddress;
@@ -49,24 +50,18 @@ public class MemcachedConnection extends DB {
 
     public static final String HOSTS_PROPERTY = "memcached.hosts";
     public static final int DEFAULT_PORT = 11211;
-    public static final String SHUTDOWN_TIMEOUT_MILLIS_PROPERTY =
-            "memcached.shutdownTimeoutMillis";
+    public static final String SHUTDOWN_TIMEOUT_MILLIS_PROPERTY = "memcached.shutdownTimeoutMillis";
     public static final String DEFAULT_SHUTDOWN_TIMEOUT_MILLIS = "30000";
-    public static final String OBJECT_EXPIRATION_TIME_PROPERTY =
-            "memcached.objectExpirationTime";
-    public static final String DEFAULT_OBJECT_EXPIRATION_TIME =
-            String.valueOf(Integer.MAX_VALUE);
-    public static final String CHECK_OPERATION_STATUS_PROPERTY =
-            "memcached.checkOperationStatus";
+    public static final String OBJECT_EXPIRATION_TIME_PROPERTY = "memcached.objectExpirationTime";
+    public static final String DEFAULT_OBJECT_EXPIRATION_TIME = String.valueOf(Integer.MAX_VALUE);
+    public static final String CHECK_OPERATION_STATUS_PROPERTY = "memcached.checkOperationStatus";
     public static final String CHECK_OPERATION_STATUS_DEFAULT = "true";
-    public static final String READ_BUFFER_SIZE_PROPERTY =
-            "memcached.readBufferSize";
+    public static final String READ_BUFFER_SIZE_PROPERTY = "memcached.readBufferSize";
     public static final String DEFAULT_READ_BUFFER_SIZE = "3000000";
     public static final String OP_TIMEOUT_PROPERTY = "memcached.opTimeoutMillis";
     public static final String DEFAULT_OP_TIMEOUT = "60000";
     public static final String FAILURE_MODE_PROPERTY = "memcached.failureMode";
-    public static final FailureMode FAILURE_MODE_PROPERTY_DEFAULT =
-            FailureMode.Redistribute;
+    public static final FailureMode FAILURE_MODE_PROPERTY_DEFAULT = FailureMode.Redistribute;
     protected static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String TEMPORARY_FAILURE_MSG = "Temporary failure";
     private static final String CANCELLED_MSG = "cancelled";
@@ -74,11 +69,9 @@ public class MemcachedConnection extends DB {
     private boolean checkOperationStatus;
     private long shutdownTimeoutMillis;
     private int objectExpirationTime;
-    /**
-     * The MemcachedClient implementation that will be used to communicate
-     * with the memcached server.
-     */
+     // The MemcachedClient implementation that will be used to communicate with the memcached server.
     private net.spy.memcached.MemcachedClient client;
+    private String hostsStr;
 
     protected static String createQualifiedKey(String table, String key) {
         return MessageFormat.format("{0}-{1}", table, key);
@@ -126,8 +119,26 @@ public class MemcachedConnection extends DB {
         return client;
     }
 
+    public MemcachedConnection(String hostsStr) {
+        this.hostsStr = hostsStr;
+        try {
+            this.init();
+        } catch (DBException e) {
+            e.printStackTrace();
+        }
+    }
+
     @Override
     public void init() throws DBException {
+        InputStream propFile = MemcachedConnection.class.getClassLoader()
+            .getResourceAsStream("memcached.properties");
+        Properties props = new Properties();
+        try {
+            props.load(propFile);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        this.setProperties(props);
         try {
             client = createMemcachedClient();
             checkOperationStatus = Boolean.parseBoolean(
@@ -167,7 +178,7 @@ public class MemcachedConnection extends DB {
         //
         // TODO(mbrukman): fix this.
         List<InetSocketAddress> addresses = new ArrayList<InetSocketAddress>();
-        String[] hosts = getProperties().getProperty(HOSTS_PROPERTY).split(",");
+        String[] hosts = hostsStr.split(","); //getProperties().getProperty(HOSTS_PROPERTY).split(",");
         for (String address : hosts) {
             int colon = address.indexOf(":");
             int port = DEFAULT_PORT;

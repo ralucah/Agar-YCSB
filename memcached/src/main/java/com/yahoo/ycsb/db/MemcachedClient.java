@@ -24,17 +24,12 @@ import com.yahoo.ycsb.Status;
 import com.yahoo.ycsb.StringByteIterator;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.StringWriter;
 import java.io.Writer;
 import java.net.InetSocketAddress;
 import java.text.MessageFormat;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.Vector;
+import java.util.*;
 
 import net.spy.memcached.ConnectionFactoryBuilder;
 import net.spy.memcached.FailureMode;
@@ -114,7 +109,16 @@ public class MemcachedClient extends DB {
 
   @Override
   public void init() throws DBException {
-    try {
+      InputStream propFile = MemcachedClient.class.getClassLoader()
+          .getResourceAsStream("memcached.properties");
+      Properties props = new Properties();
+      try {
+          props.load(propFile);
+      } catch (IOException e) {
+          e.printStackTrace();
+      }
+      this.setProperties(props);
+      try {
       client = createMemcachedClient();
       checkOperationStatus = Boolean.parseBoolean(
           getProperties().getProperty(CHECK_OPERATION_STATUS_PROPERTY,
@@ -153,6 +157,8 @@ public class MemcachedClient extends DB {
     //
     // TODO(mbrukman): fix this.
     List<InetSocketAddress> addresses = new ArrayList<InetSocketAddress>();
+      Properties props = getProperties();
+      String prop = getProperties().getProperty(HOSTS_PROPERTY);
     String[] hosts = getProperties().getProperty(HOSTS_PROPERTY).split(",");
     for (String address : hosts) {
       int colon = address.indexOf(":");
