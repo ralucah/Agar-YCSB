@@ -1,12 +1,5 @@
 package com.yahoo.ycsb.db;
 
-import com.amazonaws.ClientConfiguration;
-import com.amazonaws.Protocol;
-import com.amazonaws.auth.BasicAWSCredentials;
-import com.amazonaws.regions.Region;
-import com.amazonaws.regions.Regions;
-import com.amazonaws.services.s3.AmazonS3Client;
-import com.amazonaws.services.s3.model.SSECustomerKey;
 import com.yahoo.ycsb.ByteIterator;
 import com.yahoo.ycsb.DB;
 import com.yahoo.ycsb.DBException;
@@ -84,76 +77,135 @@ public class DualClient extends DB {
 
     @Override
     public Status read(String table, String key, Set<String> fields, HashMap<String, ByteIterator> result) {
+        Status status = null;
         int datacenterId = Mapper.mapKeyToDatacenter(key, numDatacenters);
         String bucket = s3Buckets.get(datacenterId);
-        if (mode.equals("s3")) {
-            System.out.println("DualClient.read_s3(" + bucket + ", " + key + ")");
-            return s3Connections.get(datacenterId).read(bucket, key, fields, result);
-        } else if (mode.equals("memcached")) {
-            MemcachedConnection memServer = memcachedConnections.get(datacenterId);
-            System.out.println("DualClient.read_memcached(" + bucket + ", " + key + ")");
-            return memServer.read(bucket,key, fields,result);
+        System.out.println("DualClient.read_" + mode + "(" + bucket + ", " + key + ")");
+
+        switch (mode) {
+            case "s3": {
+                status = s3Connections.get(datacenterId).read(bucket, key, fields, result);
+                break;
+            }
+            case "memcached": {
+                MemcachedConnection memServer = memcachedConnections.get(datacenterId);
+                status = memServer.read(bucket, key, fields, result);
+                break;
+            }
+            case "dual": {
+                MemcachedConnection memServer = memcachedConnections.get(datacenterId);
+                status = memServer.read(bucket, key, fields, result);
+                if (status != Status.OK) {
+                    System.out.println("Cache miss!");
+                    status = s3Connections.get(datacenterId).read(bucket, key, fields, result);
+                }
+                break;
+            }
+            default: {
+                System.err.println("Invalid mode!");
+                break;
+            }
         }
-        return null;
+
+        return status;
     }
 
     @Override
     public Status scan(String table, String startkey, int recordcount, Set<String> fields, Vector<HashMap<String, ByteIterator>> result) {
-        int datacenterId = Mapper.mapKeyToDatacenter(startkey, s3Buckets.size());
-        String bucket = s3Buckets.get(datacenterId);
-        if (mode.equals("s3")) {
-            System.out.println("DualClient.scan_s3(" + bucket + ", " + startkey + ")");
-            return s3Connections.get(datacenterId).scan(bucket, startkey, recordcount, fields, result);
-        } else if (mode.equals("memcached")) {
-            MemcachedConnection memServer = memcachedConnections.get(datacenterId);
-            System.out.println("DualClient.scan_memcached(" + bucket + ", " + startkey + ")");
-            return memServer.scan(bucket, startkey, recordcount, fields, result);
-        }
         return null;
     }
 
     @Override
     public Status update(String table, String key, HashMap<String, ByteIterator> values) {
-        int datacenterId = Mapper.mapKeyToDatacenter(key, s3Buckets.size());
+        Status status = null;
+        int datacenterId = Mapper.mapKeyToDatacenter(key, numDatacenters);
         String bucket = s3Buckets.get(datacenterId);
-        if (mode.equals("s3")) {
-            System.out.println("DualClient.update_s3(" + bucket + ", " + key + ")");
-            return s3Connections.get(datacenterId).update(bucket, key, values);
-        } else if (mode.equals("memcached")) {
-            MemcachedConnection memServer = memcachedConnections.get(datacenterId);
-            System.out.println("DualClient.update_memcached(" + bucket + ", " + key + ")");
-            return memServer.update(bucket, key, values);
+        System.out.println("DualClient.update_" + mode + "(" + bucket + ", " + key + ")");
+
+        switch (mode) {
+            case "s3": {
+                status = s3Connections.get(datacenterId).update(bucket, key, values);
+                break;
+            }
+            case "memcached": {
+                MemcachedConnection memServer = memcachedConnections.get(datacenterId);
+                status = memServer.update(bucket, key, values);
+                break;
+            }
+            case "dual": {
+                MemcachedConnection memServer = memcachedConnections.get(datacenterId);
+                Status statusMem = memServer.update(bucket, key, values);
+                status = s3Connections.get(datacenterId).update(bucket, key, values);
+                break;
+            }
+            default: {
+                System.err.println("Invalid mode!");
+                break;
+            }
         }
-        return null;
+
+        return status;
     }
 
     @Override
     public Status insert(String table, String key, HashMap<String, ByteIterator> values) {
-        int datacenterId = Mapper.mapKeyToDatacenter(key, s3Buckets.size());
+        Status status = null;
+        int datacenterId = Mapper.mapKeyToDatacenter(key, numDatacenters);
         String bucket = s3Buckets.get(datacenterId);
-        if (mode.equals("s3")) {
-            System.out.println("DualClient.insert_s3(" + bucket + ", " + key + ")");
-            return s3Connections.get(datacenterId).insert(s3Buckets.get(datacenterId), key, values);
-        } else if (mode.equals("memcached")) {
-            MemcachedConnection memServer = memcachedConnections.get(datacenterId);
-            System.out.println("DualClient.insert_memcached(" + bucket + ", " + key + ")");
-            return memServer.insert(bucket, key, values);
+        System.out.println("DualClient.insert_" + mode + "(" + bucket + ", " + key + ")");
+
+        switch (mode) {
+            case "s3": {
+                status = s3Connections.get(datacenterId).insert(bucket, key, values);
+                break;
+            }
+            case "memcached": {
+                MemcachedConnection memServer = memcachedConnections.get(datacenterId);
+                status = memServer.insert(bucket, key, values);
+                break;
+            }
+            case "dual": {
+                status = s3Connections.get(datacenterId).insert(bucket, key, values);
+                break;
+            }
+            default: {
+                System.err.println("Invalid mode!");
+                break;
+            }
         }
-        return null;
+
+        return status;
     }
 
     @Override
     public Status delete(String table, String key) {
-        int datacenterId = Mapper.mapKeyToDatacenter(key, s3Buckets.size());
+        Status status = null;
+        int datacenterId = Mapper.mapKeyToDatacenter(key, numDatacenters);
         String bucket = s3Buckets.get(datacenterId);
-        if (mode.equals("s3")) {
-            System.out.println("DualClient.delete_s3(" + bucket + ", " + key + ")");
-            return s3Connections.get(datacenterId).delete(bucket, key);
-        } else if (mode.equals("memcached")) {
-            MemcachedConnection memServer = memcachedConnections.get(datacenterId);
-            System.out.println("DualClient.delete_memcached(" + bucket + ", " + key + ")");
-            return memServer.delete(bucket, key);
+        System.out.println("DualClient.delete_" + mode + "(" + bucket + ", " + key + ")");
+
+        switch (mode) {
+            case "s3": {
+                status = s3Connections.get(datacenterId).delete(bucket, key);
+                break;
+            }
+            case "memcached": {
+                MemcachedConnection memServer = memcachedConnections.get(datacenterId);
+                status = memServer.delete(bucket, key);
+                break;
+            }
+            case "dual": {
+                MemcachedConnection memServer = memcachedConnections.get(datacenterId);
+                Status statusMem = memServer.delete(bucket, key);
+                status = s3Connections.get(datacenterId).delete(bucket, key);
+                break;
+            }
+            default: {
+                System.err.println("Invalid mode!");
+                break;
+            }
         }
-        return null;
+
+        return status;
     }
 }
