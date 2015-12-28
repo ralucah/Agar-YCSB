@@ -12,42 +12,33 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class DualClient extends DB {
     //public static final String MEMCACHED_HOSTS_PROPERTY = "memcached.hosts";
+    public static final String DUAL_PROPERTIES = "dual.properties";
 
     private static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
+
+    private static Mode mode;
+
     private static List<String> s3Buckets;
     private static List<String> s3Regions;
+    private static List<String> s3EndPoints;
+
+    private static int numConnections;
+
     private static List<S3Connection> s3Connections;
     private static List<MemcachedConnection> memcachedConnections;
-    private static String mode;
-    private static int numDatacenters;
 
-    @Override
-    public void init() throws DBException {
-        System.out.println("DualClient.init()");
+    private static Properties props;
 
-        /* S3 */
+    /**
+     * initialize connections to AWS S3
+     */
+    private void initS3() throws DBException {
         s3Connections = new ArrayList<S3Connection>();
 
-        InputStream propFile = DualClient.class.getClassLoader()
-            .getResourceAsStream("dual.properties");
-        Properties props = new Properties();
-        try {
-            props.load(propFile);
-        } catch (IOException e) {
-            System.err.println("IOException");
-            //e.printStackTrace();
-        }
-
-        mode = props.getProperty("mode").toLowerCase();
-        if (!mode.equals("s3") && !mode.equals("memcached") && !mode.equals("dual")) {
-            System.err.println("mode should be: s3/memcached/dual; check dual.properties");
-            System.exit(-1);
-        }
-
-        s3Buckets = Arrays.asList(props.getProperty("s3.buckets").split("\\s*,\\s*"));
         s3Regions = Arrays.asList(props.getProperty("s3.regions").split("\\s*,\\s*"));
-        List<String> s3EndPoints = Arrays.asList(props.getProperty("s3.endPoints").split("\\s*,\\s*"));
+        s3EndPoints = Arrays.asList(props.getProperty("s3.endPoints").split("\\s*,\\s*"));
 
+        // check if settings are valid
         int s3BucketsSize = s3Buckets.size();
         int s3RegionsSize = s3Regions.size();
         int s3EndPointsSize = s3EndPoints.size();
@@ -56,15 +47,22 @@ public class DualClient extends DB {
             System.exit(1);
         }
 
-        numDatacenters = s3Buckets.size();
+        // set number of connections
+        numConnections = s3Buckets.size();
 
+        // establish S3 connections: one per data center
         for (int i = 0; i < s3BucketsSize; i++) {
             S3Connection s3Connection = new S3Connection(s3Regions.get(i), s3EndPoints.get(i));
             s3Connections.add(s3Connection);
         }
+    }
 
-        /* Memcached */
+    /**
+     * initialize connections to Memcached
+     */
+    private void initMemcached() {
         memcachedConnections = new ArrayList<MemcachedConnection>();
+
         List<String> memcachedHosts = Arrays.asList(props.getProperty("memcached.hosts").split("\\s*,\\s*"));
         for (String memcachedHost : memcachedHosts) {
             System.out.println(memcachedHost);
@@ -72,33 +70,86 @@ public class DualClient extends DB {
             memcachedConnections.add(conn);
         }
 
-        System.out.println("Quitting nicely...");
+        numConnections = memcachedConnections.size();
+    }
+
+    /**
+     * initialize dual client
+     *
+     * @throws DBException
+     */
+    @Override
+    public void init() throws DBException {
+        System.out.println("DualClient.init()");
+
+        // get properties
+        InputStream propFile = DualClient.class.getClassLoader().getResourceAsStream(DUAL_PROPERTIES);
+        props = new Properties();
+        try {
+            props.load(propFile);
+        } catch (IOException e) {
+            System.err.println("Could not find" + DUAL_PROPERTIES);
+            System.exit(1);
+        }
+
+        // always use the S3 buckets as table names
+        s3Buckets = Arrays.asList(props.getProperty("s3.buckets").split("\\s*,\\s*"));
+
+        // get mode
+        mode = Mode.valueOf(props.getProperty("mode").toUpperCase());
+        switch (mode) {
+            case S3:
+                initS3();
+                break;
+            case MEMCACHED:
+                initMemcached();
+                break;
+            case DUAL:
+                initS3();
+                initMemcached();
+                break;
+            default:
+                // TODO how to exit properly?
+                System.err.println("Invalid mode in " + DUAL_PROPERTIES + ". Mode should be: s3 / memcached / dual.");
+                System.exit(-1);
+                break;
+        }
     }
 
     @Override
     public Status read(String table, String key, Set<String> fields, HashMap<String, ByteIterator> result) {
         Status status = null;
-        int datacenterId = Mapper.mapKeyToDatacenter(key, numDatacenters);
-        String bucket = s3Buckets.get(datacenterId);
+
+        int connId = Mapper.mapKeyToDatacenter(key, numConnections);
+        String bucket = s3Buckets.get(connId);
+
         System.out.println("DualClient.read_" + mode + "(" + bucket + ", " + key + ")");
 
         switch (mode) {
-            case "s3": {
-                status = s3Connections.get(datacenterId).read(bucket, key, fields, result);
+            case S3: {
+                status = s3Connections.get(connId).read(bucket, key, fields, result);
                 break;
             }
-            case "memcached": {
-                MemcachedConnection memServer = memcachedConnections.get(datacenterId);
-                status = memServer.read(bucket, key, fields, result);
+            case MEMCACHED: {
+                status = memcachedConnections.get(connId).read(bucket, key, fields, result);
                 break;
             }
-            case "dual": {
-                MemcachedConnection memServer = memcachedConnections.get(datacenterId);
-                status = memServer.read(bucket, key, fields, result);
-                if (status != Status.OK) {
+            case DUAL: {
+                // TODO handle this better
+                // try to read from memcached
+                status = memcachedConnections.get(connId).read(bucket, key, fields, result);
+
+                // if cache miss, read from S3
+                if (result.size() == 0) {
                     System.out.println("Cache miss!");
-                    status = s3Connections.get(datacenterId).read(bucket, key, fields, result);
+                    // get from S3
+                    status = s3Connections.get(connId).read(bucket, key, fields, result);
+                    // store in memcached
+                    memcachedConnections.get(connId).insert(bucket, key, result);
+                } else {
+                    System.out.println("Cache hit!");
                 }
+
                 break;
             }
             default: {
@@ -118,24 +169,28 @@ public class DualClient extends DB {
     @Override
     public Status update(String table, String key, HashMap<String, ByteIterator> values) {
         Status status = null;
-        int datacenterId = Mapper.mapKeyToDatacenter(key, numDatacenters);
-        String bucket = s3Buckets.get(datacenterId);
+
+        int connId = Mapper.mapKeyToDatacenter(key, numConnections);
+        String bucket = s3Buckets.get(connId);
+
         System.out.println("DualClient.update_" + mode + "(" + bucket + ", " + key + ")");
 
         switch (mode) {
-            case "s3": {
-                status = s3Connections.get(datacenterId).update(bucket, key, values);
+            case S3: {
+                status = s3Connections.get(connId).update(bucket, key, values);
                 break;
             }
-            case "memcached": {
-                MemcachedConnection memServer = memcachedConnections.get(datacenterId);
-                status = memServer.update(bucket, key, values);
+            case MEMCACHED: {
+                status = memcachedConnections.get(connId).update(bucket, key, values);
                 break;
             }
-            case "dual": {
-                MemcachedConnection memServer = memcachedConnections.get(datacenterId);
-                Status statusMem = memServer.update(bucket, key, values);
-                status = s3Connections.get(datacenterId).update(bucket, key, values);
+            case DUAL: {
+                // TODO handle this in parallel
+                // update in cache or delete from cache?
+                // does the status matter?
+                memcachedConnections.get(connId).update(bucket, key, values);
+                // update in S3
+                status = s3Connections.get(connId).update(bucket, key, values);
                 break;
             }
             default: {
@@ -150,22 +205,24 @@ public class DualClient extends DB {
     @Override
     public Status insert(String table, String key, HashMap<String, ByteIterator> values) {
         Status status = null;
-        int datacenterId = Mapper.mapKeyToDatacenter(key, numDatacenters);
-        String bucket = s3Buckets.get(datacenterId);
+
+        int connId = Mapper.mapKeyToDatacenter(key, numConnections);
+        String bucket = s3Buckets.get(connId);
+
         System.out.println("DualClient.insert_" + mode + "(" + bucket + ", " + key + ")");
 
         switch (mode) {
-            case "s3": {
-                status = s3Connections.get(datacenterId).insert(bucket, key, values);
+            case S3: {
+                status = s3Connections.get(connId).insert(bucket, key, values);
                 break;
             }
-            case "memcached": {
-                MemcachedConnection memServer = memcachedConnections.get(datacenterId);
-                status = memServer.insert(bucket, key, values);
+            case MEMCACHED: {
+                status = memcachedConnections.get(connId).insert(bucket, key, values);
                 break;
             }
-            case "dual": {
-                status = s3Connections.get(datacenterId).insert(bucket, key, values);
+            case DUAL: {
+                // insert in S3
+                status = s3Connections.get(connId).insert(bucket, key, values);
                 break;
             }
             default: {
@@ -180,24 +237,27 @@ public class DualClient extends DB {
     @Override
     public Status delete(String table, String key) {
         Status status = null;
-        int datacenterId = Mapper.mapKeyToDatacenter(key, numDatacenters);
-        String bucket = s3Buckets.get(datacenterId);
+
+        int connId = Mapper.mapKeyToDatacenter(key, numConnections);
+        String bucket = s3Buckets.get(connId);
+
         System.out.println("DualClient.delete_" + mode + "(" + bucket + ", " + key + ")");
 
         switch (mode) {
-            case "s3": {
-                status = s3Connections.get(datacenterId).delete(bucket, key);
+            case S3: {
+                status = s3Connections.get(connId).delete(bucket, key);
                 break;
             }
-            case "memcached": {
-                MemcachedConnection memServer = memcachedConnections.get(datacenterId);
-                status = memServer.delete(bucket, key);
+            case MEMCACHED: {
+                status = memcachedConnections.get(connId).delete(bucket, key);
                 break;
             }
-            case "dual": {
-                MemcachedConnection memServer = memcachedConnections.get(datacenterId);
-                Status statusMem = memServer.delete(bucket, key);
-                status = s3Connections.get(datacenterId).delete(bucket, key);
+            case DUAL: {
+                // TODO handle this better; delete in parallel?
+                // delete from cache; does the status matter?
+                memcachedConnections.get(connId).delete(bucket, key);
+                // delete from S3
+                status = s3Connections.get(connId).delete(bucket, key);
                 break;
             }
             default: {

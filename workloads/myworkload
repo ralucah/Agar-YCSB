@@ -1,11 +1,11 @@
-recordcount=5
-operationcount=5
+recordcount=6
+operationcount=6
 workload=com.yahoo.ycsb.workloads.CoreWorkload
 
 readallfields=true
 
-readproportion=0.5
-updateproportion=0.5
+readproportion=1
+updateproportion=0
 scanproportion=0
 insertproportion=0
 
