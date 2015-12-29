@@ -27,6 +27,8 @@ public class DualClient extends DB {
     private static List<S3Connection> s3Connections;
     private static List<MemcachedConnection> memcachedConnections;
 
+    private static boolean memFlush = false;
+
     private static Properties props;
 
     /**
@@ -62,6 +64,8 @@ public class DualClient extends DB {
      */
     private void initMemcached() {
         memcachedConnections = new ArrayList<MemcachedConnection>();
+
+        memFlush = Boolean.valueOf(props.getProperty("memcached.flush"));
 
         List<String> memcachedHosts = Arrays.asList(props.getProperty("memcached.hosts").split("\\s*,\\s*"));
         for (String memcachedHost : memcachedHosts) {
@@ -113,6 +117,18 @@ public class DualClient extends DB {
                 System.err.println("Invalid mode in " + DUAL_PROPERTIES + ". Mode should be: s3 / memcached / dual.");
                 System.exit(-1);
                 break;
+        }
+    }
+
+    @Override
+    public void cleanup() throws DBException {
+        if (memcachedConnections != null) {
+            for (MemcachedConnection conn : memcachedConnections) {
+                if (memFlush == true) {
+                    conn.flush();
+                }
+                conn.cleanup();
+            }
         }
     }
 
@@ -172,12 +188,17 @@ public class DualClient extends DB {
 
     @Override
     public Status scan(String table, String startkey, int recordcount, Set<String> fields, Vector<HashMap<String, ByteIterator>> result) {
+        System.err.println("scan() not supported yet");
+        System.exit(0);
         return null;
     }
 
     @Override
     public Status update(String table, String key, HashMap<String, ByteIterator> values) {
-        Status status = null;
+        System.err.println("update() not supported yet");
+        System.exit(0);
+        return null;
+        /*Status status = null;
 
         int connId = Mapper.mapKeyToDatacenter(key, numConnections);
         String bucket = s3Buckets.get(connId);
@@ -208,7 +229,7 @@ public class DualClient extends DB {
             }
         }
 
-        return status;
+        return status;*/
     }
 
     @Override
@@ -232,6 +253,7 @@ public class DualClient extends DB {
             case DUAL: {
                 // insert in S3
                 status = s3Connections.get(connId).insert(bucket, key, values);
+                // TODO to cache or not to cache on insert?
                 break;
             }
             default: {
@@ -245,7 +267,11 @@ public class DualClient extends DB {
 
     @Override
     public Status delete(String table, String key) {
-        Status status = null;
+        System.err.println("delete() not supported yet");
+        System.exit(0);
+        return null;
+
+        /*Status status = null;
 
         int connId = Mapper.mapKeyToDatacenter(key, numConnections);
         String bucket = s3Buckets.get(connId);
@@ -262,11 +288,10 @@ public class DualClient extends DB {
                 break;
             }
             case DUAL: {
-                // TODO handle this better; delete in parallel?
-                // delete from cache; does the status matter?
-                memcachedConnections.get(connId).delete(bucket, key);
                 // delete from S3
                 status = s3Connections.get(connId).delete(bucket, key);
+                // TODO delete or invalidate cache?
+                memcachedConnections.get(connId).delete(bucket, key);
                 break;
             }
             default: {
@@ -275,6 +300,6 @@ public class DualClient extends DB {
             }
         }
 
-        return status;
+        return status;*/
     }
 }

@@ -279,4 +279,10 @@ public class MemcachedConnection extends DB {
             memcachedClient().shutdown(shutdownTimeoutMillis, MILLISECONDS);
         }
     }
+
+    public void flush() {
+        if (client != null) {
+            memcachedClient().flush().isDone();
+        }
+    }
 }
