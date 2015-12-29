@@ -73,6 +73,15 @@ public class MemcachedConnection extends DB {
     private net.spy.memcached.MemcachedClient client;
     private String hostsStr;
 
+    public MemcachedConnection(String hostsStr) {
+        this.hostsStr = hostsStr;
+        try {
+            this.init();
+        } catch (DBException e) {
+            e.printStackTrace();
+        }
+    }
+
     protected static String createQualifiedKey(String table, String key) {
         return MessageFormat.format("{0}-{1}", table, key);
     }
@@ -117,15 +126,6 @@ public class MemcachedConnection extends DB {
      */
     protected net.spy.memcached.MemcachedClient memcachedClient() {
         return client;
-    }
-
-    public MemcachedConnection(String hostsStr) {
-        this.hostsStr = hostsStr;
-        try {
-            this.init();
-        } catch (DBException e) {
-            e.printStackTrace();
-        }
     }
 
     @Override
@@ -203,8 +203,9 @@ public class MemcachedConnection extends DB {
             Object document = future.get();
             if (document != null) {
                 fromJson((String) document, fields, result);
+                return Status.OK;
             }
-            return Status.OK;
+            return Status.NOT_FOUND;
         } catch (Exception e) {
             logger.error("Error encountered for key: " + key, e);
             return Status.ERROR;

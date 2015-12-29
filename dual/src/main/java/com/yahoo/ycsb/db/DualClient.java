@@ -121,7 +121,7 @@ public class DualClient extends DB {
         Status status = null;
 
         int connId = Mapper.mapKeyToDatacenter(key, numConnections);
-        String bucket = s3Buckets.get(connId);
+        final String bucket = s3Buckets.get(connId);
 
         System.out.println("DualClient.read_" + mode + "(" + bucket + ", " + key + ")");
 
@@ -135,18 +135,27 @@ public class DualClient extends DB {
                 break;
             }
             case DUAL: {
-                // TODO handle this better
                 // try to read from memcached
-                status = memcachedConnections.get(connId).read(bucket, key, fields, result);
+                final MemcachedConnection memConn = memcachedConnections.get(connId);
+                status = memConn.read(bucket, key, fields, result);
 
                 // if cache miss, read from S3
-                if (result.size() == 0) {
+                if (status == Status.NOT_FOUND) {
                     System.out.println("Cache miss!");
-                    // get from S3
+
+                    // get from s3
                     status = s3Connections.get(connId).read(bucket, key, fields, result);
-                    // store in memcached
-                    memcachedConnections.get(connId).insert(bucket, key, result);
-                } else {
+
+                    //store in memcached in a different thread, in the background
+                    final String keyFinal = key;
+                    final HashMap<String, ByteIterator> resultFinal = new HashMap<String, ByteIterator>(result);
+                    new Thread() {
+                        @Override
+                        public void run() {
+                            memConn.insert(bucket, keyFinal, resultFinal);
+                        }
+                    }.start();
+                } else if (status == Status.OK) {
                     System.out.println("Cache hit!");
                 }
 
