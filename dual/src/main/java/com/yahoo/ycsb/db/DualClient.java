@@ -168,12 +168,12 @@ public class DualClient extends DB {
                     //store in memcached in a different thread, in the background
                     final String keyFinal = key;
                     final HashMap<String, ByteIterator> resultFinal = new HashMap<String, ByteIterator>(result);
-                    /*new Thread() {
+                    new Thread() {
                         @Override
                         public void run() {
-                            memConn.insert(bucket, keyFinal, resultFinal);
+                            memConn.insert(bucket, keyFinal, resultFinal.get(keyFinal).toArray());
                         }
-                    }.start();*/
+                    }.start();
                 } else if (status == Status.OK) {
                     System.out.println("Cache hit!");
                 }
@@ -245,13 +245,12 @@ public class DualClient extends DB {
         byte[] sourceArray = values.get(keyToSearch).toArray();
         int sizeArray = sourceArray.length;
         int totalSize = sizeArray * fieldCount;
-        byte[] destinationArray = new byte[totalSize];
+        byte[] bytes = new byte[totalSize];
         int offset = 0;
         for (int i = 0; i < fieldCount; i++) {
-            System.arraycopy(sourceArray, 0, destinationArray, offset, sizeArray);
+            System.arraycopy(sourceArray, 0, bytes, offset, sizeArray);
             offset += sizeArray;
         }
-        InputStream input =  new ByteArrayInputStream(destinationArray);
 
         int connId = Mapper.mapKeyToDatacenter(key, numConnections);
         String bucket = s3Buckets.get(connId);
@@ -260,16 +259,16 @@ public class DualClient extends DB {
 
         switch (mode) {
             case S3: {
-                status = s3Connections.get(connId).insert(bucket, key, input, totalSize);
+                status = s3Connections.get(connId).insert(bucket, key, bytes);
                 break;
             }
             case MEMCACHED: {
-                status = memcachedConnections.get(connId).insert(bucket, key, input);
+                status = memcachedConnections.get(connId).insert(bucket, key, bytes);
                 break;
             }
             case DUAL: {
                 // insert in S3
-                status = s3Connections.get(connId).insert(bucket, key, input, totalSize);
+                status = s3Connections.get(connId).insert(bucket, key, bytes);
                 // TODO to cache or not to cache on insert?
                 break;
             }

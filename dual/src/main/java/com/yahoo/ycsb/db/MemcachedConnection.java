@@ -197,12 +197,13 @@ public class MemcachedConnection {
     public Status read(
             String table, String key, Set<String> fields,
             HashMap<String, ByteIterator> result) {
-        key = createQualifiedKey(table, key);
+        //key = createQualifiedKey(table, key);
         try {
             GetFuture<Object> future = memcachedClient().asyncGet(key);
-            Object document = future.get();
+            byte[] document = (byte[])future.get();
             if (document != null) {
-                fromJson((String) document, fields, result);
+                result.put(key, new ByteArrayByteIterator(document));
+                //fromJson((String) document, fields, result);
                 return Status.OK;
             }
             return Status.NOT_FOUND;
@@ -232,11 +233,13 @@ public class MemcachedConnection {
     }
 
     public Status insert(
-            String table, String key, InputStream input) { //HashMap<String, ByteIterator> values) {
+            String table, String key, byte[] bytes) { //HashMap<String, ByteIterator> values) {
         //key = createQualifiedKey(table, key);
+        //HashMap<String, ByteIterator> values = new HashMap<String, ByteIterator>();
+        //values.put(key, new ByteArrayByteIterator(bytes));
         try {
             OperationFuture<Boolean> future =
-                    memcachedClient().add(key, objectExpirationTime, IOUtils.toByteArray(input));//toJson(values));
+                    memcachedClient().add(key, objectExpirationTime, bytes); //toJson(values));
             return getReturnCode(future);
         } catch (Exception e) {
             logger.error("Error inserting value", e);

@@ -205,46 +205,52 @@ public class S3Connection {
      * @return OK on success, ERROR otherwise. See the
      *         {@link DB} class's description for a discussion of error codes.
      */
-    public Status insert(String bucket, String key, InputStream input, int totalSize) {
+    public Status insert(String bucket, String key, byte[] bytes) {
                          //HashMap<String, ByteIterator> values) {
         //return writeToStorage(bucket, key, values, true, sse, ssecKey);
 
-        ObjectMetadata metadata = new ObjectMetadata();
-        metadata.setContentLength(totalSize);
-        PutObjectRequest putObjectRequest = null;
-        if (ssecKey != null) {
-            if (ssecKey.equals("true")) {
-                metadata.setSSEAlgorithm(ObjectMetadata.AES_256_SERVER_SIDE_ENCRYPTION);
+        try (InputStream input =  new ByteArrayInputStream(bytes)) {
+            ObjectMetadata metadata = new ObjectMetadata();
+            metadata.setContentLength(bytes.length);
+            PutObjectRequest putObjectRequest = null;
+            if (ssecKey != null) {
+                if (ssecKey.equals("true")) {
+                    metadata.setSSEAlgorithm(ObjectMetadata.AES_256_SERVER_SIDE_ENCRYPTION);
+                    putObjectRequest = new PutObjectRequest(bucket, key,
+                        input, metadata);
+                } else {
+                    putObjectRequest = new PutObjectRequest(bucket, key,
+                        input, metadata).withSSECustomerKey(ssecKey);
+                }
+            } else {
                 putObjectRequest = new PutObjectRequest(bucket, key,
                     input, metadata);
-            } else {
-                putObjectRequest = new PutObjectRequest(bucket, key,
-                    input, metadata).withSSECustomerKey(ssecKey);
             }
-        } else {
-            putObjectRequest = new PutObjectRequest(bucket, key,
-                input, metadata);
-        }
 
-        try {
-            PutObjectResult res =
-                s3Client.putObject(putObjectRequest);
-            if (res.getETag() == null) {
-                return Status.ERROR;
-            } else {
-                if (ssecKey != null) {
-                    if (ssecKey.equals("true")) {
-                        System.out.println("Uploaded object encryption status is " +
-                            res.getSSEAlgorithm());
-                    } else {
-                        System.out.println("Uploaded object encryption status is " +
-                            res.getSSEAlgorithm());
+            try {
+                PutObjectResult res =
+                    s3Client.putObject(putObjectRequest);
+                if (res.getETag() == null) {
+                    return Status.ERROR;
+                } else {
+                    if (ssecKey != null) {
+                        if (ssecKey.equals("true")) {
+                            System.out.println("Uploaded object encryption status is " +
+                                res.getSSEAlgorithm());
+                        } else {
+                            System.out.println("Uploaded object encryption status is " +
+                                res.getSSEAlgorithm());
+                        }
                     }
                 }
+                return Status.OK;
+            } catch (Exception e) {
+                System.err.println("Not possible to write object :" + key);
+                e.printStackTrace();
+                return Status.ERROR;
             }
-            return Status.OK;
         } catch (Exception e) {
-            System.err.println("Not possible to write object :" + key);
+            System.err.println("Error in the creation of the stream :" + e.toString());
             e.printStackTrace();
             return Status.ERROR;
         }
@@ -267,7 +273,37 @@ public class S3Connection {
      */
     public Status read(String bucket, String key, Set<String> fields,
                        HashMap<String, ByteIterator> result) {
-        return readFromStorage(bucket, key, result, ssecKey);
+        //return readFromStorage(bucket, key, result, ssecKey);
+        try {
+            GetObjectRequest getObjectRequest = null;
+            GetObjectMetadataRequest getObjectMetadataRequest = null;
+            if (ssecKey != null) {
+                getObjectRequest = new GetObjectRequest(bucket,
+                    key).withSSECustomerKey(ssecKey);
+                getObjectMetadataRequest = new GetObjectMetadataRequest(bucket,
+                    key).withSSECustomerKey(ssecKey);
+            } else {
+                getObjectRequest = new GetObjectRequest(bucket, key);
+                getObjectMetadataRequest = new GetObjectMetadataRequest(bucket, key);
+            }
+            S3Object object =
+                s3Client.getObject(getObjectRequest);
+            ObjectMetadata objectMetadata =
+                s3Client.getObjectMetadata(getObjectMetadataRequest);
+            InputStream objectData = object.getObjectContent(); //consuming the stream
+            // writing the stream to bytes and to results
+            int sizeOfFile = (int) objectMetadata.getContentLength();
+            byte[] inputStreamToByte = new byte[sizeOfFile];
+            objectData.read(inputStreamToByte, 0, sizeOfFile);
+            result.put(key, new ByteArrayByteIterator(inputStreamToByte));
+            objectData.close();
+        } catch (Exception e) {
+            System.err.println("Not possible to get the object " + key);
+            e.printStackTrace();
+            return Status.ERROR;
+        } finally {
+            return Status.OK;
+        }
     }
 
     /**
