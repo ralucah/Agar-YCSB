@@ -36,7 +36,6 @@
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <processorPath useClasspath="true" />
-        <module name="memcached-binding" />
       </profile>
       <profile default="false" name="Annotation profile for datastore-specific-descriptor" enabled="true">
         <sourceOutputDir name="target/generated-sources/annotations" />
@@ -50,7 +49,6 @@
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <processorPath useClasspath="true" />
-        <module name="s3-binding" />
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
@@ -58,9 +56,7 @@
       <module name="core" target="1.7" />
       <module name="datastore-specific-descriptor" target="1.7" />
       <module name="dual-binding" target="1.7" />
-      <module name="memcached-binding" target="1.7" />
       <module name="root" target="1.7" />
-      <module name="s3-binding" target="1.7" />
     </bytecodeTargetLevel>
   </component>
 </project>

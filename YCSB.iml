@@ -43,12 +43,19 @@
     <orderEntry type="module" module-name="core" />
     <orderEntry type="module" module-name="datastore-specific-descriptor" />
     <orderEntry type="module" module-name="dual-binding" />
-    <orderEntry type="module" module-name="memcached-binding" />
-    <orderEntry type="module" module-name="s3-binding" />
     <orderEntry type="module-library">
       <library>
         <CLASSES>
           <root url="file://$MODULE_DIR$/workloads" />
+        </CLASSES>
+        <JAVADOC />
+        <SOURCES />
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library>
+        <CLASSES>
+          <root url="jar://$MODULE_DIR$/dual/target/dependency/jna-4.2.1.jar!/" />
         </CLASSES>
         <JAVADOC />
         <SOURCES />

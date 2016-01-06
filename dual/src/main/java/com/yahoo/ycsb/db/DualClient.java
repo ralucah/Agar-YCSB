@@ -102,6 +102,12 @@ public class DualClient extends DB {
         // always use the S3 buckets as table names
         s3Buckets = Arrays.asList(props.getProperty("s3.buckets").split("\\s*,\\s*"));
 
+        // get longhair attributes
+        LonghairLib.k = Integer.valueOf(props.getProperty("longhair.k"));
+        LonghairLib.m = Integer.valueOf(props.getProperty("longhair.m"));
+        assert(LonghairLib.k >= 0 && LonghairLib.k < 256);
+        assert(LonghairLib.m >= 0 && LonghairLib.m <= 256 - LonghairLib.k);
+
         // get mode
         mode = Mode.valueOf(props.getProperty("mode").toUpperCase());
         switch (mode) {
@@ -235,6 +241,10 @@ public class DualClient extends DB {
         return status;*/
     }
 
+    private void insertBlock() {
+
+    }
+
     @Override
     public Status insert(String table, String key, HashMap<String, ByteIterator> values) {
         Status status = null;
@@ -252,30 +262,45 @@ public class DualClient extends DB {
             offset += sizeArray;
         }
 
-        int connId = Mapper.mapKeyToDatacenter(key, numConnections);
-        String bucket = s3Buckets.get(connId);
 
-        System.out.println("DualClient.insert_" + mode + "(" + bucket + ", " + key + ", " + totalSize + ")");
 
-        switch (mode) {
-            case S3: {
-                status = s3Connections.get(connId).insert(bucket, key, bytes);
-                break;
+        // encode data
+        Map<Integer, byte[]> blocks = LonghairLib.encode(bytes);
+        Iterator it = blocks.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry pair = (Map.Entry)it.next();
+            String blockKey = key + pair.getKey();
+            byte[] blockBytes = (byte[])pair.getValue();
+
+            // map to data center
+            int connId = Mapper.mapKeyToDatacenter(key, numConnections);
+            String bucket = s3Buckets.get(connId);
+
+            System.out.println("DualClient.insert_" + mode + "(" + bucket + ", " + blockKey + ")");
+
+            switch (mode) {
+                case S3: {
+                    status = s3Connections.get(connId).insert(bucket, blockKey, blockBytes);
+                    break;
+                }
+                case MEMCACHED: {
+                    status = memcachedConnections.get(connId).insert(bucket, blockKey, blockBytes);
+                    break;
+                }
+                case DUAL: {
+                    // insert in S3
+                    status = s3Connections.get(connId).insert(bucket, blockKey, blockBytes);
+                    // TODO to cache or not to cache on insert?
+                    break;
+                }
+                default: {
+                    System.err.println("Invalid mode!");
+                    break;
+                }
             }
-            case MEMCACHED: {
-                status = memcachedConnections.get(connId).insert(bucket, key, bytes);
+
+            if (status != Status.OK)
                 break;
-            }
-            case DUAL: {
-                // insert in S3
-                status = s3Connections.get(connId).insert(bucket, key, bytes);
-                // TODO to cache or not to cache on insert?
-                break;
-            }
-            default: {
-                System.err.println("Invalid mode!");
-                break;
-            }
         }
 
         return status;

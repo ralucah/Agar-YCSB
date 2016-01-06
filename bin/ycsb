@@ -50,8 +50,6 @@ COMMANDS = {
 
 DATABASES = {
     "dual"         : "com.yahoo.ycsb.db.DualClient",
-    "memcached"    : "com.yahoo.ycsb.db.MemcachedClient",
-    "s3"           : "com.yahoo.ycsb.db.S3Client"
 }
 
 OPTIONS = {

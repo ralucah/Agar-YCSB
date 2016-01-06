@@ -6,8 +6,6 @@
     <file url="file://$PROJECT_DIR$/binding-parent/datastore-specific-descriptor" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/core" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/dual" charset="UTF-8" />
-    <file url="file://$PROJECT_DIR$/memcached" charset="UTF-8" />
-    <file url="file://$PROJECT_DIR$/s3" charset="UTF-8" />
     <file url="PROJECT" charset="UTF-8" />
   </component>
 </project>
