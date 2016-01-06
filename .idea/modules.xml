@@ -2,12 +2,12 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
+      <module fileurl="file://$PROJECT_DIR$/YCSB.iml" filepath="$PROJECT_DIR$/YCSB.iml" />
       <module fileurl="file://$PROJECT_DIR$/binding-parent/binding-parent.iml" filepath="$PROJECT_DIR$/binding-parent/binding-parent.iml" />
       <module fileurl="file://$PROJECT_DIR$/core/core.iml" filepath="$PROJECT_DIR$/core/core.iml" />
       <module fileurl="file://$PROJECT_DIR$/binding-parent/datastore-specific-descriptor/datastore-specific-descriptor.iml" filepath="$PROJECT_DIR$/binding-parent/datastore-specific-descriptor/datastore-specific-descriptor.iml" />
       <module fileurl="file://$PROJECT_DIR$/dual/dual-binding.iml" filepath="$PROJECT_DIR$/dual/dual-binding.iml" />
       <module fileurl="file://$PROJECT_DIR$/memcached/memcached-binding.iml" filepath="$PROJECT_DIR$/memcached/memcached-binding.iml" />
-      <module fileurl="file://$PROJECT_DIR$/root.iml" filepath="$PROJECT_DIR$/root.iml" />
       <module fileurl="file://$PROJECT_DIR$/s3/s3-binding.iml" filepath="$PROJECT_DIR$/s3/s3-binding.iml" />
     </modules>
   </component>

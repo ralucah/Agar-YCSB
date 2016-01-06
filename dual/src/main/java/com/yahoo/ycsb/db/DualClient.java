@@ -1,10 +1,13 @@
 package com.yahoo.ycsb.db;
 
+// -db com.yahoo.ycsb.db.DualClient -p fieldlength=10 -p fieldcount=20 -s -P workloads/myworkload -load
+
 import com.yahoo.ycsb.ByteIterator;
 import com.yahoo.ycsb.DB;
 import com.yahoo.ycsb.DBException;
 import com.yahoo.ycsb.Status;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
@@ -165,12 +168,12 @@ public class DualClient extends DB {
                     //store in memcached in a different thread, in the background
                     final String keyFinal = key;
                     final HashMap<String, ByteIterator> resultFinal = new HashMap<String, ByteIterator>(result);
-                    new Thread() {
+                    /*new Thread() {
                         @Override
                         public void run() {
                             memConn.insert(bucket, keyFinal, resultFinal);
                         }
-                    }.start();
+                    }.start();*/
                 } else if (status == Status.OK) {
                     System.out.println("Cache hit!");
                 }
@@ -236,23 +239,37 @@ public class DualClient extends DB {
     public Status insert(String table, String key, HashMap<String, ByteIterator> values) {
         Status status = null;
 
+        // create input stream by concatenating values[key0] X fieldCount times
+        int fieldCount = values.size();
+        Object keyToSearch = values.keySet().toArray()[0];
+        byte[] sourceArray = values.get(keyToSearch).toArray();
+        int sizeArray = sourceArray.length;
+        int totalSize = sizeArray * fieldCount;
+        byte[] destinationArray = new byte[totalSize];
+        int offset = 0;
+        for (int i = 0; i < fieldCount; i++) {
+            System.arraycopy(sourceArray, 0, destinationArray, offset, sizeArray);
+            offset += sizeArray;
+        }
+        InputStream input =  new ByteArrayInputStream(destinationArray);
+
         int connId = Mapper.mapKeyToDatacenter(key, numConnections);
         String bucket = s3Buckets.get(connId);
 
-        System.out.println("DualClient.insert_" + mode + "(" + bucket + ", " + key + ")");
+        System.out.println("DualClient.insert_" + mode + "(" + bucket + ", " + key + ", " + totalSize + ")");
 
         switch (mode) {
             case S3: {
-                status = s3Connections.get(connId).insert(bucket, key, values);
+                status = s3Connections.get(connId).insert(bucket, key, input, totalSize);
                 break;
             }
             case MEMCACHED: {
-                status = memcachedConnections.get(connId).insert(bucket, key, values);
+                status = memcachedConnections.get(connId).insert(bucket, key, input);
                 break;
             }
             case DUAL: {
                 // insert in S3
-                status = s3Connections.get(connId).insert(bucket, key, values);
+                status = s3Connections.get(connId).insert(bucket, key, input, totalSize);
                 // TODO to cache or not to cache on insert?
                 break;
             }

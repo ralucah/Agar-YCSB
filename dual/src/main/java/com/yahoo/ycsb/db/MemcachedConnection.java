@@ -17,6 +17,7 @@
 
 package com.yahoo.ycsb.db;
 
+import com.amazonaws.util.IOUtils;
 import com.yahoo.ycsb.*;
 import net.spy.memcached.ConnectionFactoryBuilder;
 import net.spy.memcached.FailureMode;
@@ -46,7 +47,7 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 /**
  * Concrete Memcached client implementation.
  */
-public class MemcachedConnection extends DB {
+public class MemcachedConnection {
 
     public static final String HOSTS_PROPERTY = "memcached.hosts";
     public static final int DEFAULT_PORT = 11211;
@@ -72,6 +73,7 @@ public class MemcachedConnection extends DB {
      // The MemcachedClient implementation that will be used to communicate with the memcached server.
     private net.spy.memcached.MemcachedClient client;
     private String hostsStr;
+    private Properties props;
 
     public MemcachedConnection(String hostsStr) {
         this.hostsStr = hostsStr;
@@ -128,27 +130,26 @@ public class MemcachedConnection extends DB {
         return client;
     }
 
-    @Override
     public void init() throws DBException {
         InputStream propFile = MemcachedConnection.class.getClassLoader()
             .getResourceAsStream("memcached.properties");
-        Properties props = new Properties();
+        props = new Properties();
         try {
             props.load(propFile);
         } catch (IOException e) {
             e.printStackTrace();
         }
-        this.setProperties(props);
+        //this.setProperties(props);
         try {
             client = createMemcachedClient();
             checkOperationStatus = Boolean.parseBoolean(
-                    getProperties().getProperty(CHECK_OPERATION_STATUS_PROPERTY,
+                    props.getProperty(CHECK_OPERATION_STATUS_PROPERTY,
                             CHECK_OPERATION_STATUS_DEFAULT));
             objectExpirationTime = Integer.parseInt(
-                    getProperties().getProperty(OBJECT_EXPIRATION_TIME_PROPERTY,
+                    props.getProperty(OBJECT_EXPIRATION_TIME_PROPERTY,
                             DEFAULT_OBJECT_EXPIRATION_TIME));
             shutdownTimeoutMillis = Integer.parseInt(
-                    getProperties().getProperty(SHUTDOWN_TIMEOUT_MILLIS_PROPERTY,
+                    props.getProperty(SHUTDOWN_TIMEOUT_MILLIS_PROPERTY,
                             DEFAULT_SHUTDOWN_TIMEOUT_MILLIS));
         } catch (Exception e) {
             throw new DBException(e);
@@ -161,13 +162,13 @@ public class MemcachedConnection extends DB {
                 new ConnectionFactoryBuilder();
 
         connectionFactoryBuilder.setReadBufferSize(Integer.parseInt(
-                getProperties().getProperty(READ_BUFFER_SIZE_PROPERTY,
+                props.getProperty(READ_BUFFER_SIZE_PROPERTY,
                         DEFAULT_READ_BUFFER_SIZE)));
 
         connectionFactoryBuilder.setOpTimeout(Integer.parseInt(
-                getProperties().getProperty(OP_TIMEOUT_PROPERTY, DEFAULT_OP_TIMEOUT)));
+                props.getProperty(OP_TIMEOUT_PROPERTY, DEFAULT_OP_TIMEOUT)));
 
-        String failureString = getProperties().getProperty(FAILURE_MODE_PROPERTY);
+        String failureString = props.getProperty(FAILURE_MODE_PROPERTY);
         connectionFactoryBuilder.setFailureMode(
                 failureString == null ? FAILURE_MODE_PROPERTY_DEFAULT
                         : FailureMode.valueOf(failureString));
@@ -193,7 +194,6 @@ public class MemcachedConnection extends DB {
                 connectionFactoryBuilder.build(), addresses);
     }
 
-    @Override
     public Status read(
             String table, String key, Set<String> fields,
             HashMap<String, ByteIterator> result) {
@@ -212,14 +212,12 @@ public class MemcachedConnection extends DB {
         }
     }
 
-    @Override
     public Status scan(
             String table, String startkey, int recordcount, Set<String> fields,
             Vector<HashMap<String, ByteIterator>> result) {
         return Status.NOT_IMPLEMENTED;
     }
 
-    @Override
     public Status update(
             String table, String key, HashMap<String, ByteIterator> values) {
         key = createQualifiedKey(table, key);
@@ -233,13 +231,12 @@ public class MemcachedConnection extends DB {
         }
     }
 
-    @Override
     public Status insert(
-            String table, String key, HashMap<String, ByteIterator> values) {
-        key = createQualifiedKey(table, key);
+            String table, String key, InputStream input) { //HashMap<String, ByteIterator> values) {
+        //key = createQualifiedKey(table, key);
         try {
             OperationFuture<Boolean> future =
-                    memcachedClient().add(key, objectExpirationTime, toJson(values));
+                    memcachedClient().add(key, objectExpirationTime, IOUtils.toByteArray(input));//toJson(values));
             return getReturnCode(future);
         } catch (Exception e) {
             logger.error("Error inserting value", e);
@@ -247,7 +244,6 @@ public class MemcachedConnection extends DB {
         }
     }
 
-    @Override
     public Status delete(String table, String key) {
         key = createQualifiedKey(table, key);
         try {
@@ -273,7 +269,6 @@ public class MemcachedConnection extends DB {
         return new Status("ERROR", future.getStatus().getMessage());
     }
 
-    @Override
     public void cleanup() throws DBException {
         if (client != null) {
             memcachedClient().shutdown(shutdownTimeoutMillis, MILLISECONDS);

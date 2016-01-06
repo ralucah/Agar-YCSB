@@ -17,34 +17,11 @@
         <SOURCES />
       </library>
     </orderEntry>
-    <orderEntry type="module-library">
-      <library>
-        <CLASSES>
-          <root url="file://$MODULE_DIR$/s3/conf" />
-        </CLASSES>
-        <JAVADOC />
-        <SOURCES />
-      </library>
-    </orderEntry>
-    <orderEntry type="module-library">
-      <library>
-        <CLASSES>
-          <root url="file://$MODULE_DIR$/memcached/conf" />
-        </CLASSES>
-        <JAVADOC />
-        <SOURCES />
-      </library>
-    </orderEntry>
-    <orderEntry type="module" module-name="core" />
-    <orderEntry type="module" module-name="datastore-specific-descriptor" />
-    <orderEntry type="module" module-name="dual-binding" />
-    <orderEntry type="module" module-name="memcached-binding" />
-    <orderEntry type="module" module-name="s3-binding" />
     <orderEntry type="library" name="Maven: com.amazonaws:aws-java-sdk-core:1.10.20" level="project" />
     <orderEntry type="library" name="Maven: com.amazonaws:aws-java-sdk-kms:1.10.20" level="project" />
     <orderEntry type="library" name="Maven: com.amazonaws:aws-java-sdk-s3:1.10.20" level="project" />
     <orderEntry type="library" name="Maven: com.beust:jcommander:1.12" level="project" />
-    <orderEntry type="module" module-name="binding-parent" />
+    <orderEntry type="library" name="Maven: com.fasterxml.jackson.core:jackson-annotations:2.5.0" level="project" />
     <orderEntry type="library" name="Maven: com.fasterxml.jackson.core:jackson-core:2.5.3" level="project" />
     <orderEntry type="library" name="Maven: com.fasterxml.jackson.core:jackson-databind:2.5.3" level="project" />
     <orderEntry type="library" name="Maven: commons-codec:commons-codec:1.6" level="project" />
@@ -62,6 +39,20 @@
     <orderEntry type="library" name="Maven: org.hdrhistogram:HdrHistogram:2.1.4" level="project" />
     <orderEntry type="library" scope="TEST" name="Maven: org.testng:testng:6.1.1" level="project" />
     <orderEntry type="library" name="Maven: org.yaml:snakeyaml:1.6" level="project" />
-    <orderEntry type="library" name="Maven: com.fasterxml.jackson.core:jackson-annotations:2.5.0" level="project" />
+    <orderEntry type="module" module-name="binding-parent" />
+    <orderEntry type="module" module-name="core" />
+    <orderEntry type="module" module-name="datastore-specific-descriptor" />
+    <orderEntry type="module" module-name="dual-binding" />
+    <orderEntry type="module" module-name="memcached-binding" />
+    <orderEntry type="module" module-name="s3-binding" />
+    <orderEntry type="module-library">
+      <library>
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/workloads" />
+        </CLASSES>
+        <JAVADOC />
+        <SOURCES />
+      </library>
+    </orderEntry>
   </component>
 </module>
