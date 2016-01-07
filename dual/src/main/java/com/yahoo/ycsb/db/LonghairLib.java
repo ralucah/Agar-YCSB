@@ -2,10 +2,9 @@ package com.yahoo.ycsb.db;
 
 import com.sun.jna.*;
 
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
 
 /**
  * Created by ubuntu on 06.01.16.
@@ -13,6 +12,7 @@ import java.util.Map;
 public class LonghairLib {
     public static int k;
     public static int m;
+    public static final int reservedBytes = 8;
 
     private interface Longhair extends Library {
         Longhair INSTANCE = (Longhair) Native.loadLibrary("longhair", Longhair.class);
@@ -57,7 +57,108 @@ public class LonghairLib {
         }
     }
 
-    private static Map<Integer, byte[]> blockToBytes(Block.ByReference[] blocks, int blockSize) {
+    public static Block[] bytesToBlocks(Map<Integer, byte[]> blocksBytes) {
+        // bBlocks size should be k
+        Block.ByReference[] blocks = new Block.ByReference[k];
+        for (int i = 0; i < k; i++) {
+            blocks[i] = new Block.ByReference();
+        }
+        assert(blocks.length == k);
+
+        Iterator it = blocksBytes.entrySet().iterator();
+        int blockSize = blocksBytes.size() / k;
+        int blockIndex = 0;
+        while (it.hasNext()) {
+            Map.Entry pair = (Map.Entry) it.next();
+            byte[] fullValue = (byte[])pair.getValue();
+            int valueLen = fullValue.length - (reservedBytes * 2);
+
+            // divide full value into original length, row number, value
+            byte[] lengthBytes = new byte[reservedBytes];
+            byte[] rowBytes = new byte[reservedBytes];
+            byte[] valueBytes = new byte[valueLen];
+            int offset = 0;
+            System.arraycopy(fullValue, offset, lengthBytes, 0, reservedBytes);
+            offset += reservedBytes;
+            System.arraycopy(fullValue, offset, rowBytes, 0, reservedBytes);
+            offset += reservedBytes;
+            System.arraycopy(fullValue, offset, valueBytes, 0, valueLen);
+
+            // obtain int
+            int originalLength = ByteBuffer.wrap(lengthBytes).getInt();
+            int row = ByteBuffer.wrap(rowBytes).getInt();
+
+            // add row and valie to block
+            blocks[blockIndex].row = (char) pair.getKey();
+
+            Pointer ptr = new Memory(blockSize);
+            ptr.write(0, (byte[])pair.getValue(),0, blockSize);
+
+            blocks[blockIndex].data = ptr;
+            blockIndex++;
+        }
+
+        return blocks;
+    }
+
+    public static byte[] decode(Map<Integer, byte[]> blocksBytes) {
+        Block.ByReference[] blocks = new Block.ByReference[k];
+        for (int i = 0; i < k; i++) {
+            blocks[i] = new Block.ByReference();
+        }
+        assert(blocks.length == k);
+
+        Iterator it = blocksBytes.entrySet().iterator();
+        int blockSize = blocksBytes.size() / k;
+        int blockIndex = 0;
+        int originalLength = 0;
+        while (it.hasNext()) {
+            Map.Entry pair = (Map.Entry) it.next();
+            byte[] fullValue = (byte[])pair.getValue();
+            int valueLen = fullValue.length - (reservedBytes * 2);
+
+            // divide full value into original length, row number, value
+            byte[] lengthBytes = new byte[reservedBytes];
+            byte[] rowBytes = new byte[reservedBytes];
+            byte[] valueBytes = new byte[valueLen];
+            int offset = 0;
+            System.arraycopy(fullValue, offset, lengthBytes, 0, reservedBytes);
+            offset += reservedBytes;
+            System.arraycopy(fullValue, offset, rowBytes, 0, reservedBytes);
+            offset += reservedBytes;
+            System.arraycopy(fullValue, offset, valueBytes, 0, valueLen);
+
+            // obtain int
+            originalLength = ByteBuffer.wrap(lengthBytes).getInt();
+            int row = ByteBuffer.wrap(rowBytes).getInt();
+
+            // add row and valie to block
+            blocks[blockIndex].row = (char) pair.getKey();
+
+            Pointer ptr = new Memory(blockSize);
+            ptr.write(0, (byte[])pair.getValue(),0, blockSize);
+
+            blocks[blockIndex].data = ptr;
+            blockIndex++;
+        }
+        //System.out.println(blocks.length);
+        assert(blocks.length == k);
+        assert(originalLength > 0);
+
+        assert(Longhair.INSTANCE.cauchy_256_decode(k, m, blocks, blockSize) == 0);
+
+        Pointer ptrReconstructedData = new Memory(blockSize * k * Native.getNativeSize(Byte.TYPE));
+        for (int i = 0; i < k; i++) {
+            //System.out.println((int)blocks[i].row);
+            ptrReconstructedData.write(i * blockSize, blocks[i].data.getByteArray(0, blockSize), 0, blockSize);
+        }
+        //System.out.println(Arrays.equals(dataPtr.getByteArray(0,newLen),reconstructed.getByteArray(0,newLen)));
+        System.out.println(new String(ptrReconstructedData.getByteArray(0, originalLength), StandardCharsets.UTF_8));
+        return ptrReconstructedData.getByteArray(0, originalLength);
+    }
+
+    /* helper function for encode */
+    private static Map<Integer, byte[]> blocksToBytes(Block.ByReference[] blocks, int blockSize) {
         Map<Integer, byte[]> bBlocks = new HashMap<Integer, byte[]>();
         int blockNum = 0;
         for (Block.ByReference block : blocks) {
@@ -70,27 +171,31 @@ public class LonghairLib {
     public static Map<Integer, byte[]> encode(byte[] originalData) {
         // compute length of each block
         int originalLen = originalData.length;
-        int newLen = originalLen;
-        while (newLen % (8 * k) != 0) {
-            newLen++;
+
+        // reserve 20 bytes for data length and 10 bytes for each block number
+        int paddedLen = originalLen;
+
+        while (paddedLen % (8 * k) != 0) {
+            paddedLen++;
         }
 
-        // pad data
-        byte[] paddedData = new byte[newLen];
+        // compute block size
+        int blockSize = paddedLen / k;
+
+        // construct padded data
+        byte[] paddedData = new byte[paddedLen];
+
         System.arraycopy(originalData, 0, paddedData, 0, originalLen);
 
         // 1. allocate memory for padded data
-        Memory dataPtr = new Memory(newLen * Native.getNativeSize(Byte.TYPE));
+        Memory dataPtr = new Memory(paddedLen * Native.getNativeSize(Byte.TYPE));
 
         // 2. write padded data to that memory
-        dataPtr.write(0, paddedData, 0, newLen);
-
-        //System.out.println(Arrays.equals(paddedData, dataPtr.getByteArray(0, newLen)));
-        //System.out.println(dataPtr.getByteArray(0, newLen).length);
+        dataPtr.write(0, paddedData, 0, paddedLen);
 
         // 3. divide original data into k blocks
         Pointer[] dataPtrs = new Pointer[k];
-        int blockSize = newLen / k;
+        //int blockSize = paddedLen / k;
         for (int i = 0; i < k; i++) {
             dataPtrs[i] = dataPtr.share(i * blockSize);
         }
@@ -119,8 +224,7 @@ public class LonghairLib {
             blocks[k + i].row = (char)i;
         }
 
-        return blockToBytes(blocks, blockSize);
-
+        return blocksToBytes(blocks, blockSize);
     }
 
 }
