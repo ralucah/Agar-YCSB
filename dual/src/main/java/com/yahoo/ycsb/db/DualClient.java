@@ -2,6 +2,7 @@ package com.yahoo.ycsb.db;
 
 // -db com.yahoo.ycsb.db.DualClient -p fieldlength=10 -p fieldcount=20 -s -P workloads/myworkload -load
 
+import com.sun.org.apache.xpath.internal.operations.Bool;
 import com.yahoo.ycsb.ByteIterator;
 import com.yahoo.ycsb.DB;
 import com.yahoo.ycsb.DBException;
@@ -212,32 +213,38 @@ public class DualClient extends DB {
         // TODO possible optimization: batch requests to the same data center (S3 bucket or memcached server)
         Status status = null;
 
-        List<Future> futures = new ArrayList<Future>();
+        Map<Future, Boolean> futures = new HashMap<Future, Boolean>();
         List<HashMap<String, ByteIterator>> results = new ArrayList<HashMap<String, ByteIterator>>();
         ExecutorService executor = Executors.newFixedThreadPool(LonghairLib.k); // how many threads in the thread pool?
 
         int counter = 0;
-        while (counter <= LonghairLib.k + LonghairLib.m) {
+        while (counter < LonghairLib.k + LonghairLib.m) {
             final int counterFin = counter;
             HashMap<String, ByteIterator> res = new HashMap<String, ByteIterator>();
             Future<Status> future = executor.submit(() -> {
                 return readBlock(table, key + counterFin, fields, result);
             });
-            futures.add(future);
+            futures.put(future, false);
             results.add(res);
             counter++;
         }
 
         int receivedBlocks = 0;
         while (receivedBlocks < LonghairLib.k) {
-            for (Future future : futures) {
-                if (future.isDone()) {
+            Iterator it = futures.entrySet().iterator();
+            while (it.hasNext()) {
+                Map.Entry<Future, Boolean> pair = (Map.Entry) it.next();
+                Future future = pair.getKey();
+                Boolean done = pair.getValue();
+                if (done.equals(false) && future.isDone()) {
                     // result should be in the result array
                     // check status
                     try {
                         Status s = (Status) future.get();
-                        if (s.equals(Status.OK))
+                        if (s.equals(Status.OK)) {
                             receivedBlocks++;
+                            pair.setValue(true);
+                        }
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     } catch (ExecutionException e) {
