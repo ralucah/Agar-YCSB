@@ -55,8 +55,9 @@
       <module name="binding-parent" target="1.7" />
       <module name="core" target="1.7" />
       <module name="datastore-specific-descriptor" target="1.7" />
-      <module name="dual-binding" target="1.7" />
+      <module name="dual-binding" target="1.8" />
       <module name="root" target="1.7" />
+      <module name="YCSB" target="1.7" />
     </bytecodeTargetLevel>
   </component>
 </project>

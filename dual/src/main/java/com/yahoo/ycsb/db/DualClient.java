@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.*;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class DualClient extends DB {
@@ -142,10 +143,8 @@ public class DualClient extends DB {
         }
     }
 
-    @Override
-    public Status read(String table, String key, Set<String> fields, HashMap<String, ByteIterator> result) {
+    public Status readBlock(String table, String key, Set<String> fields, HashMap<String, ByteIterator> result) {
         Status status = null;
-
         int connId = Mapper.mapKeyToDatacenter(key, numConnections);
         final String bucket = s3Buckets.get(connId);
 
@@ -194,6 +193,71 @@ public class DualClient extends DB {
         }
 
         return status;
+    }
+
+    private List<byte[]> transformResults( List<HashMap<String, ByteIterator>> results) {
+        List<byte[]> blocksBytes = new ArrayList<byte[]>();
+
+        Iterator it = results.iterator();
+        while(it.hasNext()) {
+            Map.Entry<String, ByteIterator> pair = (Map.Entry) it.next();
+            blocksBytes.add(pair.getValue().toArray());
+        }
+
+        return blocksBytes;
+    }
+
+    @Override
+    public Status read(String table, String key, Set<String> fields, HashMap<String, ByteIterator> result) {
+        // TODO possible optimization: batch requests to the same data center (S3 bucket or memcached server)
+        Status status = null;
+
+        List<Future> futures = new ArrayList<Future>();
+        List<HashMap<String, ByteIterator>> results = new ArrayList<HashMap<String, ByteIterator>>();
+        ExecutorService executor = Executors.newFixedThreadPool(LonghairLib.k); // how many threads in the thread pool?
+
+        int counter = 0;
+        while (counter <= LonghairLib.k + LonghairLib.m) {
+            final int counterFin = counter;
+            HashMap<String, ByteIterator> res = new HashMap<String, ByteIterator>();
+            Future<Status> future = executor.submit(() -> {
+                return readBlock(table, key + counterFin, fields, result);
+            });
+            futures.add(future);
+            results.add(res);
+            counter++;
+        }
+
+        int receivedBlocks = 0;
+        while (receivedBlocks < LonghairLib.k) {
+            for (Future future : futures) {
+                if (future.isDone()) {
+                    // result should be in the result array
+                    // check status
+                    try {
+                        Status s = (Status) future.get();
+                        if (s.equals(Status.OK))
+                            receivedBlocks++;
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    } catch (ExecutionException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        }
+        assert(receivedBlocks >= LonghairLib.k);
+
+        // decode needs Map<Integer, byte[]> blocksBytes
+        // so transform results into List<byte[]> blocksBytes
+        List<byte[]> blockBytes = transformResults(results);
+
+        byte[] bytes = LonghairLib.decode(blockBytes);
+
+        // now transform bytes to result hashmap
+
+        return status;
+
     }
 
     @Override

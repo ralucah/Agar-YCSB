@@ -101,42 +101,38 @@ public class LonghairLib {
         return blocks;
     }
 
-    public static byte[] decode(Map<Integer, byte[]> blocksBytes) {
+    public static byte[] decode(List<byte[]> blocksBytes) {
         Block.ByReference[] blocks = new Block.ByReference[k];
         for (int i = 0; i < k; i++) {
             blocks[i] = new Block.ByReference();
         }
         assert(blocks.length == k);
 
-        Iterator it = blocksBytes.entrySet().iterator();
-        int blockSize = blocksBytes.size() / k;
         int blockIndex = 0;
         int originalLength = 0;
-        while (it.hasNext()) {
-            Map.Entry pair = (Map.Entry) it.next();
-            byte[] fullValue = (byte[])pair.getValue();
-            int valueLen = fullValue.length - (reservedBytes * 2);
+        int blockSize = 0;
+        for (byte[] fullValue : blocksBytes){
+            blockSize = fullValue.length - (reservedBytes * 2);
 
             // divide full value into original length, row number, value
             byte[] lengthBytes = new byte[reservedBytes];
             byte[] rowBytes = new byte[reservedBytes];
-            byte[] valueBytes = new byte[valueLen];
+
             int offset = 0;
             System.arraycopy(fullValue, offset, lengthBytes, 0, reservedBytes);
             offset += reservedBytes;
             System.arraycopy(fullValue, offset, rowBytes, 0, reservedBytes);
             offset += reservedBytes;
-            System.arraycopy(fullValue, offset, valueBytes, 0, valueLen);
 
             // obtain int
             originalLength = ByteBuffer.wrap(lengthBytes).getInt();
             int row = ByteBuffer.wrap(rowBytes).getInt();
 
-            // add row and valie to block
-            blocks[blockIndex].row = (char) pair.getKey();
+            // add row and value to block
+            blocks[blockIndex].row = (char) row;
 
             Pointer ptr = new Memory(blockSize);
-            ptr.write(0, (byte[])pair.getValue(),0, blockSize);
+            ptr.write(0, fullValue, offset, blockSize);
 
             blocks[blockIndex].data = ptr;
             blockIndex++;
