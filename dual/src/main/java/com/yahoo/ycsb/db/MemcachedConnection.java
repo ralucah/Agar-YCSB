@@ -194,23 +194,15 @@ public class MemcachedConnection {
                 connectionFactoryBuilder.build(), addresses);
     }
 
-    public Status read(
-            String table, String key, Set<String> fields,
-            HashMap<String, ByteIterator> result) {
-        //key = createQualifiedKey(table, key);
+    public byte[] read(String table, String key) {
+        byte[] bytes = null;
         try {
             GetFuture<Object> future = memcachedClient().asyncGet(key);
-            byte[] document = (byte[])future.get();
-            if (document != null) {
-                result.put(key, new ByteArrayByteIterator(document));
-                //fromJson((String) document, fields, result);
-                return Status.OK;
-            }
-            return Status.NOT_FOUND;
+            bytes = (byte[])future.get();
         } catch (Exception e) {
             logger.error("Error encountered for key: " + key, e);
-            return Status.ERROR;
         }
+        return bytes;
     }
 
     public Status scan(

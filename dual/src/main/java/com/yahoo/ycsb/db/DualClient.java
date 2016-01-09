@@ -3,10 +3,7 @@ package com.yahoo.ycsb.db;
 // -db com.yahoo.ycsb.db.DualClient -p fieldlength=10 -p fieldcount=20 -s -P workloads/myworkload -load
 
 import com.sun.org.apache.xpath.internal.operations.Bool;
-import com.yahoo.ycsb.ByteIterator;
-import com.yahoo.ycsb.DB;
-import com.yahoo.ycsb.DBException;
-import com.yahoo.ycsb.Status;
+import com.yahoo.ycsb.*;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -144,8 +141,8 @@ public class DualClient extends DB {
         }
     }
 
-    public Status readBlock(String table, String key, Set<String> fields, HashMap<String, ByteIterator> result) {
-        Status status = null;
+    public byte[] readBlock(String table, String key, Set<String> fields, HashMap<String, ByteIterator> result) {
+        byte[] bytes = null;
         int connId = Mapper.mapKeyToDatacenter(key, numConnections);
         final String bucket = s3Buckets.get(connId);
 
@@ -153,24 +150,24 @@ public class DualClient extends DB {
 
         switch (mode) {
             case S3: {
-                status = s3Connections.get(connId).read(bucket, key, fields, result);
+                bytes = s3Connections.get(connId).read(bucket, key);
                 break;
             }
             case MEMCACHED: {
-                status = memcachedConnections.get(connId).read(bucket, key, fields, result);
+                bytes = memcachedConnections.get(connId).read(bucket, key);
                 break;
             }
             case DUAL: {
                 // try to read from memcached
                 final MemcachedConnection memConn = memcachedConnections.get(connId);
-                status = memConn.read(bucket, key, fields, result);
+                bytes = memConn.read(bucket, key);
 
                 // if cache miss, read from S3
-                if (status == Status.NOT_FOUND) {
+                if (bytes == null) {
                     System.out.println("Cache miss!");
 
                     // get from s3
-                    status = s3Connections.get(connId).read(bucket, key, fields, result);
+                    bytes = s3Connections.get(connId).read(bucket, key);
 
                     //store in memcached in a different thread, in the background
                     final String keyFinal = key;
@@ -181,7 +178,7 @@ public class DualClient extends DB {
                             memConn.insert(bucket, keyFinal, resultFinal.get(keyFinal).toArray());
                         }
                     }.start();
-                } else if (status == Status.OK) {
+                } else {
                     System.out.println("Cache hit!");
                 }
 
@@ -193,10 +190,10 @@ public class DualClient extends DB {
             }
         }
 
-        return status;
+        return bytes;
     }
 
-    private List<byte[]> transformResults( List<HashMap<String, ByteIterator>> results) {
+    /*private List<byte[]> transformResults( List<HashMap<String, ByteIterator>> results) {
         List<byte[]> blocksBytes = new ArrayList<byte[]>();
 
         Iterator it = results.iterator();
@@ -206,29 +203,27 @@ public class DualClient extends DB {
         }
 
         return blocksBytes;
-    }
+    }*/
 
     @Override
     public Status read(String table, String key, Set<String> fields, HashMap<String, ByteIterator> result) {
         // TODO possible optimization: batch requests to the same data center (S3 bucket or memcached server)
-        Status status = null;
 
         Map<Future, Boolean> futures = new HashMap<Future, Boolean>();
-        List<HashMap<String, ByteIterator>> results = new ArrayList<HashMap<String, ByteIterator>>();
+        List<byte[]> results = new ArrayList<byte[]>();
         ExecutorService executor = Executors.newFixedThreadPool(LonghairLib.k); // how many threads in the thread pool?
 
         int counter = 0;
         while (counter < LonghairLib.k + LonghairLib.m) {
             final int counterFin = counter;
-            HashMap<String, ByteIterator> res = new HashMap<String, ByteIterator>();
-            Future<Status> future = executor.submit(() -> {
+            Future<byte[]> future = executor.submit(() -> {
                 return readBlock(table, key + counterFin, fields, result);
             });
             futures.put(future, false);
-            results.add(res);
             counter++;
         }
 
+        // TODO should give up in a while
         int receivedBlocks = 0;
         while (receivedBlocks < LonghairLib.k) {
             Iterator it = futures.entrySet().iterator();
@@ -237,13 +232,12 @@ public class DualClient extends DB {
                 Future future = pair.getKey();
                 Boolean done = pair.getValue();
                 if (done.equals(false) && future.isDone()) {
-                    // result should be in the result array
-                    // check status
                     try {
-                        Status s = (Status) future.get();
-                        if (s.equals(Status.OK)) {
+                        byte[] res = (byte[])future.get();
+                        if (res != null) {
                             receivedBlocks++;
                             pair.setValue(true);
+                            results.add(res);
                         }
                     } catch (InterruptedException e) {
                         e.printStackTrace();
@@ -257,13 +251,13 @@ public class DualClient extends DB {
 
         // decode needs Map<Integer, byte[]> blocksBytes
         // so transform results into List<byte[]> blocksBytes
-        List<byte[]> blockBytes = transformResults(results);
 
-        byte[] bytes = LonghairLib.decode(blockBytes);
+        byte[] bytes = LonghairLib.decode(results);
 
         // now transform bytes to result hashmap
+        result.put(key, new ByteArrayByteIterator(bytes));
 
-        return status;
+        return Status.OK;
 
     }
 

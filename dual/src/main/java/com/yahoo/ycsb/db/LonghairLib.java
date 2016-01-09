@@ -57,56 +57,11 @@ public class LonghairLib {
         }
     }
 
-    public static Block[] bytesToBlocks(Map<Integer, byte[]> blocksBytes) {
-        // bBlocks size should be k
-        Block.ByReference[] blocks = new Block.ByReference[k];
-        for (int i = 0; i < k; i++) {
-            blocks[i] = new Block.ByReference();
-        }
-        assert(blocks.length == k);
-
-        Iterator it = blocksBytes.entrySet().iterator();
-        int blockSize = blocksBytes.size() / k;
-        int blockIndex = 0;
-        while (it.hasNext()) {
-            Map.Entry pair = (Map.Entry) it.next();
-            byte[] fullValue = (byte[])pair.getValue();
-            int valueLen = fullValue.length - (reservedBytes * 2);
-
-            // divide full value into original length, row number, value
-            byte[] lengthBytes = new byte[reservedBytes];
-            byte[] rowBytes = new byte[reservedBytes];
-            byte[] valueBytes = new byte[valueLen];
-            int offset = 0;
-            System.arraycopy(fullValue, offset, lengthBytes, 0, reservedBytes);
-            offset += reservedBytes;
-            System.arraycopy(fullValue, offset, rowBytes, 0, reservedBytes);
-            offset += reservedBytes;
-            System.arraycopy(fullValue, offset, valueBytes, 0, valueLen);
-
-            // obtain int
-            int originalLength = ByteBuffer.wrap(lengthBytes).getInt();
-            int row = ByteBuffer.wrap(rowBytes).getInt();
-
-            // add row and valie to block
-            blocks[blockIndex].row = (char) pair.getKey();
-
-            Pointer ptr = new Memory(blockSize);
-            ptr.write(0, (byte[])pair.getValue(),0, blockSize);
-
-            blocks[blockIndex].data = ptr;
-            blockIndex++;
-        }
-
-        return blocks;
-    }
-
     public static byte[] decode(List<byte[]> blocksBytes) {
-        Block.ByReference[] blocks = new Block.ByReference[k];
-        for (int i = 0; i < k; i++) {
+        Block.ByReference[] blocks = new Block.ByReference[blocksBytes.size()];
+        for (int i = 0; i < blocksBytes.size(); i++) {
             blocks[i] = new Block.ByReference();
         }
-        assert(blocks.length == k);
 
         int blockIndex = 0;
         int originalLength = 0;
@@ -138,7 +93,7 @@ public class LonghairLib {
             blockIndex++;
         }
         //System.out.println(blocks.length);
-        assert(blocks.length == k);
+        //assert(blocks.length == k);
         assert(originalLength > 0);
 
         assert(Longhair.INSTANCE.cauchy_256_decode(k, m, blocks, blockSize) == 0);

@@ -264,45 +264,39 @@ public class S3Connection {
      *            The name of the bucket
      * @param key
      *            The record key of the file to read.
-     * @param fields
+     //* @param fields
      *            The list of fields to read, or null for all of them,
      *            it is null by default
-     * @param result
+     //* @param result
      *          A HashMap of field/value pairs for the result
      * @return OK on success, ERROR otherwise.
      */
-    public Status read(String bucket, String key, Set<String> fields,
-                       HashMap<String, ByteIterator> result) {
-        //return readFromStorage(bucket, key, result, ssecKey);
+    public byte[] read(String bucket, String key) {
+        byte[] bytes = null;
         try {
             GetObjectRequest getObjectRequest = null;
             GetObjectMetadataRequest getObjectMetadataRequest = null;
             if (ssecKey != null) {
-                getObjectRequest = new GetObjectRequest(bucket,
-                    key).withSSECustomerKey(ssecKey);
-                getObjectMetadataRequest = new GetObjectMetadataRequest(bucket,
-                    key).withSSECustomerKey(ssecKey);
+                getObjectRequest = new GetObjectRequest(bucket, key).withSSECustomerKey(ssecKey);
+                getObjectMetadataRequest = new GetObjectMetadataRequest(bucket, key).withSSECustomerKey(ssecKey);
             } else {
                 getObjectRequest = new GetObjectRequest(bucket, key);
                 getObjectMetadataRequest = new GetObjectMetadataRequest(bucket, key);
             }
-            S3Object object =
-                s3Client.getObject(getObjectRequest);
-            ObjectMetadata objectMetadata =
-                s3Client.getObjectMetadata(getObjectMetadataRequest);
+            S3Object object = s3Client.getObject(getObjectRequest);
+            ObjectMetadata objectMetadata = s3Client.getObjectMetadata(getObjectMetadataRequest);
             InputStream objectData = object.getObjectContent(); //consuming the stream
             // writing the stream to bytes and to results
             int sizeOfFile = (int) objectMetadata.getContentLength();
-            byte[] inputStreamToByte = new byte[sizeOfFile];
-            objectData.read(inputStreamToByte, 0, sizeOfFile);
-            result.put(key, new ByteArrayByteIterator(inputStreamToByte));
+            bytes = new byte[sizeOfFile];
+            objectData.read(bytes, 0, sizeOfFile);
+            //result.put(key, new ByteArrayByteIterator(inputStreamToByte));
             objectData.close();
         } catch (Exception e) {
             System.err.println("Not possible to get the object " + key);
             e.printStackTrace();
-            return Status.ERROR;
         } finally {
-            return Status.OK;
+            return bytes;
         }
     }
 
