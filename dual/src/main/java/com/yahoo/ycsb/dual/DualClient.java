@@ -189,17 +189,19 @@ public class DualClient extends DB {
                     bytes = s3Connections.get(connId).read(bucket, key);
 
                     // store to memcached
-                    memConn.insert(bucket, key, bytes);
+                    //memConn.insert(bucket, key, bytes);
 
                     //store in memcached in a different thread, in the background
-                    //final String keyFinal = key;
-                    //final HashMap<String, ByteIterator> resultFinal = new HashMap<String, ByteIterator>(result);
-                    /*new Thread() {
+                    final String keyFinal = key;
+                    final HashMap<String, ByteIterator> resultFinal = new HashMap<String, ByteIterator>(result);
+                    final byte[] bytesFin = new byte[bytes.length];
+                    System.arraycopy(bytes, 0, bytesFin,0, bytes.length);
+                    new Thread() {
                         @Override
                         public void run() {
-                            memConn.insert(bucket, keyFinal, resultFinal.get(keyFinal).toArray());
+                            memConn.insert(bucket, keyFinal, bytesFin);
                         }
-                    }.start();*/
+                    }.start();
                 } else {
                     System.out.println("Cache hit!");
                 }
