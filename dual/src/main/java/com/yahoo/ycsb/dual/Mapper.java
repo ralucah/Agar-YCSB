@@ -7,6 +7,7 @@ public class Mapper {
 
     public static int mapKeyToDatacenter(String key, int bucketsNum) {
         // hashcode is not safe!! collisions will occur
-        return Math.abs(key.hashCode()) % bucketsNum;
+        int toRet = Math.abs(key.hashCode()) % bucketsNum;
+        return toRet;
     }
 }

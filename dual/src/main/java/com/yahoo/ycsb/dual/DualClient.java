@@ -5,6 +5,7 @@ package com.yahoo.ycsb.dual;
 import com.sun.jna.Memory;
 import com.sun.jna.Pointer;
 import com.yahoo.ycsb.*;
+import jdk.nashorn.internal.codegen.CompilerConstants;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -105,8 +106,10 @@ public class DualClient extends DB {
         // get longhair attributes
         LonghairLib.k = Integer.valueOf(props.getProperty("longhair.k"));
         LonghairLib.m = Integer.valueOf(props.getProperty("longhair.m"));
-        assert(LonghairLib.k >= 0 && LonghairLib.k < 256);
-        assert(LonghairLib.m >= 0 && LonghairLib.m <= 256 - LonghairLib.k);
+        if (LonghairLib.Longhair.INSTANCE._cauchy_256_init(2) != 0)
+            System.err.println("Error initializing longhair");
+        //assert(LonghairLib.k >= 0 && LonghairLib.k < 256);
+        //assert(LonghairLib.m >= 0 && LonghairLib.m <= 256 - LonghairLib.k);
 
         // get mode
         mode = Mode.valueOf(props.getProperty("mode").toUpperCase());
@@ -145,8 +148,6 @@ public class DualClient extends DB {
         byte[] bytes = null;
         int connId = Mapper.mapKeyToDatacenter(key, numConnections);
         final String bucket = s3Buckets.get(connId);
-
-        //System.out.println("DualClient.read_" + mode + "(" + bucket + ", " + key + ")");
 
         switch (mode) {
             case S3: {
@@ -190,6 +191,7 @@ public class DualClient extends DB {
             }
         }
 
+        //System.out.println("DualClient.readBlock_" + mode + "(" + key + " " +bucket + " " + bytesToHex(bytes) + ")");
         return bytes;
     }
 
@@ -199,20 +201,25 @@ public class DualClient extends DB {
 
         Map<Future, Boolean> futures = new HashMap<Future, Boolean>();
         List<byte[]> results = new ArrayList<byte[]>();
-        ExecutorService executor = Executors.newFixedThreadPool(LonghairLib.k); // how many threads in the thread pool?
+
+        ExecutorService executor = Executors.newFixedThreadPool(LonghairLib.k + LonghairLib.m); // how many threads in the thread pool?
 
         int counter = 0;
         while (counter < LonghairLib.k + LonghairLib.m) {
             final int counterFin = counter;
             Future<byte[]> future = executor.submit(() -> {
-                return readBlock(table, key + counterFin, fields, result);
+                byte[] toRet = readBlock(table, key + counterFin, fields, result);
+                //System.out.println("Reading key " + (key+counterFin) + " returned " + toRet);
+                return toRet;
             });
             futures.put(future, false);
+            //System.out.println("Future <" + future + "> checks key " + (key+counterFin));
             counter++;
         }
 
         // TODO should give up in a while
         int receivedBlocks = 0;
+        //System.out.println("k = " + LonghairLib.k + " " + futures.entrySet().size());
         while (receivedBlocks < LonghairLib.k) {
             Iterator it = futures.entrySet().iterator();
             while (it.hasNext()) {
@@ -314,34 +321,6 @@ public class DualClient extends DB {
         return bytes;
     }
 
-    /*private byte[] deconstructBlocks(List<byte[]> blocks) {
-        Map<Integer, byte[]> dataBlocks = new HashMap<Integer, byte[]>();
-
-        for (byte[] block : blocks){
-            int dataBlockSize = block.length - (LonghairLib.reservedBytes * 2);
-
-            // divide full value into original length, row number, value
-            byte[] lengthBytes = new byte[LonghairLib.reservedBytes];
-            byte[] rowBytes = new byte[LonghairLib.reservedBytes];
-            byte[] actualData = new byte[dataBlockSize];
-
-            int offset = 0;
-            System.arraycopy(block, offset, lengthBytes, 0, LonghairLib.reservedBytes);
-            offset += LonghairLib.reservedBytes;
-            System.arraycopy(block, offset, rowBytes, 0, LonghairLib.reservedBytes);
-            offset += LonghairLib.reservedBytes;
-            System.arraycopy(block, offset, actualData, 0, dataBlockSize);
-
-            // obtain int
-            int originalLength = ByteBuffer.wrap(lengthBytes).getInt();
-            int row = ByteBuffer.wrap(rowBytes).getInt();
-
-            // add row and value to block
-            dataBlocks.put(row, actualData);
-        }
-        return null;
-    }*/
-
     final protected static char[] hexArray = "0123456789ABCDEF".toCharArray();
     public static String bytesToHex(byte[] bytes) {
         char[] hexChars = new char[bytes.length * 2];
@@ -361,8 +340,6 @@ public class DualClient extends DB {
         byte[] bytes = valuesToBytes(values);
         System.out.println("DualClient.insert_" + mode + "(" + key + " " + bytesToHex(bytes) + ")");
 
-        int bytesLen = bytes.length;
-        byte[] lengthBytes = ByteBuffer.allocate(LonghairLib.reservedBytes).putInt(bytesLen).array();
 
         // encode data using Longhair
         List<byte[]> blocks = LonghairLib.encode(bytes);
@@ -371,12 +348,13 @@ public class DualClient extends DB {
         int row = 0;
         for (byte[] block : blocks) {
             String blockKey = key + row;
+            row++;
 
             // map to data center
-            int connId = Mapper.mapKeyToDatacenter(key, numConnections);
+            int connId = Mapper.mapKeyToDatacenter(blockKey, numConnections);
             String bucket = s3Buckets.get(connId);
 
-            //System.out.println("DualClient.insert_" + mode + "(" + bucket + ", " + blockKey + " " + bytesToHex(newBlock) + ")");
+            //System.out.println("DualClient.insertBlock" + mode + "(" + blockKey + " " + bucket + " " + bytesToHex(block) + ")");
 
             switch (mode) {
                 case S3: {

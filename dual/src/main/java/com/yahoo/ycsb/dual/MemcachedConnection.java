@@ -224,7 +224,7 @@ public class MemcachedConnection {
     }
 
     public Status insert(
-            String table, String key, byte[] bytes) { //HashMap<String, ByteIterator> values) {
+            String table, String key, byte[] bytes) {//HashMap<String, ByteIterator> values) {
         //key = createQualifiedKey(table, key);
         //HashMap<String, ByteIterator> values = new HashMap<String, ByteIterator>();
         //values.put(key, new ByteArrayByteIterator(bytes));
