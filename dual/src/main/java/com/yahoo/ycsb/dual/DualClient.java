@@ -1,15 +1,11 @@
 package com.yahoo.ycsb.dual;
 
-// -db com.yahoo.ycsb.db.DualClient -p fieldlength=10 -p fieldcount=20 -s -P workloads/myworkload -load
+// -db com.yahoo.ycsb.dual.DualClient -p fieldlength=10 -p fieldcount=20 -s -P workloads/myworkload -load
+// -db com.yahoo.ycsb.dual.DualClient -p fieldlength=10 -p fieldcount=20 -s -P workloads/myworkload
 
-import com.sun.jna.Memory;
-import com.sun.jna.Pointer;
 import com.yahoo.ycsb.*;
-import jdk.nashorn.internal.codegen.CompilerConstants;
-
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -32,6 +28,8 @@ public class DualClient extends DB {
     private static List<MemcachedConnection> memcachedConnections;
 
     private static boolean memFlush = false;
+
+    private static boolean erasureCoding = false;
 
     private static Properties props;
 
@@ -81,6 +79,29 @@ public class DualClient extends DB {
         numConnections = memcachedConnections.size();
     }
 
+    private void initLonghair() {
+        LonghairLib.k = Integer.valueOf(props.getProperty("longhair.k"));
+        LonghairLib.m = Integer.valueOf(props.getProperty("longhair.m"));
+
+        // check k >= 0 and k < 256
+        if (LonghairLib.k < 0 || LonghairLib.k >= 256) {
+            System.err.println("Invalid longhair.k: k should be >= 0 and < 256.");
+            System.exit(1);
+        }
+
+        // check m >=0 and m <= 256 - k
+        if (LonghairLib.m < 0 || LonghairLib.m > 256 - LonghairLib.k) {
+            System.err.println("Invalid longhair.m: m should be >= 0 and <= 256 - k.");
+            System.exit(1);
+        }
+
+        // init longhair
+        if (LonghairLib.Longhair.INSTANCE._cauchy_256_init(2) != 0) {
+            System.err.println("Error initializing longhair");
+            System.exit(1);
+        }
+    }
+
     /**
      * initialize dual client
      *
@@ -104,12 +125,9 @@ public class DualClient extends DB {
         s3Buckets = Arrays.asList(props.getProperty("s3.buckets").split("\\s*,\\s*"));
 
         // get longhair attributes
-        LonghairLib.k = Integer.valueOf(props.getProperty("longhair.k"));
-        LonghairLib.m = Integer.valueOf(props.getProperty("longhair.m"));
-        if (LonghairLib.Longhair.INSTANCE._cauchy_256_init(2) != 0)
-            System.err.println("Error initializing longhair");
-        //assert(LonghairLib.k >= 0 && LonghairLib.k < 256);
-        //assert(LonghairLib.m >= 0 && LonghairLib.m <= 256 - LonghairLib.k);
+        erasureCoding = Boolean.valueOf(props.getProperty("longhair.enable"));
+        if (erasureCoding)
+            initLonghair();
 
         // get mode
         mode = Mode.valueOf(props.getProperty("mode").toUpperCase());
@@ -144,7 +162,7 @@ public class DualClient extends DB {
         }
     }
 
-    public byte[] readBlock(String table, String key, Set<String> fields, HashMap<String, ByteIterator> result) {
+    public byte[] readBlock(String key, Set<String> fields, HashMap<String, ByteIterator> result) {
         byte[] bytes = null;
         int connId = Mapper.mapKeyToDatacenter(key, numConnections);
         final String bucket = s3Buckets.get(connId);
@@ -170,15 +188,18 @@ public class DualClient extends DB {
                     // get from s3
                     bytes = s3Connections.get(connId).read(bucket, key);
 
+                    // store to memcached
+                    memConn.insert(bucket, key, bytes);
+
                     //store in memcached in a different thread, in the background
-                    final String keyFinal = key;
-                    final HashMap<String, ByteIterator> resultFinal = new HashMap<String, ByteIterator>(result);
-                    new Thread() {
+                    //final String keyFinal = key;
+                    //final HashMap<String, ByteIterator> resultFinal = new HashMap<String, ByteIterator>(result);
+                    /*new Thread() {
                         @Override
                         public void run() {
                             memConn.insert(bucket, keyFinal, resultFinal.get(keyFinal).toArray());
                         }
-                    }.start();
+                    }.start();*/
                 } else {
                     System.out.println("Cache hit!");
                 }
@@ -198,64 +219,72 @@ public class DualClient extends DB {
     @Override
     public Status read(String table, String key, Set<String> fields, HashMap<String, ByteIterator> result) {
         // TODO possible optimization: batch requests to the same data center (S3 bucket or memcached server)
+        byte[] bytes;
+        if (erasureCoding) {
+            Map<Future, Boolean> futures = new HashMap<Future, Boolean>();
+            List<byte[]> results = new ArrayList<byte[]>();
 
-        Map<Future, Boolean> futures = new HashMap<Future, Boolean>();
-        List<byte[]> results = new ArrayList<byte[]>();
+            ExecutorService executor = Executors.newFixedThreadPool(LonghairLib.k + LonghairLib.m); // how many threads in the thread pool?
 
-        ExecutorService executor = Executors.newFixedThreadPool(LonghairLib.k + LonghairLib.m); // how many threads in the thread pool?
+            int counter = 0;
+            while (counter < LonghairLib.k + LonghairLib.m) {
+                final int counterFin = counter;
+                Future<byte[]> future = executor.submit(() -> {
+                    byte[] toRet = readBlock(key + counterFin, fields, result);
+                    //System.out.println("Reading key " + (key+counterFin) + " returned " + toRet);
+                    return toRet;
+                });
+                futures.put(future, false);
+                //System.out.println("Future <" + future + "> checks key " + (key+counterFin));
+                counter++;
+            }
 
-        int counter = 0;
-        while (counter < LonghairLib.k + LonghairLib.m) {
-            final int counterFin = counter;
-            Future<byte[]> future = executor.submit(() -> {
-                byte[] toRet = readBlock(table, key + counterFin, fields, result);
-                //System.out.println("Reading key " + (key+counterFin) + " returned " + toRet);
-                return toRet;
-            });
-            futures.put(future, false);
-            //System.out.println("Future <" + future + "> checks key " + (key+counterFin));
-            counter++;
-        }
-
-        // TODO should give up in a while
-        int receivedBlocks = 0;
-        //System.out.println("k = " + LonghairLib.k + " " + futures.entrySet().size());
-        while (receivedBlocks < LonghairLib.k) {
-            Iterator it = futures.entrySet().iterator();
-            while (it.hasNext()) {
-                Map.Entry<Future, Boolean> pair = (Map.Entry) it.next();
-                Future future = pair.getKey();
-                Boolean done = pair.getValue();
-                if (done.equals(false) && future.isDone()) {
-                    try {
-                        byte[] res = (byte[])future.get();
-                        if (res != null) {
-                            receivedBlocks++;
-                            pair.setValue(true);
-                            results.add(res);
+            // TODO should give up in a while
+            int receivedBlocks = 0;
+            //System.out.println("k = " + LonghairLib.k + " " + futures.entrySet().size());
+            while (receivedBlocks < LonghairLib.k) {
+                Iterator it = futures.entrySet().iterator();
+                while (it.hasNext()) {
+                    Map.Entry<Future, Boolean> pair = (Map.Entry) it.next();
+                    Future future = pair.getKey();
+                    Boolean done = pair.getValue();
+                    if (done.equals(false) && future.isDone()) {
+                        try {
+                            byte[] res = (byte[])future.get();
+                            if (res != null) {
+                                receivedBlocks++;
+                                pair.setValue(true);
+                                results.add(res);
+                            }
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        } catch (ExecutionException e) {
+                            e.printStackTrace();
                         }
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    } catch (ExecutionException e) {
-                        e.printStackTrace();
                     }
                 }
             }
+            assert(receivedBlocks >= LonghairLib.k);
+
+            // decode needs Map<Integer, byte[]> blocksBytes
+            // so transform results into List<byte[]> blocksBytes
+
+            bytes = LonghairLib.decode(results);
+        } else {
+            bytes = readBlock(key, fields, result);
         }
-        assert(receivedBlocks >= LonghairLib.k);
+        Status status = Status.ERROR;
+        if (bytes != null) {
+            status = Status.OK;
+            // now transform bytes to result hashmap
+            System.out.println("DualClient.read_" + mode + "(" + key + " " + Utils.bytesToHex(bytes) + ")");
+            result.put(key, new ByteArrayByteIterator(bytes));
+        }
 
-        // decode needs Map<Integer, byte[]> blocksBytes
-        // so transform results into List<byte[]> blocksBytes
-
-        byte[] bytes = LonghairLib.decode(results);
-
-        // now transform bytes to result hashmap
-        System.out.println("DualClient.read_" + mode + "(" + key + " " + bytesToHex(bytes) + ")");
-        result.put(key, new ByteArrayByteIterator(bytes));
-
-        return Status.OK;
+        return status;
 
     }
+
 
     @Override
     public Status scan(String table, String startkey, int recordcount, Set<String> fields, Vector<HashMap<String, ByteIterator>> result) {
@@ -269,38 +298,6 @@ public class DualClient extends DB {
         System.err.println("update() not supported yet");
         System.exit(0);
         return null;
-        /*Status status = null;
-
-        int connId = Mapper.mapKeyToDatacenter(key, numConnections);
-        String bucket = s3Buckets.get(connId);
-
-        System.out.println("DualClient.update_" + mode + "(" + bucket + ", " + key + ")");
-
-        switch (mode) {
-            case S3: {
-                status = s3Connections.get(connId).update(bucket, key, values);
-                break;
-            }
-            case MEMCACHED: {
-                status = memcachedConnections.get(connId).update(bucket, key, values);
-                break;
-            }
-            case DUAL: {
-                // TODO handle this in parallel
-                // update in cache or delete from cache?
-                // does the status matter?
-                memcachedConnections.get(connId).update(bucket, key, values);
-                // update in S3
-                status = s3Connections.get(connId).update(bucket, key, values);
-                break;
-            }
-            default: {
-                System.err.println("Invalid mode!");
-                break;
-            }
-        }
-
-        return status;*/
     }
 
     private byte[] valuesToBytes(HashMap<String, ByteIterator> values) {
@@ -321,15 +318,37 @@ public class DualClient extends DB {
         return bytes;
     }
 
-    final protected static char[] hexArray = "0123456789ABCDEF".toCharArray();
-    public static String bytesToHex(byte[] bytes) {
-        char[] hexChars = new char[bytes.length * 2];
-        for ( int j = 0; j < bytes.length; j++ ) {
-            int v = bytes[j] & 0xFF;
-            hexChars[j * 2] = hexArray[v >>> 4];
-            hexChars[j * 2 + 1] = hexArray[v & 0x0F];
+    /* helper function for insert */
+    private Status insertBytes(String key, byte[] bytes) {
+        Status status = null;
+
+        // map to data center
+        int connId = Mapper.mapKeyToDatacenter(key, numConnections);
+        String bucket = s3Buckets.get(connId);
+
+        //System.out.println("DualClient.insertBlock" + mode + "(" + blockKey + " " + bucket + " " + bytesToHex(block) + ")");
+
+        switch (mode) {
+            case S3: {
+                status = s3Connections.get(connId).insert(bucket, key, bytes);
+                break;
+            }
+            case MEMCACHED: {
+                status = memcachedConnections.get(connId).insert(bucket, key, bytes);
+                break;
+            }
+            case DUAL: {
+                // insert in S3
+                status = s3Connections.get(connId).insert(bucket, key, bytes);
+                // TODO to cache or not to cache on insert?
+                break;
+            }
+            default: {
+                System.err.println("Invalid mode!");
+                break;
+            }
         }
-        return new String(hexChars);
+        return status;
     }
 
     @Override
@@ -338,48 +357,23 @@ public class DualClient extends DB {
 
         // generate bytes array based on values
         byte[] bytes = valuesToBytes(values);
-        System.out.println("DualClient.insert_" + mode + "(" + key + " " + bytesToHex(bytes) + ")");
+        System.out.println("DualClient.insert_" + mode + "(" + key + " " + Utils.bytesToHex(bytes) + ") EC:" + erasureCoding);
 
+        if (erasureCoding) {
+            // encode data using Longhair
+            List<byte[]> blocks = LonghairLib.encode(bytes);
 
-        // encode data using Longhair
-        List<byte[]> blocks = LonghairLib.encode(bytes);
-
-        // store each block
-        int row = 0;
-        for (byte[] block : blocks) {
-            String blockKey = key + row;
-            row++;
-
-            // map to data center
-            int connId = Mapper.mapKeyToDatacenter(blockKey, numConnections);
-            String bucket = s3Buckets.get(connId);
-
-            //System.out.println("DualClient.insertBlock" + mode + "(" + blockKey + " " + bucket + " " + bytesToHex(block) + ")");
-
-            switch (mode) {
-                case S3: {
-                    status = s3Connections.get(connId).insert(bucket, blockKey, block);
+            // store each block
+            int row = 0;
+            for (byte[] block : blocks) {
+                String blockKey = key + row;
+                row++;
+                status = insertBytes(blockKey, block);
+                if (status != Status.OK)
                     break;
-                }
-                case MEMCACHED: {
-                    status = memcachedConnections.get(connId).insert(bucket, blockKey, block);
-                    break;
-                }
-                case DUAL: {
-                    // insert in S3
-                    status = s3Connections.get(connId).insert(bucket, blockKey, block);
-                    // TODO to cache or not to cache on insert?
-                    break;
-                }
-                default: {
-                    System.err.println("Invalid mode!");
-                    break;
-                }
             }
-
-            if (status != Status.OK)
-                break;
-        }
+        } else
+            status = insertBytes(key, bytes);
 
         return status;
     }
@@ -389,36 +383,5 @@ public class DualClient extends DB {
         System.err.println("delete() not supported yet");
         System.exit(0);
         return null;
-
-        /*Status status = null;
-
-        int connId = Mapper.mapKeyToDatacenter(key, numConnections);
-        String bucket = s3Buckets.get(connId);
-
-        System.out.println("DualClient.delete_" + mode + "(" + bucket + ", " + key + ")");
-
-        switch (mode) {
-            case S3: {
-                status = s3Connections.get(connId).delete(bucket, key);
-                break;
-            }
-            case MEMCACHED: {
-                status = memcachedConnections.get(connId).delete(bucket, key);
-                break;
-            }
-            case DUAL: {
-                // delete from S3
-                status = s3Connections.get(connId).delete(bucket, key);
-                // TODO delete or invalidate cache?
-                memcachedConnections.get(connId).delete(bucket, key);
-                break;
-            }
-            default: {
-                System.err.println("Invalid mode!");
-                break;
-            }
-        }
-
-        return status;*/
     }
 }
