@@ -1,4 +1,4 @@
-package com.yahoo.ycsb.db;
+package com.yahoo.ycsb.dual;
 
 /**
  * Created by Raluca on 27.12.15.

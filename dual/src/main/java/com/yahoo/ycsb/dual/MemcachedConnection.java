@@ -15,9 +15,8 @@
  * LICENSE file.
  */
 
-package com.yahoo.ycsb.db;
+package com.yahoo.ycsb.dual;
 
-import com.amazonaws.util.IOUtils;
 import com.yahoo.ycsb.*;
 import net.spy.memcached.ConnectionFactoryBuilder;
 import net.spy.memcached.FailureMode;

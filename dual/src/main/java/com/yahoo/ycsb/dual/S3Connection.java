@@ -16,7 +16,7 @@
  * <p>
  * S3 storage client binding for YCSB.
  */
-package com.yahoo.ycsb.db;
+package com.yahoo.ycsb.dual;
 
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.Protocol;

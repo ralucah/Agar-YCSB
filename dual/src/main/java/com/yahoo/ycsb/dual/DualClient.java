@@ -1,11 +1,11 @@
-package com.yahoo.ycsb.db;
+package com.yahoo.ycsb.dual;
 
 // -db com.yahoo.ycsb.db.DualClient -p fieldlength=10 -p fieldcount=20 -s -P workloads/myworkload -load
 
-import com.sun.org.apache.xpath.internal.operations.Bool;
+import com.sun.jna.Memory;
+import com.sun.jna.Pointer;
 import com.yahoo.ycsb.*;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -146,7 +146,7 @@ public class DualClient extends DB {
         int connId = Mapper.mapKeyToDatacenter(key, numConnections);
         final String bucket = s3Buckets.get(connId);
 
-        System.out.println("DualClient.read_" + mode + "(" + bucket + ", " + key + ")");
+        //System.out.println("DualClient.read_" + mode + "(" + bucket + ", " + key + ")");
 
         switch (mode) {
             case S3: {
@@ -192,18 +192,6 @@ public class DualClient extends DB {
 
         return bytes;
     }
-
-    /*private List<byte[]> transformResults( List<HashMap<String, ByteIterator>> results) {
-        List<byte[]> blocksBytes = new ArrayList<byte[]>();
-
-        Iterator it = results.iterator();
-        while(it.hasNext()) {
-            Map.Entry<String, ByteIterator> pair = (Map.Entry) it.next();
-            blocksBytes.add(pair.getValue().toArray());
-        }
-
-        return blocksBytes;
-    }*/
 
     @Override
     public Status read(String table, String key, Set<String> fields, HashMap<String, ByteIterator> result) {
@@ -255,6 +243,7 @@ public class DualClient extends DB {
         byte[] bytes = LonghairLib.decode(results);
 
         // now transform bytes to result hashmap
+        System.out.println("DualClient.read_" + mode + "(" + key + " " + bytesToHex(bytes) + ")");
         result.put(key, new ByteArrayByteIterator(bytes));
 
         return Status.OK;
@@ -325,28 +314,43 @@ public class DualClient extends DB {
         return bytes;
     }
 
-    private byte[] constructNewBlock(int row, byte[] value, byte[] lengthBytes) {
-        // allocate memory for new block: original data length in bytes + row number + value
-        byte[] newBlock = new byte[value.length + (LonghairLib.reservedBytes * 2)];
+    /*private byte[] deconstructBlocks(List<byte[]> blocks) {
+        Map<Integer, byte[]> dataBlocks = new HashMap<Integer, byte[]>();
 
-        // offset within new block
-        int offset = 0;
+        for (byte[] block : blocks){
+            int dataBlockSize = block.length - (LonghairLib.reservedBytes * 2);
 
-        // copy length to new block
-        System.arraycopy(lengthBytes, 0, newBlock, offset, LonghairLib.reservedBytes);
-        offset += LonghairLib.reservedBytes;
+            // divide full value into original length, row number, value
+            byte[] lengthBytes = new byte[LonghairLib.reservedBytes];
+            byte[] rowBytes = new byte[LonghairLib.reservedBytes];
+            byte[] actualData = new byte[dataBlockSize];
 
-        // transform row number to bytes
-        byte[] rowBytes = ByteBuffer.allocate(LonghairLib.reservedBytes).putInt(row).array();
+            int offset = 0;
+            System.arraycopy(block, offset, lengthBytes, 0, LonghairLib.reservedBytes);
+            offset += LonghairLib.reservedBytes;
+            System.arraycopy(block, offset, rowBytes, 0, LonghairLib.reservedBytes);
+            offset += LonghairLib.reservedBytes;
+            System.arraycopy(block, offset, actualData, 0, dataBlockSize);
 
-        // copy rown number bytes to new block
-        System.arraycopy(rowBytes, 0, newBlock, offset, LonghairLib.reservedBytes);
-        offset += LonghairLib.reservedBytes;
+            // obtain int
+            int originalLength = ByteBuffer.wrap(lengthBytes).getInt();
+            int row = ByteBuffer.wrap(rowBytes).getInt();
 
-        // copy value to new block
-        System.arraycopy(value, 0, newBlock, offset, value.length);
+            // add row and value to block
+            dataBlocks.put(row, actualData);
+        }
+        return null;
+    }*/
 
-        return newBlock;
+    final protected static char[] hexArray = "0123456789ABCDEF".toCharArray();
+    public static String bytesToHex(byte[] bytes) {
+        char[] hexChars = new char[bytes.length * 2];
+        for ( int j = 0; j < bytes.length; j++ ) {
+            int v = bytes[j] & 0xFF;
+            hexChars[j * 2] = hexArray[v >>> 4];
+            hexChars[j * 2 + 1] = hexArray[v & 0x0F];
+        }
+        return new String(hexChars);
     }
 
     @Override
@@ -355,42 +359,37 @@ public class DualClient extends DB {
 
         // generate bytes array based on values
         byte[] bytes = valuesToBytes(values);
+        System.out.println("DualClient.insert_" + mode + "(" + key + " " + bytesToHex(bytes) + ")");
+
         int bytesLen = bytes.length;
         byte[] lengthBytes = ByteBuffer.allocate(LonghairLib.reservedBytes).putInt(bytesLen).array();
 
         // encode data using Longhair
-        Map<Integer, byte[]> blocks = LonghairLib.encode(bytes);
+        List<byte[]> blocks = LonghairLib.encode(bytes);
 
         // store each block
-        Iterator it = blocks.entrySet().iterator();
-        while (it.hasNext()) {
-            Map.Entry pair = (Map.Entry)it.next();
-            int row = (int)pair.getKey();
+        int row = 0;
+        for (byte[] block : blocks) {
             String blockKey = key + row;
-
-            byte[] value = (byte[])pair.getValue();
-
-            /* construct new block by appending original length and row number */
-            byte[] newBlock = constructNewBlock(row, value, lengthBytes);
 
             // map to data center
             int connId = Mapper.mapKeyToDatacenter(key, numConnections);
             String bucket = s3Buckets.get(connId);
 
-            System.out.println("DualClient.insert_" + mode + "(" + bucket + ", " + blockKey + ")");
+            //System.out.println("DualClient.insert_" + mode + "(" + bucket + ", " + blockKey + " " + bytesToHex(newBlock) + ")");
 
             switch (mode) {
                 case S3: {
-                    status = s3Connections.get(connId).insert(bucket, blockKey, newBlock);
+                    status = s3Connections.get(connId).insert(bucket, blockKey, block);
                     break;
                 }
                 case MEMCACHED: {
-                    status = memcachedConnections.get(connId).insert(bucket, blockKey, newBlock);
+                    status = memcachedConnections.get(connId).insert(bucket, blockKey, block);
                     break;
                 }
                 case DUAL: {
                     // insert in S3
-                    status = s3Connections.get(connId).insert(bucket, blockKey, newBlock);
+                    status = s3Connections.get(connId).insert(bucket, blockKey, block);
                     // TODO to cache or not to cache on insert?
                     break;
                 }
