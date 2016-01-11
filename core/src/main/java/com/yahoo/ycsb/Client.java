@@ -536,7 +536,6 @@ public class Client {
         }
 
         while (args[argindex].startsWith("-")) {
-            System.out.println("in while: " + argindex + " " + args[argindex]);
             if (args[argindex].compareTo("-threads") == 0) {
                 argindex++;
                 if (argindex >= args.length) {

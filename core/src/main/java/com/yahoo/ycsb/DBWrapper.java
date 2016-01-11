@@ -17,14 +17,9 @@
 
 package com.yahoo.ycsb;
 
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Properties;
-import java.util.Set;
-import java.util.Vector;
-
 import com.yahoo.ycsb.measurements.Measurements;
+
+import java.util.*;
 
 /**
  * Wrapper around a "real" DB that measures latencies and counts return codes.
@@ -32,19 +27,16 @@ import com.yahoo.ycsb.measurements.Measurements;
  */
 public class DBWrapper extends DB
 {
-  private DB _db;
-  private Measurements _measurements;
-
-  private boolean reportLatencyForEachError = false;
-  private HashSet<String> latencyTrackedErrors = new HashSet<String>();
-
   private static final String REPORT_LATENCY_FOR_EACH_ERROR_PROPERTY =
       "reportlatencyforeacherror";
   private static final String REPORT_LATENCY_FOR_EACH_ERROR_PROPERTY_DEFAULT =
       "false";
-
   private static final String LATENCY_TRACKED_ERRORS_PROPERTY =
       "latencytrackederrors";
+    private DB _db;
+    private Measurements _measurements;
+    private boolean reportLatencyForEachError = false;
+    private HashSet<String> latencyTrackedErrors = new HashSet<String>();
 
   public DBWrapper(DB db)
   {
@@ -53,19 +45,19 @@ public class DBWrapper extends DB
   }
 
   /**
-   * Set the properties for this DB.
-   */
-  public void setProperties(Properties p)
-  {
-    _db.setProperties(p);
-  }
-
-  /**
    * Get the set of properties for this DB.
    */
   public Properties getProperties()
   {
-    return _db.getProperties();
+      return _db.getProperties();
+  }
+
+  /**
+   * Set the properties for this DB.
+   */
+  public void setProperties(Properties p)
+  {
+      _db.setProperties(p);
   }
 
   /**
@@ -89,9 +81,9 @@ public class DBWrapper extends DB
       }
     }
 
-    System.err.println("DBWrapper: report latency for each error is " +
+    /*System.err.println("DBWrapper: report latency for each error is " +
         this.reportLatencyForEachError + " and specific error codes to track" +
-        " for latency are: " + this.latencyTrackedErrors.toString());
+        " for latency are: " + this.latencyTrackedErrors.toString());*/
   }
 
   /**

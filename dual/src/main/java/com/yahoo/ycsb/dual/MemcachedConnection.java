@@ -17,12 +17,15 @@
 
 package com.yahoo.ycsb.dual;
 
-import com.yahoo.ycsb.*;
+import com.yahoo.ycsb.ByteIterator;
+import com.yahoo.ycsb.DBException;
+import com.yahoo.ycsb.Status;
+import com.yahoo.ycsb.StringByteIterator;
 import net.spy.memcached.ConnectionFactoryBuilder;
 import net.spy.memcached.FailureMode;
 import net.spy.memcached.internal.GetFuture;
 import net.spy.memcached.internal.OperationFuture;
-import org.apache.log4j.Logger;
+import org.apache.log4j.Level;
 import org.codehaus.jackson.JsonFactory;
 import org.codehaus.jackson.JsonGenerator;
 import org.codehaus.jackson.JsonNode;
@@ -65,7 +68,6 @@ public class MemcachedConnection {
     protected static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String TEMPORARY_FAILURE_MSG = "Temporary failure";
     private static final String CANCELLED_MSG = "cancelled";
-    private final Logger logger = Logger.getLogger(getClass());
     private boolean checkOperationStatus;
     private long shutdownTimeoutMillis;
     private int objectExpirationTime;
@@ -130,6 +132,10 @@ public class MemcachedConnection {
     }
 
     public void init() throws DBException {
+        // turn off logging for spy memcached
+        System.setProperty("net.spy.log.LoggerImpl", "net.spy.memcached.compat.log.Log4JLogger");
+        org.apache.log4j.Logger.getLogger("net.spy.memcached").setLevel(Level.OFF);
+
         InputStream propFile = MemcachedConnection.class.getClassLoader()
             .getResourceAsStream("memcached.properties");
         props = new Properties();
@@ -199,7 +205,7 @@ public class MemcachedConnection {
             GetFuture<Object> future = memcachedClient().asyncGet(key);
             bytes = (byte[])future.get();
         } catch (Exception e) {
-            logger.error("Error encountered for key: " + key, e);
+            DualClient.logger.error("Error encountered for key: " + key, e);
         }
         return bytes;
     }
@@ -218,7 +224,7 @@ public class MemcachedConnection {
                     memcachedClient().replace(key, objectExpirationTime, toJson(values));
             return getReturnCode(future);
         } catch (Exception e) {
-            logger.error("Error updating value with key: " + key, e);
+            DualClient.logger.error("Error updating value with key: " + key, e);
             return Status.ERROR;
         }
     }
@@ -233,7 +239,7 @@ public class MemcachedConnection {
                     memcachedClient().add(key, objectExpirationTime, bytes); //toJson(values));
             return getReturnCode(future);
         } catch (Exception e) {
-            logger.error("Error inserting value", e);
+            DualClient.logger.error("Error inserting value", e);
             return Status.ERROR;
         }
     }
@@ -244,7 +250,7 @@ public class MemcachedConnection {
             OperationFuture<Boolean> future = memcachedClient().delete(key);
             return getReturnCode(future);
         } catch (Exception e) {
-            logger.error("Error deleting value", e);
+            DualClient.logger.error("Error deleting value", e);
             return Status.ERROR;
         }
     }

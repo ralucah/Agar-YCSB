@@ -4,18 +4,22 @@ package com.yahoo.ycsb.dual;
 // -db com.yahoo.ycsb.dual.DualClient -p fieldlength=10 -p fieldcount=20 -s -P workloads/myworkload
 
 import com.yahoo.ycsb.*;
+import org.apache.log4j.Logger;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class DualClient extends DB {
-    //public static final String MEMCACHED_HOSTS_PROPERTY = "memcached.hosts";
     public static final String DUAL_PROPERTIES = "dual.properties";
-
     private static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
-
+    //public static final String MEMCACHED_HOSTS_PROPERTY = "memcached.hosts";
+    protected static Logger logger = Logger.getLogger("com.yahoo.ycsb.dual");
     private static Mode mode;
 
     private static List<String> s3Buckets;
@@ -47,7 +51,7 @@ public class DualClient extends DB {
         int s3RegionsSize = s3Regions.size();
         int s3EndPointsSize = s3EndPoints.size();
         if (s3BucketsSize != s3RegionsSize || s3RegionsSize != s3EndPointsSize || s3BucketsSize != s3EndPointsSize) {
-            System.err.println("Num buckets should be equal to num regions and num endpoints. Check dual.properties");
+            logger.error("Num buckets should be equal to num regions and num endpoints. Check dual.properties");
             System.exit(1);
         }
 
@@ -71,7 +75,6 @@ public class DualClient extends DB {
 
         List<String> memcachedHosts = Arrays.asList(props.getProperty("memcached.hosts").split("\\s*,\\s*"));
         for (String memcachedHost : memcachedHosts) {
-            System.out.println(memcachedHost);
             MemcachedConnection conn = new MemcachedConnection(memcachedHost);
             memcachedConnections.add(conn);
         }
@@ -85,19 +88,19 @@ public class DualClient extends DB {
 
         // check k >= 0 and k < 256
         if (LonghairLib.k < 0 || LonghairLib.k >= 256) {
-            System.err.println("Invalid longhair.k: k should be >= 0 and < 256.");
+            logger.error("Invalid longhair.k: k should be >= 0 and < 256.");
             System.exit(1);
         }
 
         // check m >=0 and m <= 256 - k
         if (LonghairLib.m < 0 || LonghairLib.m > 256 - LonghairLib.k) {
-            System.err.println("Invalid longhair.m: m should be >= 0 and <= 256 - k.");
+            logger.error("Invalid longhair.m: m should be >= 0 and <= 256 - k.");
             System.exit(1);
         }
 
         // init longhair
         if (LonghairLib.Longhair.INSTANCE._cauchy_256_init(2) != 0) {
-            System.err.println("Error initializing longhair");
+            logger.error("Error initializing longhair");
             System.exit(1);
         }
     }
@@ -109,7 +112,7 @@ public class DualClient extends DB {
      */
     @Override
     public void init() throws DBException {
-        System.out.println("DualClient.init()");
+        logger.debug("DualClient.init()");
 
         // get properties
         InputStream propFile = DualClient.class.getClassLoader().getResourceAsStream(DUAL_PROPERTIES);
@@ -117,7 +120,7 @@ public class DualClient extends DB {
         try {
             props.load(propFile);
         } catch (IOException e) {
-            System.err.println("Could not find" + DUAL_PROPERTIES);
+            logger.error("Could not find" + DUAL_PROPERTIES);
             System.exit(1);
         }
 
@@ -144,7 +147,7 @@ public class DualClient extends DB {
                 break;
             default:
                 // TODO how to exit properly?
-                System.err.println("Invalid mode in " + DUAL_PROPERTIES + ". Mode should be: s3 / memcached / dual.");
+                logger.error("Invalid mode in " + DUAL_PROPERTIES + ". Mode should be: s3 / memcached / dual.");
                 System.exit(-1);
                 break;
         }
@@ -183,7 +186,7 @@ public class DualClient extends DB {
 
                 // if cache miss, read from S3
                 if (bytes == null) {
-                    System.out.println("Cache miss!");
+                    logger.debug("Cache miss!");
 
                     // get from s3
                     bytes = s3Connections.get(connId).read(bucket, key);
@@ -203,18 +206,18 @@ public class DualClient extends DB {
                         }
                     }.start();
                 } else {
-                    System.out.println("Cache hit!");
+                    logger.debug("Cache hit!");
                 }
 
                 break;
             }
             default: {
-                System.err.println("Invalid mode!");
+                logger.error("Invalid mode!");
                 break;
             }
         }
 
-        //System.out.println("DualClient.readBlock_" + mode + "(" + key + " " +bucket + " " + bytesToHex(bytes) + ")");
+        //logger.debug("DualClient.readBlock_" + mode + "(" + key + " " +bucket + " " + bytesToHex(bytes) + ")");
         return bytes;
     }
 
@@ -233,17 +236,17 @@ public class DualClient extends DB {
                 final int counterFin = counter;
                 Future<byte[]> future = executor.submit(() -> {
                     byte[] toRet = readBlock(key + counterFin, fields, result);
-                    //System.out.println("Reading key " + (key+counterFin) + " returned " + toRet);
+                    //logger.debug("Reading key " + (key+counterFin) + " returned " + toRet);
                     return toRet;
                 });
                 futures.put(future, false);
-                //System.out.println("Future <" + future + "> checks key " + (key+counterFin));
+                //logger.debug("Future <" + future + "> checks key " + (key+counterFin));
                 counter++;
             }
 
             // TODO should give up in a while
             int receivedBlocks = 0;
-            //System.out.println("k = " + LonghairLib.k + " " + futures.entrySet().size());
+            //logger.debug("k = " + LonghairLib.k + " " + futures.entrySet().size());
             while (receivedBlocks < LonghairLib.k) {
                 Iterator it = futures.entrySet().iterator();
                 while (it.hasNext()) {
@@ -279,7 +282,7 @@ public class DualClient extends DB {
         if (bytes != null) {
             status = Status.OK;
             // now transform bytes to result hashmap
-            System.out.println("DualClient.read_" + mode + "(" + key + " " + Utils.bytesToHex(bytes) + ")");
+            logger.debug("DualClient.read_" + mode + "(" + key + " " + Utils.bytesToHex(bytes) + ")");
             result.put(key, new ByteArrayByteIterator(bytes));
         }
 
@@ -290,14 +293,14 @@ public class DualClient extends DB {
 
     @Override
     public Status scan(String table, String startkey, int recordcount, Set<String> fields, Vector<HashMap<String, ByteIterator>> result) {
-        System.err.println("scan() not supported yet");
+        logger.error("scan() not supported yet");
         System.exit(0);
         return null;
     }
 
     @Override
     public Status update(String table, String key, HashMap<String, ByteIterator> values) {
-        System.err.println("update() not supported yet");
+        logger.error("update() not supported yet");
         System.exit(0);
         return null;
     }
@@ -328,7 +331,7 @@ public class DualClient extends DB {
         int connId = Mapper.mapKeyToDatacenter(key, numConnections);
         String bucket = s3Buckets.get(connId);
 
-        //System.out.println("DualClient.insertBlock" + mode + "(" + blockKey + " " + bucket + " " + bytesToHex(block) + ")");
+        //logger.debug("DualClient.insertBlock" + mode + "(" + blockKey + " " + bucket + " " + bytesToHex(block) + ")");
 
         switch (mode) {
             case S3: {
@@ -346,7 +349,7 @@ public class DualClient extends DB {
                 break;
             }
             default: {
-                System.err.println("Invalid mode!");
+                logger.error("Invalid mode!");
                 break;
             }
         }
@@ -359,7 +362,7 @@ public class DualClient extends DB {
 
         // generate bytes array based on values
         byte[] bytes = valuesToBytes(values);
-        System.out.println("DualClient.insert_" + mode + "(" + key + " " + Utils.bytesToHex(bytes) + ") EC:" + erasureCoding);
+        logger.debug("DualClient.insert_" + mode + "(" + key + " " + Utils.bytesToHex(bytes) + ") EC:" + erasureCoding);
 
         if (erasureCoding) {
             // encode data using Longhair
@@ -382,7 +385,7 @@ public class DualClient extends DB {
 
     @Override
     public Status delete(String table, String key) {
-        System.err.println("delete() not supported yet");
+        logger.error("delete() not supported yet");
         System.exit(0);
         return null;
     }

@@ -54,28 +54,27 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class S3Connection {
 
-    private AmazonS3Client s3Client;
+    private static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
     private static String sse;
     private static SSECustomerKey ssecKey;
-    private static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
-
     private static BasicAWSCredentials s3Credentials;
     private static ClientConfiguration clientConfig;
+    private AmazonS3Client s3Client;
 
     public S3Connection(String region, String endPoint) throws DBException {
-        System.out.println("S3Connection.establishConnection(" + region + "," + endPoint + ")");
+        DualClient.logger.debug("S3Connection.establishConnection(" + region + "," + endPoint + ")");
 
         if (s3Credentials == null || clientConfig == null)
             init();
 
         try {
-            System.out.println("Inizializing the S3 connection...");
+            DualClient.logger.debug("Inizializing the S3 connection...");
             s3Client = new AmazonS3Client(s3Credentials, clientConfig);
             s3Client.setRegion(Region.getRegion(Regions.fromName(region)));
             s3Client.setEndpoint(endPoint);
-            System.out.println("Connection successfully initialized");
+            DualClient.logger.debug("Connection successfully initialized");
         } catch (Exception e) {
-            System.err.println("Could not connect to S3 storage: " + e.toString());
+            DualClient.logger.error("Could not connect to S3 storage: " + e.toString());
             e.printStackTrace();
             throw new DBException(e);
         }
@@ -89,9 +88,9 @@ public class S3Connection {
         if (INIT_COUNT.decrementAndGet() == 0) {
             try {
                 s3Client.shutdown();
-                System.out.println("The client is shutdown successfully");
+                DualClient.logger.debug("The client is shutdown successfully");
             } catch (Exception e) {
-                System.err.println("Could not shutdown the S3Client: " + e.toString());
+                DualClient.logger.error("Could not shutdown the S3Client: " + e.toString());
                 e.printStackTrace();
             } finally {
                 if (s3Client != null) {
@@ -115,7 +114,7 @@ public class S3Connection {
         try {
             s3Client.deleteObject(new DeleteObjectRequest(bucket, key));
         } catch (Exception e) {
-            System.err.println("Not possible to delete the key " + key);
+            DualClient.logger.error("Not possible to delete the key " + key);
             e.printStackTrace();
             return Status.ERROR;
         }
@@ -127,7 +126,7 @@ public class S3Connection {
      * Called once per S3 instance; If the client is not null it is re-used.
      */
     public void init() throws DBException {
-        System.out.println("S3Connection.init()");
+        DualClient.logger.debug("S3Connection.init()");
 
         String accessKeyId = null;
         String secretKey = null;
@@ -142,30 +141,30 @@ public class S3Connection {
             props.load(propFile);
 
             accessKeyId = props.getProperty("s3.accessKeyId");
-            //System.out.println("s3.accessKeyId: " + accessKeyId);
+            //DualClient.logger.debug("s3.accessKeyId: " + accessKeyId);
 
             secretKey = props.getProperty("s3.secretKey");
-            //System.out.println("s3.secretKey: " + secretKey);
+            //DualClient.logger.debug("s3.secretKey: " + secretKey);
 
             maxErrorRetry = props.getProperty("s3.maxErrorRetry");
-            //System.out.println("s3.maxErrorRetry: " + maxErrorRetry);
+            //DualClient.logger.debug("s3.maxErrorRetry: " + maxErrorRetry);
 
             maxConnections = props.getProperty("s3.maxConnections");
-            //System.out.println("s3.maxConnections: " + maxConnections);
+            //DualClient.logger.debug("s3.maxConnections: " + maxConnections);
 
             protocol = props.getProperty("s3.protocol");
-            //System.out.println("s3.protocol: " + protocol);
+            //DualClient.logger.debug("s3.protocol: " + protocol);
 
             sse = props.getProperty("s3.sse");
-            //System.out.println("s3.sse: " + sse);
+            //DualClient.logger.debug("s3.sse: " + sse);
 
             String ssec = props.getProperty("s3.ssec");
             if (ssec != null) {
                 ssecKey = new SSECustomerKey(ssec);
-                //System.out.println("ssecKey: " + ssecKey);
+                //DualClient.logger.debug("ssecKey: " + ssecKey);
             }
         } catch (Exception e) {
-            System.err.println("The file properties doesn't exist " + e.toString());
+            DualClient.logger.error("The file properties doesn't exist " + e.toString());
             e.printStackTrace();
         }
         try {
@@ -181,7 +180,7 @@ public class S3Connection {
                 clientConfig.setMaxConnections(Integer.parseInt(maxConnections));
             }
         } catch (Exception e) {
-            System.err.println("Could not connect to S3 storage: " + e.toString());
+            DualClient.logger.error("Could not connect to S3 storage: " + e.toString());
             e.printStackTrace();
             throw new DBException(e);
         }
@@ -235,22 +234,22 @@ public class S3Connection {
                 } else {
                     if (ssecKey != null) {
                         if (ssecKey.equals("true")) {
-                            System.out.println("Uploaded object encryption status is " +
+                            DualClient.logger.debug("Uploaded object encryption status is " +
                                 res.getSSEAlgorithm());
                         } else {
-                            System.out.println("Uploaded object encryption status is " +
+                            DualClient.logger.debug("Uploaded object encryption status is " +
                                 res.getSSEAlgorithm());
                         }
                     }
                 }
                 return Status.OK;
             } catch (Exception e) {
-                System.err.println("Not possible to write object :" + key);
+                DualClient.logger.error("Not possible to write object :" + key);
                 e.printStackTrace();
                 return Status.ERROR;
             }
         } catch (Exception e) {
-            System.err.println("Error in the creation of the stream :" + e.toString());
+            DualClient.logger.error("Error in the creation of the stream :" + e.toString());
             e.printStackTrace();
             return Status.ERROR;
         }
@@ -293,7 +292,7 @@ public class S3Connection {
             //result.put(key, new ByteArrayByteIterator(inputStreamToByte));
             objectData.close();
         } catch (Exception e) {
-            System.err.println("Not possible to get the object " + key);
+            DualClient.logger.error("Not possible to get the object " + key);
             e.printStackTrace();
         } finally {
             return bytes;
@@ -388,7 +387,7 @@ public class S3Connection {
                 fieldCount = sizeOfFile / sizeArray;
                 totalSize = sizeOfFile;
             } catch (Exception e) {
-                System.err.println("Not possible to get the object :" + key);
+                DualClient.logger.error("Not possible to get the object :" + key);
                 e.printStackTrace();
                 return Status.ERROR;
             }
@@ -422,22 +421,22 @@ public class S3Connection {
                     return Status.ERROR;
                 } else {
                     if (sseLocal.equals("true")) {
-                        System.out.println("Uploaded object encryption status is " +
+                        DualClient.logger.debug("Uploaded object encryption status is " +
                                 res.getSSEAlgorithm());
                     } else if (ssecLocal != null) {
-                        System.out.println("Uploaded object encryption status is " +
+                        DualClient.logger.debug("Uploaded object encryption status is " +
                                 res.getSSEAlgorithm());
                     }
                 }
             } catch (Exception e) {
-                System.err.println("Not possible to write object :" + key);
+                DualClient.logger.error("Not possible to write object :" + key);
                 e.printStackTrace();
                 return Status.ERROR;
             } finally {
                 return Status.OK;
             }
         } catch (Exception e) {
-            System.err.println("Error in the creation of the stream :" + e.toString());
+            DualClient.logger.error("Error in the creation of the stream :" + e.toString());
             e.printStackTrace();
             return Status.ERROR;
         }
@@ -481,7 +480,7 @@ public class S3Connection {
             result.put(key, new ByteArrayByteIterator(inputStreamToByte));
             objectData.close();
         } catch (Exception e) {
-            System.err.println("Not possible to get the object " + key);
+            DualClient.logger.error("Not possible to get the object " + key);
             e.printStackTrace();
             return Status.ERROR;
         } finally {
