@@ -25,6 +25,7 @@ import net.spy.memcached.ConnectionFactoryBuilder;
 import net.spy.memcached.FailureMode;
 import net.spy.memcached.internal.GetFuture;
 import net.spy.memcached.internal.OperationFuture;
+import net.spy.memcached.ops.StatusCode;
 import org.apache.log4j.Level;
 import org.codehaus.jackson.JsonFactory;
 import org.codehaus.jackson.JsonGenerator;
@@ -199,15 +200,22 @@ public class MemcachedConnection {
                 connectionFactoryBuilder.build(), addresses);
     }
 
-    public byte[] read(String table, String key) {
-        byte[] bytes = null;
+    public Result read(String table, String key) {
+        Result result = new Result();
         try {
             GetFuture<Object> future = memcachedClient().asyncGet(key);
-            bytes = (byte[])future.get();
+            byte[] bytes = (byte[]) future.get();
+            result.setBytes(bytes);
+
+            if (bytes == null || future.getStatus().getStatusCode().equals(StatusCode.ERR_NOT_FOUND))
+                result.setStatus(Status.ERROR);
+            else
+                result.setStatus(Status.OK);
         } catch (Exception e) {
             DualClient.logger.error("Error encountered for key: " + key, e);
+            result.setStatus(Status.ERROR);
         }
-        return bytes;
+        return result;
     }
 
     public Status scan(

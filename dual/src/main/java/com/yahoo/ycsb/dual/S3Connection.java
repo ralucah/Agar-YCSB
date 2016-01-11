@@ -270,8 +270,8 @@ public class S3Connection {
      *          A HashMap of field/value pairs for the result
      * @return OK on success, ERROR otherwise.
      */
-    public byte[] read(String bucket, String key) {
-        byte[] bytes = null;
+    public Result read(String bucket, String key) {
+        Result result = new Result();
         try {
             GetObjectRequest getObjectRequest = null;
             GetObjectMetadataRequest getObjectMetadataRequest = null;
@@ -287,16 +287,20 @@ public class S3Connection {
             InputStream objectData = object.getObjectContent(); //consuming the stream
             // writing the stream to bytes and to results
             int sizeOfFile = (int) objectMetadata.getContentLength();
-            bytes = new byte[sizeOfFile];
+            byte[] bytes = new byte[sizeOfFile];
             objectData.read(bytes, 0, sizeOfFile);
-            //result.put(key, new ByteArrayByteIterator(inputStreamToByte));
+            result.setBytes(bytes);
             objectData.close();
+            if (bytes == null)
+                result.setStatus(Status.ERROR);
+            else
+                result.setStatus(Status.OK);
         } catch (Exception e) {
+            result.setStatus(Status.ERROR);
             DualClient.logger.error("Not possible to get the object " + key);
-            e.printStackTrace();
-        } finally {
-            return bytes;
+            //e.printStackTrace();
         }
+        return result;
     }
 
     /**

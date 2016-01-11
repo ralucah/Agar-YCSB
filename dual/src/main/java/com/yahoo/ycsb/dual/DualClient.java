@@ -9,7 +9,6 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -165,129 +164,190 @@ public class DualClient extends DB {
         }
     }
 
-    public byte[] readBlock(String key, Set<String> fields, HashMap<String, ByteIterator> result) {
-        byte[] bytes = null;
+    public Result readOneBlock(String key, Mode readMode) {
+        Result result = new Result();
         int connId = Mapper.mapKeyToDatacenter(key, numConnections);
         final String bucket = s3Buckets.get(connId);
 
-        switch (mode) {
+        switch (readMode) {
             case S3: {
-                bytes = s3Connections.get(connId).read(bucket, key);
+                result = s3Connections.get(connId).read(bucket, key);
                 break;
             }
             case MEMCACHED: {
-                bytes = memcachedConnections.get(connId).read(bucket, key);
-                break;
-            }
-            case DUAL: {
-                // try to read from memcached
-                final MemcachedConnection memConn = memcachedConnections.get(connId);
-                bytes = memConn.read(bucket, key);
-
-                // if cache miss, read from S3
-                if (bytes == null) {
-                    logger.debug("Cache miss!");
-
-                    // get from s3
-                    bytes = s3Connections.get(connId).read(bucket, key);
-
-                    // store to memcached
-                    //memConn.insert(bucket, key, bytes);
-
-                    //store in memcached in a different thread, in the background
-                    final String keyFinal = key;
-                    final HashMap<String, ByteIterator> resultFinal = new HashMap<String, ByteIterator>(result);
-                    final byte[] bytesFin = new byte[bytes.length];
-                    System.arraycopy(bytes, 0, bytesFin,0, bytes.length);
-                    new Thread() {
-                        @Override
-                        public void run() {
-                            memConn.insert(bucket, keyFinal, bytesFin);
-                        }
-                    }.start();
-                } else {
-                    logger.debug("Cache hit!");
-                }
-
+                result = memcachedConnections.get(connId).read(bucket, key);
                 break;
             }
             default: {
-                logger.error("Invalid mode!");
+                logger.error("Invalid read mode!");
+                break;
+            }
+        }
+        //logger.debug("DualClient.readBlock_" + mode + "(" + key + " " +bucket + " " + bytesToHex(bytes) + ")");
+        return result;
+    }
+
+
+    public List<Result> readKBlocks(String key, Mode readMode) {
+        List<Result> results = new ArrayList<Result>();
+        Map<Future, Boolean> futures = new HashMap<Future, Boolean>();
+
+        // TODO how many threads in the thread pool?
+        ExecutorService executor = Executors.newFixedThreadPool(LonghairLib.k + LonghairLib.m);
+
+        int counter = 0;
+        while (counter < LonghairLib.k + LonghairLib.m) {
+            final int counterFin = counter;
+            Future<Result> future = executor.submit(() -> {
+                //logger.debug("Reading key " + (key+counterFin) + " returned " + toRet);
+                return readOneBlock(key + counterFin, readMode);
+            });
+            futures.put(future, false);
+            //logger.debug("Future <" + future + "> checks key " + (key+counterFin));
+            counter++;
+        }
+
+        // TODO should give up in a while
+        int receivedBlocks = 0;
+        //logger.debug("k = " + LonghairLib.k + " " + futures.entrySet().size());
+        int cancelled = 0;
+        while (receivedBlocks < LonghairLib.k && cancelled < futures.entrySet().size()) {
+            Iterator it = futures.entrySet().iterator();
+            while (it.hasNext()) {
+                Map.Entry<Future, Boolean> pair = (Map.Entry) it.next();
+                Future future = pair.getKey();
+                Boolean done = pair.getValue();
+                if (done.equals(false) && future.isDone()) {
+                    try {
+                        Result res = (Result) future.get();
+
+                        if (res != null) {
+                            if (res.getStatus() == Status.OK) {
+                                receivedBlocks++;
+                                pair.setValue(true);
+                                results.add(res);
+                            } else {
+                                future.cancel(true);
+                                cancelled++;
+                            }
+                        }
+                    } catch (Exception e) {
+                        logger.error("Exception in future!");
+                        future.cancel(true); // may interrupt if running
+                    }
+                }
+            }
+        }
+
+        executor.shutdown();
+
+        return results;
+    }
+
+
+    // TODO possible optimization: batch requests to the same data center (S3 bucket or memcached server)
+    @Override
+    public Status read(String table, String key, Set<String> fields, HashMap<String, ByteIterator> result) {
+        Status status = null;
+        byte[] bytes = null;
+
+        switch (mode) {
+            case S3:
+            case MEMCACHED: {
+                if (erasureCoding) {
+                    // read k blocks
+                    List<Result> results = readKBlocks(key, mode);
+                    if (results == null || results.size() < LonghairLib.k)
+                        status = Status.ERROR;
+                    else {
+                        List<byte[]> blocks = new ArrayList<byte[]>();
+                        for (Result res : results) {
+                            blocks.add(res.getBytes());
+                        }
+                        bytes = LonghairLib.decode(blocks);
+                    }
+                } else {
+                    // read full data
+                    Result res = readOneBlock(key, mode);
+                    status = res.getStatus();
+                    bytes = res.getBytes();
+                }
+                break;
+            }
+            case DUAL: {
+                if (erasureCoding) {
+                    // try to read k blocks from memcached
+                    List<Result> results = readKBlocks(key, Mode.MEMCACHED);
+                    if (results != null && results.size() > 0) {
+                        logger.debug("Cache hit");
+                        status = Status.OK;
+                    } else {
+                        // if unsuccessful, try to read k blocks from s3
+                        logger.debug("Cache miss");
+
+                        results = readKBlocks(key, Mode.S3);
+
+                        if (results == null || results.size() < LonghairLib.k)
+                            status = Status.ERROR;
+                        else {
+                            List<byte[]> blocks = new ArrayList<byte[]>();
+                            for (Result res : results) {
+                                blocks.add(res.getBytes());
+                            }
+                            bytes = LonghairLib.decode(blocks);
+
+                            // then, if successful, store the blocks in memcached
+                            int row = 0;
+                            Status cacheStatus;
+                            for (Result res : results) {
+                                String blockKey = key + row;
+                                row++;
+                                cacheStatus = insertOneBlock(blockKey, res.getBytes(), Mode.MEMCACHED);
+                                if (cacheStatus != Status.OK) {
+                                    logger.error("Error caching block!");
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // try to read data from memcached
+                    Result res = readOneBlock(key, Mode.MEMCACHED);
+                    status = res.getStatus();
+
+                    if (res == null || status == Status.ERROR) {
+                        logger.debug("Cache miss");
+
+                        // try to get from s3
+                        res = readOneBlock(key, Mode.S3);
+                        if (res != null && res.getStatus() == Status.OK) {
+                            bytes = res.getBytes();
+
+                            // cache it
+                            status = insertOneBlock(key, bytes, Mode.MEMCACHED);
+                        }
+                    } else if (res != null && status == status.OK) {
+                        logger.debug("Cache hit");
+                        bytes = res.getBytes();
+                    }
+                }
+                break;
+            }
+            default: {
+                logger.error("Unknown mode");
                 break;
             }
         }
 
-        //logger.debug("DualClient.readBlock_" + mode + "(" + key + " " +bucket + " " + bytesToHex(bytes) + ")");
-        return bytes;
-    }
-
-    @Override
-    public Status read(String table, String key, Set<String> fields, HashMap<String, ByteIterator> result) {
-        // TODO possible optimization: batch requests to the same data center (S3 bucket or memcached server)
-        byte[] bytes;
-        if (erasureCoding) {
-            Map<Future, Boolean> futures = new HashMap<Future, Boolean>();
-            List<byte[]> results = new ArrayList<byte[]>();
-
-            ExecutorService executor = Executors.newFixedThreadPool(LonghairLib.k + LonghairLib.m); // how many threads in the thread pool?
-
-            int counter = 0;
-            while (counter < LonghairLib.k + LonghairLib.m) {
-                final int counterFin = counter;
-                Future<byte[]> future = executor.submit(() -> {
-                    byte[] toRet = readBlock(key + counterFin, fields, result);
-                    //logger.debug("Reading key " + (key+counterFin) + " returned " + toRet);
-                    return toRet;
-                });
-                futures.put(future, false);
-                //logger.debug("Future <" + future + "> checks key " + (key+counterFin));
-                counter++;
-            }
-
-            // TODO should give up in a while
-            int receivedBlocks = 0;
-            //logger.debug("k = " + LonghairLib.k + " " + futures.entrySet().size());
-            while (receivedBlocks < LonghairLib.k) {
-                Iterator it = futures.entrySet().iterator();
-                while (it.hasNext()) {
-                    Map.Entry<Future, Boolean> pair = (Map.Entry) it.next();
-                    Future future = pair.getKey();
-                    Boolean done = pair.getValue();
-                    if (done.equals(false) && future.isDone()) {
-                        try {
-                            byte[] res = (byte[])future.get();
-                            if (res != null) {
-                                receivedBlocks++;
-                                pair.setValue(true);
-                                results.add(res);
-                            }
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        } catch (ExecutionException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                }
-            }
-            assert(receivedBlocks >= LonghairLib.k);
-
-            // decode needs Map<Integer, byte[]> blocksBytes
-            // so transform results into List<byte[]> blocksBytes
-
-            bytes = LonghairLib.decode(results);
-        } else {
-            bytes = readBlock(key, fields, result);
-        }
-        Status status = Status.ERROR;
         if (bytes != null) {
-            status = Status.OK;
             // now transform bytes to result hashmap
-            logger.debug("DualClient.read_" + mode + "(" + key + " " + Utils.bytesToHex(bytes) + ")");
+            logger.debug("DualClient.read_" + mode + "(" + key + " " + Utils.bytesToHex(bytes) + " EC:" + erasureCoding + ")");
             result.put(key, new ByteArrayByteIterator(bytes));
+        } else {
+            status = Status.ERROR;
         }
 
         return status;
-
     }
 
 
@@ -324,7 +384,7 @@ public class DualClient extends DB {
     }
 
     /* helper function for insert */
-    private Status insertBytes(String key, byte[] bytes) {
+    private Status insertOneBlock(String key, byte[] bytes, Mode insertMode) {
         Status status = null;
 
         // map to data center
@@ -333,19 +393,13 @@ public class DualClient extends DB {
 
         //logger.debug("DualClient.insertBlock" + mode + "(" + blockKey + " " + bucket + " " + bytesToHex(block) + ")");
 
-        switch (mode) {
+        switch (insertMode) {
             case S3: {
                 status = s3Connections.get(connId).insert(bucket, key, bytes);
                 break;
             }
             case MEMCACHED: {
                 status = memcachedConnections.get(connId).insert(bucket, key, bytes);
-                break;
-            }
-            case DUAL: {
-                // insert in S3
-                status = s3Connections.get(connId).insert(bucket, key, bytes);
-                // TODO to cache or not to cache on insert?
                 break;
             }
             default: {
@@ -364,6 +418,12 @@ public class DualClient extends DB {
         byte[] bytes = valuesToBytes(values);
         logger.debug("DualClient.insert_" + mode + "(" + key + " " + Utils.bytesToHex(bytes) + ") EC:" + erasureCoding);
 
+        Mode insertMode;
+        if (mode == Mode.DUAL)
+            insertMode = Mode.S3;
+        else
+            insertMode = mode;
+
         if (erasureCoding) {
             // encode data using Longhair
             List<byte[]> blocks = LonghairLib.encode(bytes);
@@ -373,12 +433,15 @@ public class DualClient extends DB {
             for (byte[] block : blocks) {
                 String blockKey = key + row;
                 row++;
-                status = insertBytes(blockKey, block);
+
+                if (mode == Mode.DUAL)
+
+                    status = insertOneBlock(blockKey, block, insertMode);
                 if (status != Status.OK)
                     break;
             }
         } else
-            status = insertBytes(key, bytes);
+            status = insertOneBlock(key, bytes, insertMode);
 
         return status;
     }
