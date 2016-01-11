@@ -24,7 +24,7 @@ LICENSE file.
     </parent>
   
   <artifactId>dual-binding</artifactId>
-  <name>Dual S3 Storage and Memcached Binding</name>
+  <name>Dual AWS S3 and Memcached Binding</name>
   <packaging>jar</packaging>
 
   <dependencies>

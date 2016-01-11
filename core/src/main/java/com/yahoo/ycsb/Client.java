@@ -454,6 +454,7 @@ public class Client {
         System.out.println("          values in the propertyfile");
         System.out.println("  -s:  show status during run (default: no status)");
         System.out.println("  -l label:  use label for status (e.g. to label one experiment out of a whole batch)");
+        System.out.println("  -flush-cache:  flush cache after running a test");
         System.out.println("");
         System.out.println("Required properties:");
         System.out.println("  " + WORKLOAD_PROPERTY + ": the name of the workload class to use (e.g. com.yahoo.ycsb.workloads.CoreWorkload)");
@@ -461,7 +462,6 @@ public class Client {
         System.out.println("To run the transaction phase from multiple servers, start a separate client on each.");
         System.out.println("To run the load phase from multiple servers, start a separate client on each; additionally,");
         System.out.println("use the \"insertcount\" and \"insertstart\" properties to divide up the records to be inserted");
-        System.out.println("  -flush-cache:  flush cache after running a test");
     }
 
     public static boolean checkRequiredProperties(Properties props) {
@@ -536,6 +536,7 @@ public class Client {
         }
 
         while (args[argindex].startsWith("-")) {
+            System.out.println("in while: " + argindex + " " + args[argindex]);
             if (args[argindex].compareTo("-threads") == 0) {
                 argindex++;
                 if (argindex >= args.length) {

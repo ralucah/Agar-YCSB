@@ -67,6 +67,7 @@ LICENSE file.
       <excludes>
         <exclude>com.yahoo.ycsb:core</exclude>
         <exclude>com.yahoo.ycsb:binding-parent</exclude>
+          <exclude>com.yahoo.ycsb:dual-client</exclude>
         <exclude>com.yahoo.ycsb:datastore-specific-descriptor</exclude>
         <exclude>com.yahoo.ycsb:ycsb</exclude>
         <exclude>com.yahoo.ycsb:root</exclude>
