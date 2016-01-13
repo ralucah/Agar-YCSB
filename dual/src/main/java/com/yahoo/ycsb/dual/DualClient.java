@@ -261,8 +261,11 @@ public class DualClient extends DB {
                         status = Status.ERROR;
                     else {
                         List<byte[]> blocks = new ArrayList<byte[]>();
+                        status = results.get(0).getStatus();
                         for (Result res : results) {
                             blocks.add(res.getBytes());
+                            if (res.getStatus() != status)
+                                status = res.getStatus();
                         }
                         bytes = LonghairLib.decode(blocks);
                     }
@@ -281,6 +284,17 @@ public class DualClient extends DB {
                     if (results != null && results.size() > 0) {
                         logger.debug("Cache hit");
                         status = Status.OK;
+                        List<byte[]> blocks = new ArrayList<byte[]>();
+                        int ok = 0;
+                        for (Result res : results) {
+                            blocks.add(res.getBytes());
+                            if (res.getStatus() == Status.OK)
+                                ok++;
+                        }
+                        if (ok >= LonghairLib.k) {
+                            status = Status.OK;
+                            bytes = LonghairLib.decode(blocks);
+                        }
                     } else {
                         // if unsuccessful, try to read k blocks from s3
                         logger.debug("Cache miss");
@@ -291,10 +305,17 @@ public class DualClient extends DB {
                             status = Status.ERROR;
                         else {
                             List<byte[]> blocks = new ArrayList<byte[]>();
+                            int ok = 0;
                             for (Result res : results) {
                                 blocks.add(res.getBytes());
+                                if (res.getStatus() == Status.OK)
+                                    ok++;
                             }
-                            bytes = LonghairLib.decode(blocks);
+                            if (ok >= LonghairLib.k) {
+                                status = Status.OK;
+                                bytes = LonghairLib.decode(blocks);
+                            } else
+                                status = Status.ERROR;
 
                             // then, if successful, store the blocks in memcached
                             int row = 0;
@@ -304,6 +325,7 @@ public class DualClient extends DB {
                                 row++;
                                 cacheStatus = insertOneBlock(blockKey, res.getBytes(), Mode.MEMCACHED);
                                 if (cacheStatus != Status.OK) {
+                                    status = Status.ERROR;
                                     logger.error("Error caching block!");
                                     break;
                                 }
@@ -314,22 +336,22 @@ public class DualClient extends DB {
                     // try to read data from memcached
                     Result res = readOneBlock(key, Mode.MEMCACHED);
                     status = res.getStatus();
+                    bytes = res.getBytes();
 
-                    if (res == null || status == Status.ERROR) {
+                    if (status == Status.ERROR) {
                         logger.debug("Cache miss");
 
                         // try to get from s3
                         res = readOneBlock(key, Mode.S3);
-                        if (res != null && res.getStatus() == Status.OK) {
-                            bytes = res.getBytes();
+                        status = res.getStatus();
+                        bytes = res.getBytes();
 
-                            // cache it
+                        // cache it
+                        if (status == Status.OK) {
                             status = insertOneBlock(key, bytes, Mode.MEMCACHED);
                         }
-                    } else if (res != null && status == status.OK) {
+                    } else
                         logger.debug("Cache hit");
-                        bytes = res.getBytes();
-                    }
                 }
                 break;
             }
@@ -339,13 +361,19 @@ public class DualClient extends DB {
             }
         }
 
+        String msg = "Read_" + mode +
+            " Key:" + key +
+            " Status:" + status.getName() +
+            " EC:" + erasureCoding + " ";
+
         if (bytes != null) {
             // now transform bytes to result hashmap
-            logger.debug("DualClient.read_" + mode + "(" + key + " " + Utils.bytesToHex(bytes) + " EC:" + erasureCoding + ")");
+            msg += Utils.bytesToHex(bytes);
             result.put(key, new ByteArrayByteIterator(bytes));
         } else {
-            status = Status.ERROR;
+            msg += "null";
         }
+        logger.debug(msg);
 
         return status;
     }
@@ -383,7 +411,7 @@ public class DualClient extends DB {
         return bytes;
     }
 
-    /* helper function for insert */
+    /* helper function for inserting to s3 or memcached */
     private Status insertOneBlock(String key, byte[] bytes, Mode insertMode) {
         Status status = null;
 
@@ -414,15 +442,12 @@ public class DualClient extends DB {
     public Status insert(String table, String key, HashMap<String, ByteIterator> values) {
         Status status = null;
 
+        Mode imode = mode;
+        if (mode == Mode.DUAL)
+            imode = Mode.S3;
+
         // generate bytes array based on values
         byte[] bytes = valuesToBytes(values);
-        logger.debug("DualClient.insert_" + mode + "(" + key + " " + Utils.bytesToHex(bytes) + ") EC:" + erasureCoding);
-
-        Mode insertMode;
-        if (mode == Mode.DUAL)
-            insertMode = Mode.S3;
-        else
-            insertMode = mode;
 
         if (erasureCoding) {
             // encode data using Longhair
@@ -434,15 +459,17 @@ public class DualClient extends DB {
                 String blockKey = key + row;
                 row++;
 
-                if (mode == Mode.DUAL)
-
-                    status = insertOneBlock(blockKey, block, insertMode);
+                status = insertOneBlock(blockKey, block, imode);
                 if (status != Status.OK)
                     break;
             }
         } else
-            status = insertOneBlock(key, bytes, insertMode);
+            status = insertOneBlock(key, bytes, imode);
 
+        logger.debug("Insert_" + mode +
+            " Key:" + key + " " + Utils.bytesToHex(bytes) +
+            " Status:" + status.getName() +
+            " EC:" + erasureCoding);
         return status;
     }
 

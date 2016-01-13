@@ -26,6 +26,7 @@ import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.model.*;
 import com.yahoo.ycsb.*;
+import org.apache.log4j.Level;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -126,6 +127,7 @@ public class S3Connection {
      * Called once per S3 instance; If the client is not null it is re-used.
      */
     public void init() throws DBException {
+        org.apache.log4j.Logger.getLogger("com.amazonaws").setLevel(Level.OFF);
         DualClient.logger.debug("S3Connection.init()");
 
         String accessKeyId = null;
@@ -297,7 +299,7 @@ public class S3Connection {
                 result.setStatus(Status.OK);
         } catch (Exception e) {
             result.setStatus(Status.ERROR);
-            DualClient.logger.error("Not possible to get the object " + key);
+            //DualClient.logger.error("Not possible to get the object " + key);
             //e.printStackTrace();
         }
         return result;
