@@ -9,9 +9,7 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class DualClient extends DB {
@@ -188,58 +186,43 @@ public class DualClient extends DB {
     }
 
 
-    public List<Result> readKBlocks(String key, Mode readMode) {
-        List<Result> results = new ArrayList<Result>();
-        Map<Future, Boolean> futures = new HashMap<Future, Boolean>();
+    public List<Result> readKBlocks(String key, Mode readMode, List<Result> results) {
+        List<Future> futures = new ArrayList<Future>();
 
         // TODO how many threads in the thread pool?
-        ExecutorService executor = Executors.newFixedThreadPool(LonghairLib.k + LonghairLib.m);
+        //ExecutorService executor = Executors.newFixedThreadPool(LonghairLib.k + LonghairLib.m);
+        Executor executor = Executors.newFixedThreadPool(LonghairLib.k + LonghairLib.m);
+        CompletionService<Result> completionService = new ExecutorCompletionService<Result>(executor);
 
-        int counter = 0;
-        while (counter < LonghairLib.k + LonghairLib.m) {
-            final int counterFin = counter;
-            Future<Result> future = executor.submit(() -> {
-                //logger.debug("Reading key " + (key+counterFin) + " returned " + toRet);
-                return readOneBlock(key + counterFin, readMode);
-            });
-            futures.put(future, false);
-            //logger.debug("Future <" + future + "> checks key " + (key+counterFin));
-            counter++;
-        }
-
-        // TODO should give up in a while
-        int receivedBlocks = 0;
-        //logger.debug("k = " + LonghairLib.k + " " + futures.entrySet().size());
-        int cancelled = 0;
-        while (receivedBlocks < LonghairLib.k && cancelled < futures.entrySet().size()) {
-            Iterator it = futures.entrySet().iterator();
-            while (it.hasNext()) {
-                Map.Entry<Future, Boolean> pair = (Map.Entry) it.next();
-                Future future = pair.getKey();
-                Boolean done = pair.getValue();
-                if (done.equals(false) && future.isDone()) {
-                    try {
-                        Result res = (Result) future.get();
-
-                        if (res != null) {
-                            if (res.getStatus() == Status.OK) {
-                                receivedBlocks++;
-                                pair.setValue(true);
-                                results.add(res);
-                            } else {
-                                future.cancel(true);
-                                cancelled++;
-                            }
-                        }
-                    } catch (Exception e) {
-                        logger.error("Exception in future!");
-                        future.cancel(true); // may interrupt if running
-                    }
+        for (int i = 0; i < LonghairLib.k + LonghairLib.m; i++) {
+            final String keyFin = key + i;
+            completionService.submit(new Callable<Result>() {
+                @Override
+                public Result call() throws Exception {
+                    return readOneBlock(keyFin, readMode);
                 }
-            }
+            });
         }
 
-        executor.shutdown();
+        /* best effort read at least k valid blocks */
+        int errors = 0;
+        while (results.size() < LonghairLib.k) {
+            Future<Result> resultFuture = null;
+            try {
+                resultFuture = completionService.take();
+                Result res = resultFuture.get();
+                if (res.getStatus() == Status.OK) {
+                    if (!results.contains(res))
+                        results.add(res);
+                } else
+                    errors++;
+            } catch (Exception e) {
+                errors++;
+                logger.debug("Exception reading a block.");
+            }
+            if (errors == LonghairLib.k + LonghairLib.m)
+                break;
+        }
 
         return results;
     }
@@ -256,7 +239,8 @@ public class DualClient extends DB {
             case MEMCACHED: {
                 if (erasureCoding) {
                     // read k blocks
-                    List<Result> results = readKBlocks(key, mode);
+                    List<Result> results = new ArrayList<Result>();
+                    readKBlocks(key, mode, results);
                     if (results == null || results.size() < LonghairLib.k)
                         status = Status.ERROR;
                     else {
@@ -279,56 +263,47 @@ public class DualClient extends DB {
             }
             case DUAL: {
                 if (erasureCoding) {
-                    // try to read k blocks from memcached
-                    List<Result> results = readKBlocks(key, Mode.MEMCACHED);
-                    if (results != null && results.size() > 0) {
-                        logger.debug("Cache hit");
-                        status = Status.OK;
+                    // try to read at least k valid blocks from memcached
+                    List<Result> results = new ArrayList<Result>();
+                    readKBlocks(key, Mode.MEMCACHED, results);
+
+                    // if at least k valid blocks were retrieved
+                    if (results.size() >= LonghairLib.k) {
+                        logger.debug("Cache hit " + results.size());
                         List<byte[]> blocks = new ArrayList<byte[]>();
-                        int ok = 0;
-                        for (Result res : results) {
+                        for (Result res : results)
                             blocks.add(res.getBytes());
-                            if (res.getStatus() == Status.OK)
-                                ok++;
-                        }
-                        if (ok >= LonghairLib.k) {
-                            status = Status.OK;
-                            bytes = LonghairLib.decode(blocks);
-                        }
+                        bytes = LonghairLib.decode(blocks);
                     } else {
-                        // if unsuccessful, try to read k blocks from s3
-                        logger.debug("Cache miss");
+                        if (results.size() > 0)
+                            logger.debug("Cache partial hit " + results.size());
+                        else
+                            logger.debug("Cache miss " + results.size());
 
-                        results = readKBlocks(key, Mode.S3);
+                        // try to retrieve missing blocks from the S3 backend
+                        readKBlocks(key, Mode.S3, results);
 
-                        if (results == null || results.size() < LonghairLib.k)
-                            status = Status.ERROR;
-                        else {
+                        // if at least k valid blocks are now available
+                        if (results.size() >= LonghairLib.k) {
                             List<byte[]> blocks = new ArrayList<byte[]>();
-                            int ok = 0;
-                            for (Result res : results) {
+                            for (Result res : results)
                                 blocks.add(res.getBytes());
-                                if (res.getStatus() == Status.OK)
-                                    ok++;
-                            }
-                            if (ok >= LonghairLib.k) {
-                                status = Status.OK;
-                                bytes = LonghairLib.decode(blocks);
-                            } else
-                                status = Status.ERROR;
+                            bytes = LonghairLib.decode(blocks);
+                        } else {
+                            // not enough blocks available in the system
+                            logger.debug("Not enough blocks available in the system for " + key);
+                        }
 
-                            // then, if successful, store the blocks in memcached
-                            int row = 0;
-                            Status cacheStatus;
-                            for (Result res : results) {
-                                String blockKey = key + row;
-                                row++;
-                                cacheStatus = insertOneBlock(blockKey, res.getBytes(), Mode.MEMCACHED);
-                                if (cacheStatus != Status.OK) {
-                                    status = Status.ERROR;
-                                    logger.error("Error caching block!");
-                                    break;
-                                }
+                        // cache the new blocks
+                        // store the new blocks in memcached
+                        int row = 0;
+                        Status cacheStatus;
+                        for (Result res : results) {
+                            String blockKey = key + row;
+                            row++;
+                            cacheStatus = insertOneBlock(blockKey, res.getBytes(), Mode.MEMCACHED);
+                            if (cacheStatus != Status.OK) {
+                                logger.error("Error caching block " + blockKey);
                             }
                         }
                     }
@@ -360,20 +335,20 @@ public class DualClient extends DB {
                 break;
             }
         }
-
         String msg = "Read_" + mode +
             " Key:" + key +
-            " Status:" + status.getName() +
             " EC:" + erasureCoding + " ";
 
         if (bytes != null) {
+            status = Status.OK;
             // now transform bytes to result hashmap
-            msg += Utils.bytesToHex(bytes);
+            msg += Utils.bytesToHex(bytes) + " ";
             result.put(key, new ByteArrayByteIterator(bytes));
         } else {
+            status = Status.ERROR;
             msg += "null";
         }
-        logger.debug(msg);
+        logger.debug(msg + "Status: " + status.getName());
 
         return status;
     }
