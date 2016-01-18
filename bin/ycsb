@@ -49,7 +49,7 @@ COMMANDS = {
 }
 
 DATABASES = {
-    "dual"         : "com.yahoo.ycsb.dual.DualClient",
+    "dual"         : "com.yahoo.ycsb.dual.DualClient"
 }
 
 OPTIONS = {
@@ -173,8 +173,9 @@ def main():
     command = COMMANDS[args.command]["command"]
     main_classname = COMMANDS[args.command]["main"]
 
-    # Classpath set up
-    binding = args.database.split("-")[0]
+    # Classpath set up: binding is always dual
+    #binding = args.database.split("-")[0]
+    binding = "dual"
 
     if is_distribution():
         db_dir = os.path.join(ycsb_home, binding + "-binding")

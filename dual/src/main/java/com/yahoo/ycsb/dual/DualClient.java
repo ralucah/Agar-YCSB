@@ -25,8 +25,8 @@ public class DualClient extends DB {
 
     private static int numConnections;
 
-    private static List<S3Connection> s3Connections;
-    private static List<MemcachedConnection> memcachedConnections;
+    private static List<S3Client> s3Clients;
+    private static List<MemcachedClient> memcachedConnections;
 
     private static boolean memFlush = false;
 
@@ -38,7 +38,7 @@ public class DualClient extends DB {
      * initialize connections to AWS S3
      */
     private void initS3() throws DBException {
-        s3Connections = new ArrayList<S3Connection>();
+        s3Clients = new ArrayList<S3Client>();
 
         s3Regions = Arrays.asList(props.getProperty("s3.regions").split("\\s*,\\s*"));
         s3EndPoints = Arrays.asList(props.getProperty("s3.endPoints").split("\\s*,\\s*"));
@@ -57,8 +57,8 @@ public class DualClient extends DB {
 
         // establish S3 connections: one per data center
         for (int i = 0; i < s3BucketsSize; i++) {
-            S3Connection s3Connection = new S3Connection(s3Regions.get(i), s3EndPoints.get(i));
-            s3Connections.add(s3Connection);
+            S3Client s3Client = new S3Client(s3Regions.get(i), s3EndPoints.get(i));
+            s3Clients.add(s3Client);
         }
     }
 
@@ -66,13 +66,13 @@ public class DualClient extends DB {
      * initialize connections to Memcached
      */
     private void initMemcached() {
-        memcachedConnections = new ArrayList<MemcachedConnection>();
+        memcachedConnections = new ArrayList<MemcachedClient>();
 
         memFlush = Boolean.valueOf(props.getProperty("memcached.flush"));
 
         List<String> memcachedHosts = Arrays.asList(props.getProperty("memcached.hosts").split("\\s*,\\s*"));
         for (String memcachedHost : memcachedHosts) {
-            MemcachedConnection conn = new MemcachedConnection(memcachedHost);
+            MemcachedClient conn = new MemcachedClient(memcachedHost);
             memcachedConnections.add(conn);
         }
 
@@ -153,7 +153,7 @@ public class DualClient extends DB {
     @Override
     public void cleanup() throws DBException {
         if (memcachedConnections != null) {
-            for (MemcachedConnection conn : memcachedConnections) {
+            for (MemcachedClient conn : memcachedConnections) {
                 if (memFlush == true) {
                     conn.flush();
                 }
@@ -169,7 +169,7 @@ public class DualClient extends DB {
 
         switch (readMode) {
             case S3: {
-                result = s3Connections.get(connId).read(bucket, key);
+                result = s3Clients.get(connId).read(bucket, key);
                 break;
             }
             case MEMCACHED: {
@@ -368,24 +368,6 @@ public class DualClient extends DB {
         return null;
     }
 
-    private byte[] valuesToBytes(HashMap<String, ByteIterator> values) {
-        // get the first value
-        int fieldCount = values.size();
-        Object keyToSearch = values.keySet().toArray()[0];
-        byte[] sourceArray = values.get(keyToSearch).toArray();
-        int sizeArray = sourceArray.length;
-
-        // use it to generate new value
-        int totalSize = sizeArray * fieldCount;
-        byte[] bytes = new byte[totalSize];
-        int offset = 0;
-        for (int i = 0; i < fieldCount; i++) {
-            System.arraycopy(sourceArray, 0, bytes, offset, sizeArray);
-            offset += sizeArray;
-        }
-        return bytes;
-    }
-
     /* helper function for inserting to s3 or memcached */
     private Status insertOneBlock(String key, byte[] bytes, Mode insertMode) {
         Status status = null;
@@ -398,7 +380,7 @@ public class DualClient extends DB {
 
         switch (insertMode) {
             case S3: {
-                status = s3Connections.get(connId).insert(bucket, key, bytes);
+                status = s3Clients.get(connId).insert(bucket, key, bytes);
                 break;
             }
             case MEMCACHED: {
@@ -422,7 +404,7 @@ public class DualClient extends DB {
             imode = Mode.S3;
 
         // generate bytes array based on values
-        byte[] bytes = valuesToBytes(values);
+        byte[] bytes = Utils.valuesToBytes(values);
 
         if (erasureCoding) {
             // encode data using Longhair

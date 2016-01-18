@@ -435,6 +435,10 @@ public class Client {
      */
     public static final String MAX_EXECUTION_TIME = "maxexecutiontime";
 
+    /**
+     * Whether to use encode data using erasure codes provided by the longhair library or not
+     */
+    public static final String ERASURE_CODES = "erasurecodes";
 
     public static void usageMessage() {
         System.out.println("Usage: java com.yahoo.ycsb.Client [options]");
@@ -454,7 +458,8 @@ public class Client {
         System.out.println("          values in the propertyfile");
         System.out.println("  -s:  show status during run (default: no status)");
         System.out.println("  -l label:  use label for status (e.g. to label one experiment out of a whole batch)");
-        System.out.println("  -flush-cache:  flush cache after running a test");
+        System.out.println("  -flush:  flush cache after running a test");
+        System.out.println("  -ec:  encode data using Reed-Solomon codes (via Longhair)");
         System.out.println("");
         System.out.println("Required properties:");
         System.out.println("  " + WORKLOAD_PROPERTY + ": the name of the workload class to use (e.g. com.yahoo.ycsb.workloads.CoreWorkload)");

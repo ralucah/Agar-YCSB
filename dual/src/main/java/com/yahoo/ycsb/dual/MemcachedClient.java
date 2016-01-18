@@ -50,7 +50,7 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 /**
  * Concrete Memcached client implementation.
  */
-public class MemcachedConnection {
+public class MemcachedClient {
 
     public static final String HOSTS_PROPERTY = "memcached.hosts";
     public static final int DEFAULT_PORT = 11211;
@@ -77,7 +77,7 @@ public class MemcachedConnection {
     private String hostsStr;
     private Properties props;
 
-    public MemcachedConnection(String hostsStr) {
+    public MemcachedClient(String hostsStr) {
         this.hostsStr = hostsStr;
         try {
             this.init();
@@ -137,7 +137,7 @@ public class MemcachedConnection {
         System.setProperty("net.spy.log.LoggerImpl", "net.spy.memcached.compat.log.Log4JLogger");
         org.apache.log4j.Logger.getLogger("net.spy.memcached").setLevel(Level.OFF);
 
-        InputStream propFile = MemcachedConnection.class.getClassLoader()
+        InputStream propFile = MemcachedClient.class.getClassLoader()
             .getResourceAsStream("memcached.properties");
         props = new Properties();
         try {
