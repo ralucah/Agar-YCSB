@@ -18,6 +18,7 @@ public class DualClient extends DB {
     //public static final String MEMCACHED_HOSTS_PROPERTY = "memcached.hosts";
     protected static Logger logger = Logger.getLogger("com.yahoo.ycsb.dual");
     private static Mode mode;
+    private static Mapper mapper;
 
     private static List<String> s3Buckets;
     private static List<String> s3Regions;
@@ -148,6 +149,11 @@ public class DualClient extends DB {
                 System.exit(-1);
                 break;
         }
+
+        // mapper
+        String mapperName = props.getProperty("mapper");
+        mapper = MapperFactory.newMapper(mapperName);
+        mapper.setNumOfDataCenters(numConnections);
     }
 
     @Override
@@ -164,7 +170,7 @@ public class DualClient extends DB {
 
     public Result readOneBlock(String key, Mode readMode) {
         Result result = new Result();
-        int connId = Mapper.mapKeyToDatacenter(key, numConnections);
+        int connId = mapper.assignToDataCenter(key);
         final String bucket = s3Buckets.get(connId);
 
         switch (readMode) {
@@ -373,7 +379,7 @@ public class DualClient extends DB {
         Status status = null;
 
         // map to data center
-        int connId = Mapper.mapKeyToDatacenter(key, numConnections);
+        int connId = mapper.assignToDataCenter(key);
         String bucket = s3Buckets.get(connId);
 
         //logger.debug("DualClient.insertBlock" + mode + "(" + blockKey + " " + bucket + " " + bytesToHex(block) + ")");

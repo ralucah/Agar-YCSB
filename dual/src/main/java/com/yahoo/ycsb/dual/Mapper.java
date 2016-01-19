@@ -3,12 +3,12 @@ package com.yahoo.ycsb.dual;
 /**
  * Created by Raluca on 27.12.15.
  */
-public class Mapper {
+public abstract class Mapper {
+    protected int numOfDataCenters;
 
-    public static int mapKeyToDatacenter(String key, int bucketsNum) {
-        // hashcode is not safe!! collisions will occur
-        int toRet = Math.abs(key.hashCode()) % bucketsNum;
-        //DualClient.logger.debug(key + " to " + toRet);
-        return toRet;
+    public void setNumOfDataCenters(int numOfDataCenters) {
+        this.numOfDataCenters = numOfDataCenters;
     }
+
+    public abstract int assignToDataCenter(String key);
 }
