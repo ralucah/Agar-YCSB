@@ -1,8 +1,9 @@
 package com.yahoo.ycsb.dual;
 
 /**
- * Created by ubuntu on 19.01.16.
+ * Created by Raluca on 19.01.16.
  */
+
 public class ClosestMapper extends Mapper {
 
     @Override

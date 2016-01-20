@@ -30,6 +30,7 @@ public class DualClient extends DB {
     private static List<MemcachedClient> memcachedConnections;
 
     private static boolean memFlush = false;
+    private static boolean memCacheFullCopy = false;
 
     private static boolean erasureCoding = false;
 
@@ -70,6 +71,7 @@ public class DualClient extends DB {
         memcachedConnections = new ArrayList<MemcachedClient>();
 
         memFlush = Boolean.valueOf(props.getProperty("memcached.flush"));
+        memCacheFullCopy = Boolean.valueOf(props.getProperty("memcached.cacheFullCopy"));
 
         List<String> memcachedHosts = Arrays.asList(props.getProperty("memcached.hosts").split("\\s*,\\s*"));
         for (String memcachedHost : memcachedHosts) {
