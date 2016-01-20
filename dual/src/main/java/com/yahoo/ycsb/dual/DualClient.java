@@ -271,50 +271,82 @@ public class DualClient extends DB {
             }
             case DUAL: {
                 if (erasureCoding) {
-                    // try to read at least k valid blocks from memcached
-                    List<Result> results = new ArrayList<Result>();
-                    readKBlocks(key, Mode.MEMCACHED, results);
+                    if (memCacheFullCopy == true) {
+                        // try to read full data from memcached
+                        Result res = readOneBlock(key, Mode.MEMCACHED);
+                        status = res.getStatus();
+                        bytes = res.getBytes();
 
-                    // if at least k valid blocks were retrieved
-                    if (results.size() >= LonghairLib.k) {
-                        logger.debug("Cache hit " + results.size());
-                        List<byte[]> blocks = new ArrayList<byte[]>();
-                        for (Result res : results)
-                            blocks.add(res.getBytes());
-                        bytes = LonghairLib.decode(blocks);
+                        if (status == Status.OK)
+                            logger.debug("Cache Hit");
+
+                        if (status == Status.ERROR) {
+                            logger.debug("Cache miss");
+
+                            // try to read at least k valid blocks from s3
+                            List<Result> results = new ArrayList<Result>();
+                            readKBlocks(key, Mode.S3, results);
+                            if (results.size() >= LonghairLib.k) {
+                                logger.debug("Read from S3 " + results.size());
+
+                                // decode the blocks
+                                List<byte[]> blocks = new ArrayList<byte[]>();
+                                for (Result r : results)
+                                    blocks.add(r.getBytes());
+                                bytes = LonghairLib.decode(blocks);
+
+                                // cache the full data
+                                if (bytes != null)
+                                    status = insertOneBlock(key, bytes, Mode.MEMCACHED);
+                            } else
+                                logger.error("Could not find enough blocks in S3.");
+                        }
                     } else {
-                        if (results.size() > 0)
-                            logger.debug("Cache partial hit " + results.size());
-                        else
-                            logger.debug("Cache miss " + results.size());
+                        // try to read at least k valid blocks from memcached
+                        List<Result> results = new ArrayList<Result>();
+                        readKBlocks(key, Mode.MEMCACHED, results);
 
-                        // try to retrieve missing blocks from the S3 backend
-                        readKBlocks(key, Mode.S3, results);
-
-                        // if at least k valid blocks are now available
+                        // if at least k valid blocks were retrieved
                         if (results.size() >= LonghairLib.k) {
+                            logger.debug("Cache hit " + results.size());
                             List<byte[]> blocks = new ArrayList<byte[]>();
-                            for (Result res : results)
-                                blocks.add(res.getBytes());
+                            for (Result r : results)
+                                blocks.add(r.getBytes());
                             bytes = LonghairLib.decode(blocks);
                         } else {
-                            // not enough blocks available in the system
-                            logger.debug("Not enough blocks available in the system for " + key);
-                        }
+                            if (results.size() > 0)
+                                logger.debug("Cache partial hit " + results.size());
+                            else
+                                logger.debug("Cache miss " + results.size());
 
-                        // cache the new blocks
-                        // store the new blocks in memcached
-                        int row = 0;
-                        Status cacheStatus;
-                        for (Result res : results) {
-                            String blockKey = key + row;
-                            row++;
-                            cacheStatus = insertOneBlock(blockKey, res.getBytes(), Mode.MEMCACHED);
-                            if (cacheStatus != Status.OK) {
-                                logger.error("Error caching block " + blockKey);
+                            // try to retrieve missing blocks from the S3 backend
+                            readKBlocks(key, Mode.S3, results);
+
+                            // if at least k valid blocks are now available
+                            if (results.size() >= LonghairLib.k) {
+                                List<byte[]> blocks = new ArrayList<byte[]>();
+                                for (Result r : results)
+                                    blocks.add(r.getBytes());
+                                bytes = LonghairLib.decode(blocks);
+                            } else {
+                                // not enough blocks available in the system
+                                logger.debug("Not enough blocks available in the system for " + key);
+                            }
+
+                            // cache the new blocks
+                            // store the new blocks in memcached
+                            Status cacheStatus;
+                            int row = 0;
+                            for (Result r : results) {
+                                String blockKey = key + row;
+                                row++;
+                                cacheStatus = insertOneBlock(blockKey, r.getBytes(), Mode.MEMCACHED);
+                                if (cacheStatus != Status.OK)
+                                    logger.error("Error caching block " + blockKey);
                             }
                         }
                     }
+                    // without erasure coding
                 } else {
                     // try to read data from memcached
                     Result res = readOneBlock(key, Mode.MEMCACHED);
