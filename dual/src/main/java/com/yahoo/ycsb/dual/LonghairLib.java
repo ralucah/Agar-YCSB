@@ -3,63 +3,22 @@ package com.yahoo.ycsb.dual;
 import com.sun.jna.*;
 
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Created by ubuntu on 06.01.16.
  */
 public class LonghairLib {
+    public static final int reservedBytes = 8;
     public static int k;
     public static int m;
-    public static final int reservedBytes = 8;
-
-    public interface Longhair extends Library {
-        Longhair INSTANCE = (Longhair) Native.loadLibrary("longhair", Longhair.class);
-
-        /**
-         * Verifies binary compatibility with the API on startup.
-         * @return non-zero on success; zero on failure.
-         */
-        int _cauchy_256_init(int version);
-
-        //int cauchy_256_encode(int k, int m, const unsigned char *data_ptrs[], void *recovery_blocks, int block_bytes);
-        /**
-         *
-         * @param k data blocks
-         * @param m recovery blocks
-         * @param block_bytes number of bytes per block; multiple of 8
-         * @return zero on success, another value indicates failure.
-         */
-        int cauchy_256_encode(int k, int m, Pointer[] data_ptrs, Pointer recovery_blocks, int block_bytes);
-
-        //int cauchy_256_decode(int k, int m, Block *blocks, int block_bytes);
-        /**
-         * Recover original data
-         * @param k num of original blocks
-         * @param m num of recovery blocks
-         * @param blocks blocks of data, original or recovery
-         * @param blockBytes number of bytes per block; multiple of 8
-         * @return 0 on success, otherwise failure
-         */
-        int cauchy_256_decode(int k, int m, Block[] blocks, int blockBytes);
-    }
-
-    public static class Block extends Structure {
-        public static class ByReference extends Block implements Structure.ByReference {}
-
-        public Pointer data; // unsigned char *data
-        public char row; // unsigned char row
-
-        @Override
-        protected List getFieldOrder() {
-            return Arrays.asList(new String[] {"data", "row"});
-        }
-    }
+    public static boolean initialized = false;
 
     public static byte[] decode(List<byte[]> blocksBytes) {
         //Block.ByReference[] blocks = new Block.ByReference[blocksBytes.size()];
-        Block[] blocks = (Block[])new Block().toArray(blocksBytes.size());
+        Block[] blocks = (Block[]) new Block().toArray(blocksBytes.size());
         /*for (int i = 0; i < blocksBytes.size(); i++) {
             blocks[i] = new Block();  // .ByReference();
         }*/
@@ -68,7 +27,7 @@ public class LonghairLib {
         int originalLength = -1;
         int blockSize = 0;
         byte[] lengthBytes;
-        for (byte[] fullValue : blocksBytes){
+        for (byte[] fullValue : blocksBytes) {
             blockSize = fullValue.length - (reservedBytes * 2);
             int offset = 0;
 
@@ -94,7 +53,7 @@ public class LonghairLib {
             blocks[blockIndex].data = ptr;
             blockIndex++;
         }
-        assert(originalLength > 0);
+        assert (originalLength > 0);
 
         /*System.out.println("Before calling decode");
         for (int i = 0; i < blocks.length; i++) {
@@ -164,7 +123,7 @@ public class LonghairLib {
         //System.out.println(Arrays.equals(dataPtr.getByteArray(0,newLen),reconstructed.getByteArray(0,newLen)));
 
         // reserve memory for the recovery blocks
-        Pointer recoveryBlocks = new Memory (blockSize *  m * Native.getNativeSize(Byte.TYPE));
+        Pointer recoveryBlocks = new Memory(blockSize * m * Native.getNativeSize(Byte.TYPE));
 
         // encode!
         Longhair.INSTANCE.cauchy_256_encode(k, m, dataPtrs, recoveryBlocks, blockSize);
@@ -175,18 +134,64 @@ public class LonghairLib {
             blocks[i] = new Block.ByReference();
         }
         //System.out.println("num encoded blocks: " + blocks.length);
-        assert(blocks.length == k + m);
+        assert (blocks.length == k + m);
 
-        for(int i = 0; i < k; i++) {
+        for (int i = 0; i < k; i++) {
             blocks[i].data = dataPtrs[i].share(0);
-            blocks[i].row = (char)i;
+            blocks[i].row = (char) i;
         }
         for (int i = 0; i < m; i++) {
             blocks[k + i].data = recoveryBlocks.share(i * blockSize);
-            blocks[k + i].row = (char)(k + i);
+            blocks[k + i].row = (char) (k + i);
         }
 
         return appendLengthAndRow(blocks, blockSize, originalData.length);
+    }
+
+    public interface Longhair extends Library {
+        Longhair INSTANCE = (Longhair) Native.loadLibrary("longhair", Longhair.class);
+
+        /**
+         * Verifies binary compatibility with the API on startup.
+         *
+         * @return non-zero on success; zero on failure.
+         */
+        int _cauchy_256_init(int version);
+
+        //int cauchy_256_encode(int k, int m, const unsigned char *data_ptrs[], void *recovery_blocks, int block_bytes);
+
+        /**
+         * @param k           data blocks
+         * @param m           recovery blocks
+         * @param block_bytes number of bytes per block; multiple of 8
+         * @return zero on success, another value indicates failure.
+         */
+        int cauchy_256_encode(int k, int m, Pointer[] data_ptrs, Pointer recovery_blocks, int block_bytes);
+
+        //int cauchy_256_decode(int k, int m, Block *blocks, int block_bytes);
+
+        /**
+         * Recover original data
+         *
+         * @param k          num of original blocks
+         * @param m          num of recovery blocks
+         * @param blocks     blocks of data, original or recovery
+         * @param blockBytes number of bytes per block; multiple of 8
+         * @return 0 on success, otherwise failure
+         */
+        int cauchy_256_decode(int k, int m, Block[] blocks, int blockBytes);
+    }
+
+    public static class Block extends Structure {
+        public Pointer data; // unsigned char *data
+        public char row; // unsigned char row
+
+        @Override
+        protected List getFieldOrder() {
+            return Arrays.asList(new String[]{"data", "row"});
+        }
+
+        public static class ByReference extends Block implements Structure.ByReference {}
     }
 
 }

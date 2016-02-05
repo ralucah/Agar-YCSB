@@ -2,7 +2,9 @@ package com.yahoo.ycsb.dual;
 
 import com.yahoo.ycsb.ByteIterator;
 
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 
 /**
  * Created by ubuntu on 10.01.16.
@@ -37,6 +39,14 @@ public class Utils {
             hexChars[j * 2 + 1] = hexArray[v & 0x0F];
         }
         return new String(hexChars);
+    }
+
+    public static boolean containsBlock(List<Result> blocks, byte[] block) {
+        for (Result res : blocks) {
+            if (Arrays.equals(block, res.getBytes()))
+                return true;
+        }
+        return false;
     }
 
 }
