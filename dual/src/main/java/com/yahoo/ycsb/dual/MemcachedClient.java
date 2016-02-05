@@ -27,6 +27,7 @@ import net.spy.memcached.internal.GetFuture;
 import net.spy.memcached.internal.OperationFuture;
 import net.spy.memcached.ops.StatusCode;
 import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
 import org.codehaus.jackson.JsonFactory;
 import org.codehaus.jackson.JsonGenerator;
 import org.codehaus.jackson.JsonNode;
@@ -51,7 +52,6 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
  * Concrete Memcached client implementation.
  */
 public class MemcachedClient {
-
     public static final String HOSTS_PROPERTY = "memcached.hosts";
     public static final int DEFAULT_PORT = 11211;
     public static final String SHUTDOWN_TIMEOUT_MILLIS_PROPERTY = "memcached.shutdownTimeoutMillis";
@@ -69,6 +69,7 @@ public class MemcachedClient {
     protected static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String TEMPORARY_FAILURE_MSG = "Temporary failure";
     private static final String CANCELLED_MSG = "cancelled";
+    private static Logger logger = Logger.getLogger(Class.class);
     private boolean checkOperationStatus;
     private long shutdownTimeoutMillis;
     private int objectExpirationTime;
@@ -212,7 +213,7 @@ public class MemcachedClient {
             else
                 result.setStatus(Status.OK);
         } catch (Exception e) {
-            DualClient.logger.error("Error encountered for key: " + key, e);
+            logger.error("Error encountered for key: " + key, e);
             result.setStatus(Status.ERROR);
         }
         return result;
@@ -232,7 +233,7 @@ public class MemcachedClient {
                     memcachedClient().replace(key, objectExpirationTime, toJson(values));
             return getReturnCode(future);
         } catch (Exception e) {
-            DualClient.logger.error("Error updating value with key: " + key, e);
+            logger.error("Error updating value with key: " + key, e);
             return Status.ERROR;
         }
     }
@@ -247,7 +248,7 @@ public class MemcachedClient {
                     memcachedClient().add(key, objectExpirationTime, bytes); //toJson(values));
             return getReturnCode(future);
         } catch (Exception e) {
-            DualClient.logger.error("Error inserting value", e);
+            logger.error("Error inserting value", e);
             return Status.ERROR;
         }
     }
@@ -258,7 +259,7 @@ public class MemcachedClient {
             OperationFuture<Boolean> future = memcachedClient().delete(key);
             return getReturnCode(future);
         } catch (Exception e) {
-            DualClient.logger.error("Error deleting value", e);
+            logger.error("Error deleting value", e);
             return Status.ERROR;
         }
     }

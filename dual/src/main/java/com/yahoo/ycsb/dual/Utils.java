@@ -1,6 +1,7 @@
 package com.yahoo.ycsb.dual;
 
 import com.yahoo.ycsb.ByteIterator;
+import org.apache.log4j.Logger;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -10,8 +11,8 @@ import java.util.List;
  * Created by ubuntu on 10.01.16.
  */
 public class Utils {
-
     final protected static char[] hexArray = "0123456789ABCDEF".toCharArray();
+    private static Logger logger = Logger.getLogger(Class.class);
 
     public static byte[] valuesToBytes(HashMap<String, ByteIterator> values) {
         // get the first value

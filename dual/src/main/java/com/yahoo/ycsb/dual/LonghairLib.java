@@ -1,6 +1,7 @@
 package com.yahoo.ycsb.dual;
 
 import com.sun.jna.*;
+import org.apache.log4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -15,6 +16,7 @@ public class LonghairLib {
     public static int k;
     public static int m;
     public static boolean initialized = false;
+    private static Logger logger = Logger.getLogger(Class.class);
 
     public static byte[] decode(List<byte[]> blocksBytes) {
         //Block.ByReference[] blocks = new Block.ByReference[blocksBytes.size()];

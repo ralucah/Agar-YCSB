@@ -18,7 +18,7 @@ import java.util.*;
 import java.util.concurrent.*;
 
 public class DualClient extends DB {
-    public static Logger logger = Logger.getLogger("com.yahoo.ycsb.dual");
+    private static Logger logger = Logger.getLogger(Class.class);
     private static Properties props;
 
     // s3 / memcached / dual

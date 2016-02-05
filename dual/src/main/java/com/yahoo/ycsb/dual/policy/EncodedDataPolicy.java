@@ -1,6 +1,5 @@
 package com.yahoo.ycsb.dual.policy;
 
-import com.yahoo.ycsb.dual.DualClient;
 import com.yahoo.ycsb.dual.Mode;
 
 public class EncodedDataPolicy extends StoragePolicy {
@@ -24,7 +23,7 @@ public class EncodedDataPolicy extends StoragePolicy {
         }
 
         if (regionNum == -1)
-            DualClient.logger.error("Invalid region for block " + id);
+            logger.error("Invalid region for block " + id);
 
         if (mode.equals(Mode.MEMCACHED))
             regionNum = (regionNum + 1) % numRegions;

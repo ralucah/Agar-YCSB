@@ -1,6 +1,7 @@
 package com.yahoo.ycsb.dual.tests;
 
 import com.yahoo.ycsb.dual.LonghairLib;
+import org.apache.log4j.Logger;
 
 import java.io.UnsupportedEncodingException;
 import java.util.List;
@@ -9,6 +10,7 @@ import java.util.List;
  * Created by ubuntu on 09.01.16.
  */
 public class LonghairTest {
+    private static Logger logger = Logger.getLogger(Class.class);
     public static void main(String[] args) throws InterruptedException {
         LonghairLib.k = 4;
         LonghairLib.m = 2;
