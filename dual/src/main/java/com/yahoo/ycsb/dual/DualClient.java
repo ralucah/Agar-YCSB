@@ -4,12 +4,8 @@ package com.yahoo.ycsb.dual;
 // -db com.yahoo.ycsb.dual.DualClient -p fieldlength=10 -p fieldcount=20 -s -P workloads/myworkload
 
 import com.yahoo.ycsb.*;
-import com.yahoo.ycsb.dual.policy.EncodedDataPolicy;
-import com.yahoo.ycsb.dual.policy.FullDataPolicy;
-import com.yahoo.ycsb.dual.policy.StoragePolicy;
-import com.yahoo.ycsb.dual.utils.MemcachedRegion;
-import com.yahoo.ycsb.dual.utils.ProximityClassifier;
-import com.yahoo.ycsb.dual.utils.S3Region;
+import com.yahoo.ycsb.dual.utils.*;
+import com.yahoo.ycsb.dual.utils.Utils;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
@@ -18,27 +14,25 @@ import java.util.*;
 import java.util.concurrent.*;
 
 public class DualClient extends DB {
-    private static Logger logger = Logger.getLogger(Class.class);
+    public static Executor executor;
+    private static Logger logger = Logger.getLogger(DualClient.class);
     private static Properties props;
-
     // s3 / memcached / dual
     private Mode mode;
-
     // backend (s3)
     private List<S3Client> s3Clients;
     private List<String> s3Buckets;
     private StoragePolicy s3Policy;
     private boolean s3Encode = false;
-
     // cache (memcached)
     private List<MemcachedClient> memClients;
     private StoragePolicy memPolicy;
     private boolean memEncode = false;
     private boolean memFlush = false;
 
+    /* init helper function: init S3 client connections */
     private void initS3() throws DBException {
-        // get properties
-        s3Buckets = Arrays.asList(props.getProperty("s3.buckets").split("\\s*,\\s*"));
+        // get s3 properties
         List<String> regionNames = Arrays.asList(props.getProperty("s3.regions").split("\\s*,\\s*"));
         List<String> endPointNames = Arrays.asList(props.getProperty("s3.endPoints").split("\\s*,\\s*"));
 
@@ -54,49 +48,62 @@ public class DualClient extends DB {
 
         // create connections to each s3 region
         s3Clients = new ArrayList<S3Client>();
-        ProximityClassifier.sortS3Regions(s3Regions);
+        //ProximityClassifier.sortS3Regions(s3Regions);
         for (S3Region region : s3Regions) {
-            region.print();
+            //region.print();
+            logger.trace("S3Client: " + region.getRegion() + " " + region.getEndPoint());
             s3Clients.add(new S3Client(region.getRegion(), region.getEndPoint()));
         }
 
-        // whether to encode or not
+        // whether to encode data or not
         s3Encode = Boolean.valueOf(props.getProperty("s3.encode"));
+        logger.trace("s3Encode: " + s3Encode);
         if (s3Encode == true) {
-            if (LonghairLib.initialized == false)
-                initLonghair();
-            s3Policy = new EncodedDataPolicy(s3Clients.size(), LonghairLib.k + LonghairLib.m);
+            initLonghair();
+            s3Policy = new StoragePolicy(s3Clients.size(), LonghairLib.k + LonghairLib.m);
         } else
-            s3Policy = new FullDataPolicy(s3Clients.size());
+            s3Policy = new StoragePolicy(s3Clients.size());
     }
 
+    /* init helper function: init memcached client connections */
     private void initMemcached() {
+        // construct list of regions
         List<String> memcachedHosts = Arrays.asList(props.getProperty("memcached.hosts").split("\\s*,\\s*"));
         List<MemcachedRegion> memcachedRegions = new ArrayList<MemcachedRegion>();
         for (String memcachedHost : memcachedHosts) {
-            String[] tokens = memcachedHost.split(" ");
+            String[] tokens = memcachedHost.split(":");
             memcachedRegions.add(new MemcachedRegion(tokens[0], tokens[1]));
         }
+        //ProximityClassifier.sortMemcachedRegions(memcachedRegions);
 
+        // init clients
         memClients = new ArrayList<MemcachedClient>();
         for (MemcachedRegion region : memcachedRegions) {
-            region.print();
+            //region.print();
+            logger.trace("MemcachedClient: " + region.getIp() + ":" + region.getPort());
             memClients.add(new MemcachedClient(region.getIp() + ":" + region.getPort()));
         }
 
+        // whether to encode data or not
         memEncode = Boolean.valueOf(props.getProperty("memcached.encode"));
-
+        logger.trace("memEncode: " + memEncode);
         if (memEncode == true) {
-            if (LonghairLib.initialized == false)
-                initLonghair();
-            memPolicy = new EncodedDataPolicy(memClients.size(), LonghairLib.k + LonghairLib.m);
+            initLonghair();
+            memPolicy = new StoragePolicy(memClients.size(), LonghairLib.k + LonghairLib.m);
         } else
-            memPolicy = new FullDataPolicy(memClients.size());
+            memPolicy = new StoragePolicy(memClients.size());
 
+        // whether to flush cache or not
         memFlush = Boolean.valueOf(props.getProperty("memcached.flush"));
+        logger.trace("memFlush: " + memFlush);
     }
 
+    /* init helper function: init longhair lib for erasure coding */
     private void initLonghair() {
+        if (LonghairLib.k == Integer.MIN_VALUE || LonghairLib.m == Integer.MIN_VALUE)
+            return;
+
+        // read k and m
         LonghairLib.k = Integer.valueOf(props.getProperty("longhair.k"));
         LonghairLib.m = Integer.valueOf(props.getProperty("longhair.m"));
 
@@ -117,12 +124,17 @@ public class DualClient extends DB {
             logger.error("Error initializing longhair");
             System.exit(1);
         }
-
-        LonghairLib.initialized = true;
+        logger.trace("k: " + LonghairLib.k + " m: " + LonghairLib.m);
     }
 
+    /**
+     * initialize Dual Client: S3 client connections, Memcached client connections, Longhair lib
+     *
+     * @throws DBException
+     */
     @Override
     public void init() throws DBException {
+        logger.trace("init() begin");
         // properties
         InputStream propFile = DualClient.class.getClassLoader().getResourceAsStream("dual.properties");
         props = new Properties();
@@ -133,7 +145,18 @@ public class DualClient extends DB {
             System.exit(1);
         }
 
-        // mode (s3 / memcached / dual) + liblonghair
+        // used as table names
+        s3Buckets = Arrays.asList(props.getProperty("s3.buckets").split("\\s*,\\s*"));
+
+        // init thread pool
+        int threadPoolSize = Integer.valueOf(props.getProperty("threadPoolSize"));
+        if (threadPoolSize <= 0) {
+            logger.warn("Invalid threadPoolSize! Default: 10");
+            threadPoolSize = 10;
+        }
+        executor = Executors.newFixedThreadPool(threadPoolSize);
+
+        // set mode (s3 / memcached / dual) + liblonghair
         mode = Mode.valueOf(props.getProperty("mode").toUpperCase());
         switch (mode) {
             case S3:
@@ -151,8 +174,15 @@ public class DualClient extends DB {
                 System.exit(-1);
                 break;
         }
+        logger.trace("init() end");
     }
 
+    /**
+     * Flushes memcached clients
+     *
+     * @throws DBException
+     */
+    //TODO clean S3 buckets too?
     @Override
     public void cleanup() throws DBException {
         if (memClients != null) {
@@ -165,23 +195,26 @@ public class DualClient extends DB {
         }
     }
 
-    public Result readOneBlock(String key, int blockId, Mode readMode) {
-        Result result = new Result();
-
-        int regionNum;
-        final String bucket;
-
+    /**
+     * Read valid bytes of full data
+     *
+     * @param key      identifies data record
+     * @param readMode S3 or MEMCACHED
+     * @return valid bytes or null
+     */
+    private byte[] readFullData(String key, Mode readMode) {
+        byte[] bytes = null;
         switch (readMode) {
             case S3: {
-                regionNum = s3Policy.assignToRegion(key, blockId, readMode);
-                bucket = s3Buckets.get(regionNum);
-                result = s3Clients.get(regionNum).read(bucket, key);
+                int connId = s3Policy.assignFullDataToRegion(key, Mode.S3);
+                String bucket = s3Buckets.get(connId);
+                bytes = s3Clients.get(connId).read(bucket, key);
                 break;
             }
             case MEMCACHED: {
-                regionNum = memPolicy.assignToRegion(key, blockId, readMode);
-                bucket = s3Buckets.get(regionNum);
-                result = memClients.get(regionNum).read(bucket, key);
+                int connId = memPolicy.assignFullDataToRegion(key, Mode.MEMCACHED);
+                String bucket = s3Buckets.get(connId);
+                bytes = memClients.get(connId).read(bucket, key);
                 break;
             }
             default: {
@@ -189,181 +222,188 @@ public class DualClient extends DB {
                 break;
             }
         }
-        //logger.debug("DualClient.readBlock_" + mode + "(" + key + " " +bucket + " " + bytesToHex(bytes) + ")");
-        return result;
+        if (bytes != null)
+            logger.trace("readFullData_" + readMode + "(" + key + ") return: " + bytes.length + " bytes");
+        else
+            logger.trace("readFullData_" + readMode + "(" + key + ") return: null");
+        return bytes;
     }
 
+    /**
+     * Read valid bytes of an encoded block
+     *
+     * @param blockKey identifies the block record
+     * @param blockId  id within the encoded data
+     * @param readMode S3 or MEMCACHED
+     * @return valid block bytes or null
+     */
+    private BlockResult readBlock(String blockKey, int blockId, Mode readMode) {
+        BlockResult block = null;
+        switch (readMode) {
+            case S3: {
+                int connId = s3Policy.assignEncodedBlockToRegion(blockKey, blockId, Mode.S3);
+                String bucket = s3Buckets.get(connId);
+                byte[] bytes = s3Clients.get(connId).read(bucket, blockKey);
+                block = new BlockResult(blockKey, blockId, bytes);
+                break;
+            }
+            case MEMCACHED: {
+                int connId = memPolicy.assignEncodedBlockToRegion(blockKey, blockId, Mode.MEMCACHED);
+                String bucket = s3Buckets.get(connId);
+                byte[] bytes = memClients.get(connId).read(bucket, blockKey);
+                block = new BlockResult(blockKey, blockId, bytes);
+                break;
+            }
+            default: {
+                logger.error("Invalid read mode!");
+                break;
+            }
+        }
+        if (block != null)
+            logger.trace("readBlock_" + readMode + "(" + blockKey + "," + blockId + ") return: " + block.getBytes().length + " bytes");
+        else
+            logger.trace("readBlock_" + readMode + "(" + blockKey + ":" + blockId + ") return: null");
+        return block;
+    }
 
-    public List<Result> readKBlocks(String key, Mode readMode, List<Result> results) {
+    /**
+     * Try to read at least k valid blocks
+     *
+     * @param key      of encoded record
+     * @param readMode S3 or MEMCACHED
+     * @param results  append blocks here
+     */
+    private void readEncodedBlocks(String key, Mode readMode, List<BlockResult> results) {
         List<Future> futures = new ArrayList<Future>();
-
-        // TODO how many threads in the thread pool?
-        Executor executor = Executors.newFixedThreadPool(LonghairLib.k + LonghairLib.m);
-        CompletionService<Result> completionService = new ExecutorCompletionService<Result>(executor);
-
+        // one completion service per k blocks
+        CompletionService<BlockResult> completionService = new ExecutorCompletionService<BlockResult>(executor);
         for (int i = 0; i < LonghairLib.k + LonghairLib.m; i++) {
             final String keyFin = key + i;
             final int iFin = i;
-            completionService.submit(new Callable<Result>() {
+            completionService.submit(new Callable<BlockResult>() {
                 @Override
-                public Result call() throws Exception {
-                    return readOneBlock(keyFin, iFin, readMode);
+                public BlockResult call() throws Exception {
+                    return readBlock(keyFin, iFin, readMode);
                 }
             });
         }
 
-        /* best effort read at least k valid blocks */
+        // best effort read at least k valid blocks
         int errors = 0;
         while (results.size() < LonghairLib.k) {
-            Future<Result> resultFuture = null;
+            Future<BlockResult> resultFuture = null;
             try {
                 resultFuture = completionService.take();
-                Result res = resultFuture.get();
-                if (res.getStatus() == Status.OK) {
+                BlockResult res = resultFuture.get();
+                if (res != null) {
                     if (!results.contains(res))
                         results.add(res);
                 } else
                     errors++;
             } catch (Exception e) {
                 errors++;
-                logger.debug("Exception reading a block.");
+                logger.trace("Exception reading a block.");
             }
-            if (errors == LonghairLib.k + LonghairLib.m)
+            if (errors > LonghairLib.m)
                 break;
         }
-
-        return results;
+        logger.trace("readEncodedBlocks_" + readMode + "(" + key + ") return: " + results.size() + " results");
     }
 
-
     // TODO possible optimization: batch requests to the same data center (S3 bucket or memcached server)
+
+    /**
+     * Read record identified by key from bucket identified by table
+     *
+     * @param table  The name of the table / bucket
+     * @param key    The record key of the record to read
+     * @param fields The list of fields to read, or null for all of them / not used
+     * @param result A HashMap of field/value pairs for the result
+     * @return operation status
+     */
     @Override
     public Status read(String table, String key, Set<String> fields, HashMap<String, ByteIterator> result) {
-        Status status = null;
+        Status status = Status.ERROR;
         byte[] bytes = null;
 
         switch (mode) {
-            case S3:
-            case MEMCACHED: {
-                if (memEncode) {
-                    // read k blocks
-                    List<Result> results = new ArrayList<Result>();
-                    readKBlocks(key, mode, results);
-                    if (results == null || results.size() < LonghairLib.k)
-                        status = Status.ERROR;
-                    else {
-                        List<byte[]> blocks = new ArrayList<byte[]>();
-                        status = results.get(0).getStatus();
-                        for (Result res : results) {
-                            blocks.add(res.getBytes());
-                            if (res.getStatus() != status)
-                                status = res.getStatus();
-                        }
-                        bytes = LonghairLib.decode(blocks);
-                    }
-                } else {
+            case S3: {
+                if (s3Encode == false) {
                     // read full data
-                    Result res = readOneBlock(key, -1, mode);
-                    status = res.getStatus();
-                    bytes = res.getBytes();
+                    bytes = readFullData(key, Mode.S3);
+                } else {
+                    // read encoded blocks and decode
+                    List<BlockResult> results = new ArrayList<BlockResult>();
+                    readEncodedBlocks(key, Mode.S3, results);
+                    if (results != null && results.size() >= LonghairLib.k)
+                        bytes = LonghairLib.decode(Utils.blocksToBytes(results));
+                }
+                break;
+            }
+            case MEMCACHED: {
+                if (memEncode == false) {
+                    // read full data
+                    bytes = readFullData(key, Mode.MEMCACHED);
+                } else {
+                    // read encoded blocks and decode
+                    List<BlockResult> results = new ArrayList<BlockResult>();
+                    readEncodedBlocks(key, Mode.MEMCACHED, results);
+                    if (results != null && results.size() >= LonghairLib.k)
+                        bytes = LonghairLib.decode(Utils.blocksToBytes(results));
                 }
                 break;
             }
             case DUAL: {
-                // result: full data or encoded chunks
-                Result res = null;
-                List<Result> results = new ArrayList<Result>();
-                int numCachedChunks = 0;
+                // remember the cached blocks, even if they are less than k
+                List<BlockResult> readBlocks = new ArrayList<BlockResult>();
+                int numCachedBlocks = 0;
 
-                // read from cache
+                /* read from cache */
                 if (memEncode == false) {
-                    // full data
-                    res = readOneBlock(key, -1, Mode.MEMCACHED);
-                    status = res.getStatus();
-                    bytes = res.getBytes();
+                    bytes = readFullData(key, Mode.MEMCACHED);
                 } else {
-                    // encoded chunks
-                    readKBlocks(key, Mode.MEMCACHED, results);
-                    numCachedChunks = results.size();
-
-                    // if at least k valid chunks were retrieved
-                    if (results.size() >= LonghairLib.k) {
-                        status = Status.OK;
-
-                        // decode the blocks
-                        List<byte[]> blocks = new ArrayList<byte[]>();
-                        for (Result r : results)
-                            blocks.add(r.getBytes());
-                        bytes = LonghairLib.decode(blocks);
-                    } else
-                        status = Status.ERROR;
+                    readEncodedBlocks(key, Mode.MEMCACHED, readBlocks);
+                    if (readBlocks.size() >= LonghairLib.k)
+                        bytes = LonghairLib.decode(Utils.blocksToBytes(readBlocks));
+                    else
+                        numCachedBlocks = readBlocks.size();
                 }
 
-                if (status == Status.OK && bytes != null) {
-                    logger.debug("Cache hit!");
-                    // stop here
-                } else {
-                    logger.debug("Cache (partial) miss");
-
-                    // read from backend
+                /* if cache miss, read from backend */
+                if (bytes == null) {
+                    logger.debug("Cache miss!");
                     if (s3Encode == false) {
-                        // full data
-                        res = readOneBlock(key, -1, Mode.S3);
-                        status = res.getStatus();
-                        bytes = res.getBytes();
+                        bytes = readFullData(key, Mode.S3);
                     } else {
-                        // encoded chunks
-                        readKBlocks(key, Mode.S3, results);
-
-                        // if at least k valid chunks were retrieved
-                        if (results.size() >= LonghairLib.k) {
-                            status = Status.OK;
-
-                            // decode the blocks
-                            List<byte[]> blocks = new ArrayList<byte[]>();
-                            for (Result r : results)
-                                blocks.add(r.getBytes());
-                            bytes = LonghairLib.decode(blocks);
-                        } else
-                            status = Status.ERROR;
+                        readEncodedBlocks(key, Mode.S3, readBlocks);
+                        if (readBlocks.size() >= LonghairLib.k)
+                            bytes = LonghairLib.decode(Utils.blocksToBytes(readBlocks));
                     }
 
-                    // cache data!
-                    if (status == Status.OK && bytes != null) {
-                        Status statusCache = Status.ERROR;
+                    /* cache data */
+                    if (bytes != null) {
                         if (memEncode == false) {
-                            statusCache = insertOneBlock(key, -1, bytes, Mode.MEMCACHED);
+                            insertBytes(key, bytes, Mode.MEMCACHED); // TODO return sth?
                         } else {
-                            // cache blocks
                             if (s3Encode == false) {
-                                // divide data into blocks
+                                // divide data into blocks and cache the diff with readBlocks
                                 List<byte[]> blocks = LonghairLib.encode(bytes);
-
-                                if (results.size() > 0) {
-                                    for (byte[] block : blocks) {
-                                        if (Utils.containsBlock(results, block) == false) {
-                                            statusCache = insertOneBlock(key, -1, block, Mode.MEMCACHED);
-                                            if (statusCache != Status.OK)
-                                                logger.warn("Error caching block!");
-                                        }
-                                    }
+                                int id = 0;
+                                for (byte[] blockBytes : blocks) {
+                                    if (Utils.containsBlock(readBlocks, blockBytes) == false)
+                                        insertBlock(new BlockResult(key + id, id, blockBytes), Mode.MEMCACHED);
+                                    id++;
                                 }
                             } else {
                                 // store the blocks that are not already stored
-                                for (int i = numCachedChunks; i < results.size(); i++) {
-                                    Result r = results.get(i);
-                                    if (r.getStatus() == Status.OK) {
-                                        statusCache = insertOneBlock(key, i, r.getBytes(), Mode.MEMCACHED);
-                                        if (statusCache != Status.OK)
-                                            logger.warn("Error caching block!");
-                                    } else
-                                        logger.warn("Block retrieved from backedn not ok!");
-                                }
+                                for (int i = numCachedBlocks; i < readBlocks.size(); i++)
+                                    insertBlock(readBlocks.get(i), Mode.MEMCACHED);
                             }
                         }
-                    } else {
+                    } else
                         logger.warn("Could not read data from S3!");
-                    }
+                } else {
+                    logger.debug("Cache hit!");
                 }
                 break;
             }
@@ -372,20 +412,17 @@ public class DualClient extends DB {
                 break;
             }
         }
-        String msg = "Read_" + mode +
-            " Key:" + key;
-        //" EC:" + erasureCoding + " ";
-
+        String msg = "Read_" + mode + "(" + key + ") return: ";
         if (bytes != null) {
-            status = Status.OK;
             // now transform bytes to result hashmap
-            msg += Utils.bytesToHex(bytes) + " ";
+            //msg += Utils.bytesToHex(bytes) + " ";
             result.put(key, new ByteArrayByteIterator(bytes));
+            status = Status.OK;
+            msg += bytes.length + " bytes";
         } else {
-            status = Status.ERROR;
             msg += "null";
         }
-        logger.debug(msg + "Status: " + status.getName());
+        logger.debug(msg + " " + status);
 
         return status;
     }
@@ -405,26 +442,27 @@ public class DualClient extends DB {
         return null;
     }
 
-    /* helper function for inserting to s3 or memcached */
-    private Status insertOneBlock(String key, int blockId, byte[] bytes, Mode insertMode) {
-        Status status = null;
 
-        // map to data center
-        int connId;
-        String bucket;
-
-        //logger.debug("DualClient.insertBlock" + mode + "(" + blockKey + " " + bucket + " " + bytesToHex(block) + ")");
-
+    /**
+     * Insert full data
+     *
+     * @param key        identifies the data record
+     * @param bytes      actual content
+     * @param insertMode S3 or MEMCACHED
+     * @return Status.OK if success; Status.ERROR otherwise
+     */
+    private Status insertBytes(String key, byte[] bytes, Mode insertMode) {
+        Status status = Status.ERROR;
         switch (insertMode) {
             case S3: {
-                connId = s3Policy.assignToRegion(key, blockId, insertMode);
-                bucket = s3Buckets.get(connId);
+                int connId = s3Policy.assignFullDataToRegion(key, insertMode);
+                String bucket = s3Buckets.get(connId);
                 status = s3Clients.get(connId).insert(bucket, key, bytes);
                 break;
             }
             case MEMCACHED: {
-                connId = memPolicy.assignToRegion(key, blockId, insertMode);
-                bucket = s3Buckets.get(connId);
+                int connId = memPolicy.assignFullDataToRegion(key, insertMode);
+                String bucket = s3Buckets.get(connId);
                 status = memClients.get(connId).insert(bucket, key, bytes);
                 break;
             }
@@ -433,59 +471,109 @@ public class DualClient extends DB {
                 break;
             }
         }
+        logger.trace("insertBytes_" + insertMode + "(" + key + "," + bytes.length + " bytes) " + status);
+        //bytesToHex(block)
         return status;
     }
 
+    /**
+     * Insert block
+     *
+     * @param block
+     * @param insertMode S3 or MEMCACHED
+     * @return Status.OK if success; Status.ERROR otherwise
+     */
+    private Status insertBlock(BlockResult block, Mode insertMode) {
+        Status status = Status.ERROR;
+        switch (insertMode) {
+            case S3: {
+                int connId = s3Policy.assignEncodedBlockToRegion(block.getKey(), block.getId(), Mode.S3);
+                String bucket = s3Buckets.get(connId);
+                status = s3Clients.get(connId).insert(bucket, block.getKey(), block.getBytes());
+                break;
+            }
+            case MEMCACHED: {
+                int connId = memPolicy.assignEncodedBlockToRegion(block.getKey(), block.getId(), Mode.MEMCACHED);
+                String bucket = s3Buckets.get(connId);
+                status = memClients.get(connId).insert(bucket, block.getKey(), block.getBytes());
+                break;
+            }
+            default: {
+                logger.error("Invalid mode!");
+                break;
+            }
+        }
+        logger.trace("InsertBlock_" + insertMode + "(" + block.getKey() + "," + block.getId() + "," +
+            block.getBytes().length + " bytes) " + status);
+        return status;
+    }
+
+    /**
+     * Insert encoded blocks
+     *
+     * @param key        identifies encoded data record
+     * @param blocks     list of bytes
+     * @param insertMode S3 or MEMCACHED
+     * @return Status.OK if success; Status.ERROR otherwise
+     */
+    private Status insertEncodedBlocks(String key, List<byte[]> blocks, Mode insertMode) {
+        Status status = Status.OK;
+
+        int id = 0;
+        for (byte[] blockBytes : blocks) {
+            String blockKey = key + id;
+            BlockResult block = new BlockResult(blockKey, id, blockBytes);
+            Status blockStatus = insertBlock(block, insertMode);
+            if (blockStatus != Status.OK) {
+                logger.warn("Error inserting encoded block " + blockKey);
+                status = Status.ERROR;
+            }
+            id++;
+        }
+        //logger.debug("insertEncodedBlocks_" + insertMode + "(" + key + "," + blocks.size() + "blocks) " + status);
+        return status;
+    }
+
+    /**
+     * Insert record in S3 bucket or Memcached
+     * @param table The name of the table (bucket name in this case)
+     * @param key The record key of the record to insert
+     * @param values A HashMap of field/value pairs to insert in the record (processed to generate value bytes)
+     * @return operation status (Status.OK or Status.ERROR)
+     */
     @Override
     public Status insert(String table, String key, HashMap<String, ByteIterator> values) {
+        // operation status
+        Status status = Status.ERROR;
 
+        // generate bytes array based on values
+        byte[] bytes = Utils.valuesToBytes(values);
+
+        // insert in S3 bucket or Memcached
         Mode insertMode = mode;
         if (mode == Mode.DUAL)
             insertMode = Mode.S3;
 
-        // generate bytes array based on values
-        byte[] bytes = Utils.valuesToBytes(values);
-        Status status = Status.ERROR;
         switch (insertMode) {
             case S3: {
                 if (s3Encode == false) {
                     // full data
-                    status = insertOneBlock(key, -1, bytes, Mode.S3);
+                    status = insertBytes(key, bytes, Mode.S3);
                 } else {
                     // encoded data
                     List<byte[]> blocks = LonghairLib.encode(bytes);
-
-                    // store each block
-                    int row = 0;
-                    for (byte[] block : blocks) {
-                        String blockKey = key + row;
-                        row++;
-
-                        status = insertOneBlock(blockKey, row, block, Mode.S3);
-                        if (status != Status.OK)
-                            break;
-                    }
+                    status = insertEncodedBlocks(key, blocks, Mode.S3);
                 }
                 break;
             }
             case MEMCACHED: {
                 if (memEncode == false) {
                     // full data
-                    status = insertOneBlock(key, -1, bytes, Mode.MEMCACHED);
+                    status = insertBytes(key, bytes, Mode.MEMCACHED);
                 } else {
                     // encoded data
                     List<byte[]> blocks = LonghairLib.encode(bytes);
-
-                    // store each block
-                    int row = 0;
-                    for (byte[] block : blocks) {
-                        String blockKey = key + row;
-                        row++;
-
-                        status = insertOneBlock(blockKey, row, block, Mode.MEMCACHED);
-                        if (status != Status.OK)
-                            break;
-                    }
+                    status = insertEncodedBlocks(key, blocks, Mode.MEMCACHED);
                 }
                 break;
             }
@@ -495,9 +583,7 @@ public class DualClient extends DB {
             }
         }
 
-        logger.debug("Insert_" + mode +
-            " Key:" + key + " " + Utils.bytesToHex(bytes) +
-            " Status:" + status.getName());
+        logger.debug("Insert_" + mode + "(" + key + "," + bytes.length + " bytes) " + status);
         return status;
     }
 

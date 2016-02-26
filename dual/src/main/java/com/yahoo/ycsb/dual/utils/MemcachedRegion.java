@@ -19,6 +19,6 @@ public class MemcachedRegion extends Region {
     }
 
     public void print() {
-        System.out.println(ip + ":" + port + " " + avgPingTime);
+        logger.debug(ip + ":" + port + " " + avgPingTime);
     }
 }

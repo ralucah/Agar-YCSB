@@ -1,8 +1,9 @@
-package com.yahoo.ycsb.dual;
+package com.yahoo.ycsb.dual.utils;
 
 import com.yahoo.ycsb.ByteIterator;
 import org.apache.log4j.Logger;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -12,7 +13,7 @@ import java.util.List;
  */
 public class Utils {
     final protected static char[] hexArray = "0123456789ABCDEF".toCharArray();
-    private static Logger logger = Logger.getLogger(Class.class);
+    private static Logger logger = Logger.getLogger(Utils.class);
 
     public static byte[] valuesToBytes(HashMap<String, ByteIterator> values) {
         // get the first value
@@ -29,6 +30,7 @@ public class Utils {
             System.arraycopy(sourceArray, 0, bytes, offset, sizeArray);
             offset += sizeArray;
         }
+        //logger.trace("Value size: " + bytes.length);
         return bytes;
     }
 
@@ -42,12 +44,19 @@ public class Utils {
         return new String(hexChars);
     }
 
-    public static boolean containsBlock(List<Result> blocks, byte[] block) {
-        for (Result res : blocks) {
-            if (Arrays.equals(block, res.getBytes()))
+    public static boolean containsBlock(List<BlockResult> blocks, byte[] blockBytes) {
+        for (BlockResult res : blocks) {
+            if (Arrays.equals(res.getBytes(), blockBytes))
                 return true;
         }
         return false;
+    }
+
+    public static List<byte[]> blocksToBytes(List<BlockResult> blockResults) {
+        List<byte[]> blockBytes = new ArrayList<byte[]>();
+        for (BlockResult blockRes : blockResults)
+            blockBytes.add(blockRes.getBytes());
+        return blockBytes;
     }
 
 }

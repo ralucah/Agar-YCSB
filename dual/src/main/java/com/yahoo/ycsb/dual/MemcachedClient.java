@@ -25,7 +25,6 @@ import net.spy.memcached.ConnectionFactoryBuilder;
 import net.spy.memcached.FailureMode;
 import net.spy.memcached.internal.GetFuture;
 import net.spy.memcached.internal.OperationFuture;
-import net.spy.memcached.ops.StatusCode;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.codehaus.jackson.JsonFactory;
@@ -69,7 +68,7 @@ public class MemcachedClient {
     protected static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String TEMPORARY_FAILURE_MSG = "Temporary failure";
     private static final String CANCELLED_MSG = "cancelled";
-    private static Logger logger = Logger.getLogger(Class.class);
+    private static Logger logger = Logger.getLogger(MemcachedClient.class);
     private boolean checkOperationStatus;
     private long shutdownTimeoutMillis;
     private int objectExpirationTime;
@@ -201,22 +200,15 @@ public class MemcachedClient {
                 connectionFactoryBuilder.build(), addresses);
     }
 
-    public Result read(String table, String key) {
-        Result result = new Result();
+    public byte[] read(String table, String key) {
+        byte[] bytes = null;
         try {
             GetFuture<Object> future = memcachedClient().asyncGet(key);
-            byte[] bytes = (byte[]) future.get();
-            result.setBytes(bytes);
-
-            if (bytes == null || future.getStatus().getStatusCode().equals(StatusCode.ERR_NOT_FOUND))
-                result.setStatus(Status.ERROR);
-            else
-                result.setStatus(Status.OK);
+            bytes = (byte[]) future.get();
         } catch (Exception e) {
             logger.error("Error encountered for key: " + key, e);
-            result.setStatus(Status.ERROR);
         }
-        return result;
+        return bytes;
     }
 
     public Status scan(

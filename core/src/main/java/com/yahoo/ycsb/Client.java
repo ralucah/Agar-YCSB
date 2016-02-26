@@ -299,6 +299,8 @@ class ClientThread extends Thread {
             return;
         }
 
+        Client.st = System.currentTimeMillis();
+
         //NOTE: Switching to using nanoTime and parkNanos for time management here such that the measurements
         // and the client thread have the same view on time.
 
@@ -434,6 +436,9 @@ public class Client {
      * The maximum amount of time (in seconds) for which the benchmark will be run.
      */
     public static final String MAX_EXECUTION_TIME = "maxexecutiontime";
+
+    public static long st;
+    public static long en;
 
     public static void usageMessage() {
         System.out.println("Usage: java com.yahoo.ycsb.Client [options]");
@@ -771,7 +776,7 @@ public class Client {
             statusthread.start();
         }
 
-        long st = System.currentTimeMillis();
+        //long st = System.currentTimeMillis();
 
         for (Thread t : clients) {
             t.start();
@@ -794,7 +799,8 @@ public class Client {
             }
         }
 
-        long en = System.currentTimeMillis();
+        //long en = System.currentTimeMillis();
+        en = System.currentTimeMillis();
 
         if (terminator != null && !terminator.isInterrupted()) {
             terminator.interrupt();

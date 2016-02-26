@@ -56,7 +56,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class S3Client {
     private static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
-    private static Logger logger = Logger.getLogger(Class.class);
+    private static Logger logger = Logger.getLogger(S3Client.class);
     private static String sse;
     private static SSECustomerKey ssecKey;
     private static BasicAWSCredentials s3Credentials;
@@ -273,8 +273,9 @@ public class S3Client {
      *          A HashMap of field/value pairs for the result
      * @return OK on success, ERROR otherwise.
      */
-    public Result read(String bucket, String key) {
-        Result result = new Result();
+    public byte[] read(String bucket, String key) {
+        byte[] bytes = null;
+        //Result result = new Result(key);
         try {
             GetObjectRequest getObjectRequest = null;
             GetObjectMetadataRequest getObjectMetadataRequest = null;
@@ -290,20 +291,20 @@ public class S3Client {
             InputStream objectData = object.getObjectContent(); //consuming the stream
             // writing the stream to bytes and to results
             int sizeOfFile = (int) objectMetadata.getContentLength();
-            byte[] bytes = new byte[sizeOfFile];
+            bytes = new byte[sizeOfFile];
             objectData.read(bytes, 0, sizeOfFile);
-            result.setBytes(bytes);
+            //result.setBytes(bytes);
             objectData.close();
-            if (bytes == null)
+            /*if (bytes == null)
                 result.setStatus(Status.ERROR);
             else
-                result.setStatus(Status.OK);
+                result.setStatus(Status.OK);*/
         } catch (Exception e) {
-            result.setStatus(Status.ERROR);
+            //result.setStatus(Status.ERROR);
             //DualClient.logger.error("Not possible to get the object " + key);
             //e.printStackTrace();
         }
-        return result;
+        return bytes;
     }
 
     /**

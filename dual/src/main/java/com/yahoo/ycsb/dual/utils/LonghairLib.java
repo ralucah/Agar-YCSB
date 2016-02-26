@@ -1,4 +1,4 @@
-package com.yahoo.ycsb.dual;
+package com.yahoo.ycsb.dual.utils;
 
 import com.sun.jna.*;
 import org.apache.log4j.Logger;
@@ -16,11 +16,11 @@ public class LonghairLib {
     public static int k;
     public static int m;
     public static boolean initialized = false;
-    private static Logger logger = Logger.getLogger(Class.class);
+    private static Logger logger = Logger.getLogger(LonghairLib.class);
 
-    public static byte[] decode(List<byte[]> blocksBytes) {
+    public static byte[] decode(List<byte[]> blockBytes) {
         //Block.ByReference[] blocks = new Block.ByReference[blocksBytes.size()];
-        Block[] blocks = (Block[]) new Block().toArray(blocksBytes.size());
+        Block[] blocks = (Block[]) new Block().toArray(blockBytes.size());
         /*for (int i = 0; i < blocksBytes.size(); i++) {
             blocks[i] = new Block();  // .ByReference();
         }*/
@@ -29,7 +29,7 @@ public class LonghairLib {
         int originalLength = -1;
         int blockSize = 0;
         byte[] lengthBytes;
-        for (byte[] fullValue : blocksBytes) {
+        for (byte[] fullValue : blockBytes) {
             blockSize = fullValue.length - (reservedBytes * 2);
             int offset = 0;
 

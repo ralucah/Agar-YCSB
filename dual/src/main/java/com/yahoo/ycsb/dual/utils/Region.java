@@ -1,10 +1,13 @@
 package com.yahoo.ycsb.dual.utils;
 
+import org.apache.log4j.Logger;
+
 /**
  * Created by ubuntu on 02.02.16.
  */
 public abstract class Region implements Comparable {
 
+    protected static Logger logger = Logger.getLogger(Region.class);
     protected double avgPingTime;
 
     protected Region() {
