@@ -61,5 +61,6 @@
     <orderEntry type="module" module-name="core" />
     <orderEntry type="module" module-name="datastore-specific-descriptor" />
     <orderEntry type="module" module-name="dual-binding" />
+    <orderEntry type="module" module-name="proxy" />
   </component>
 </module>

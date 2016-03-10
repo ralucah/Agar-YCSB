@@ -6,6 +6,7 @@
       <module fileurl="file://$PROJECT_DIR$/core/core.iml" filepath="$PROJECT_DIR$/core/core.iml" />
       <module fileurl="file://$PROJECT_DIR$/binding-parent/datastore-specific-descriptor/datastore-specific-descriptor.iml" filepath="$PROJECT_DIR$/binding-parent/datastore-specific-descriptor/datastore-specific-descriptor.iml" />
       <module fileurl="file://$PROJECT_DIR$/dual/dual-binding.iml" filepath="$PROJECT_DIR$/dual/dual-binding.iml" />
+      <module fileurl="file://$PROJECT_DIR$/proxy/proxy.iml" filepath="$PROJECT_DIR$/proxy/proxy.iml" />
       <module fileurl="file://$PROJECT_DIR$/root.iml" filepath="$PROJECT_DIR$/root.iml" />
     </modules>
   </component>

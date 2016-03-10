@@ -16,24 +16,16 @@ public class StoragePolicy {
         this.numBlocks = numBlocks;
     }
 
-    public int assignFullDataToRegion(String key, Mode mode) {
+    public int assignFullDataToRegion(String key) {
         int regionNum = Math.abs(key.hashCode()) % numRegions;
-
-        if (mode.equals(Mode.MEMCACHED))
-            regionNum = (regionNum + 1) % numRegions;
-
-        logger.trace(key + ":" + mode + " mapped to " + regionNum);
+        logger.trace(key + " mapped to " + regionNum);
         return regionNum;
     }
 
-    public int assignEncodedBlockToRegion(String blockKey, int blockId, Mode mode) {
+    public int assignEncodedBlockToRegion(String blockKey, int blockId) {
         int blocksPerRegion = (int) Math.round((double) (numBlocks / (double) numRegions));
         int regionNum = (int) (blockId / blocksPerRegion);
-
-        if (mode.equals(Mode.MEMCACHED))
-            regionNum = (regionNum + 1) % numRegions;
-        logger.trace(blockKey + ":" + blockId + ":" + mode + " mapped to " + regionNum);
-
+        logger.trace(blockKey + ":" + blockId + " mapped to " + regionNum);
         return regionNum;
     }
 }

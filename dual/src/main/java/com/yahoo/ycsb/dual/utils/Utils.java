@@ -3,6 +3,7 @@ package com.yahoo.ycsb.dual.utils;
 import com.yahoo.ycsb.ByteIterator;
 import org.apache.log4j.Logger;
 
+import java.io.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -11,7 +12,7 @@ import java.util.List;
 /**
  * Created by ubuntu on 10.01.16.
  */
-public class Utils {
+public abstract class Utils {
     final protected static char[] hexArray = "0123456789ABCDEF".toCharArray();
     private static Logger logger = Logger.getLogger(Utils.class);
 
@@ -57,6 +58,55 @@ public class Utils {
         for (BlockResult blockRes : blockResults)
             blockBytes.add(blockRes.getBytes());
         return blockBytes;
+    }
+
+    public static List<String> computeBlockKeys(String key, int numBlocks) {
+        List<String> blockKeys = new ArrayList<String>();
+        for (int i = 0; i < numBlocks; i++) {
+            blockKeys.add(key + i);
+        }
+        return blockKeys;
+    }
+
+    public static byte[] listToBytes(List<String> list) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ObjectOutputStream outStream = null;
+        try {
+            outStream = new ObjectOutputStream(out);
+            outStream.writeObject(list);
+        } catch (IOException e) {
+            logger.error("Error creating object output stream.");
+        } finally {
+            if (outStream != null)
+                try {
+                    outStream.close();
+                } catch (IOException e) {
+                    logger.error("Error closing object output stream.");
+                }
+        }
+        return out.toByteArray();
+    }
+
+    public static List<String> bytesToList(byte[] bytes) {
+        List<String> list = new ArrayList<String>();
+        ByteArrayInputStream in = new ByteArrayInputStream(bytes);
+        ObjectInputStream inStream = null;
+        try {
+            inStream = new ObjectInputStream(in);
+            list = (List<String>) inStream.readObject();
+        } catch (IOException e) {
+            logger.error("Error creating object input stream.");
+        } catch (ClassNotFoundException e) {
+            logger.error("Error reading from input stream.");
+        } finally {
+            if (inStream != null)
+                try {
+                    inStream.close();
+                } catch (IOException e) {
+                    logger.error("Error closing object input stream.");
+                }
+        }
+        return list;
     }
 
 }

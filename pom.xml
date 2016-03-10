@@ -16,7 +16,8 @@ permissions and limitations under the License. See accompanying
 LICENSE file.
 -->
 
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>com.yahoo.ycsb</groupId>
@@ -55,6 +56,7 @@ LICENSE file.
     <module>binding-parent</module>
     <!-- all the datastore bindings, lex sorted please -->
     <module>dual</module>
+      <module>proxy</module>
   </modules>
 
   <build>
