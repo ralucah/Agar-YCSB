@@ -24,14 +24,14 @@ public class DualClient extends DB {
     public static Logger logger = Logger.getLogger(DualClient.class);
 
     public static String PROPERTIES_FILE = "client.properties";
-    public static String PROXY = "proxy";
+    public static String PROXY_ADDRESS = "proxy.address";
     public static String S3_REGIONS = "s3.regions";
     public static String S3_ENDPOINTS = "s3.endpoints";
     public static String S3_BUCKETS = "s3.buckets";
     public static String S3_ENCODE = "s3.encode";
     public static String LONGHAIR_K = "longhair.k";
     public static String LONGHAIR_M = "longhair.m";
-    public static String PACKET_SIZE = "packet_size";
+    public static String PACKET_SIZE = "packet.size";
 
     private Properties properties;
 
@@ -49,7 +49,7 @@ public class DualClient extends DB {
     private StoragePolicy storagePolicy;
 
     private void initProxy() {
-        String[] pair = properties.getProperty(PROXY).split(":");
+        String[] pair = properties.getProperty(PROXY_ADDRESS).split(":");
         proxy = new Proxy(pair[0], Integer.parseInt(pair[1]));
         logger.trace("Proxy " + proxy.getIp() + " " + proxy.getPort());
 

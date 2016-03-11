@@ -8,6 +8,7 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
@@ -20,10 +21,10 @@ public class UDPServer {
     public static Logger logger = Logger.getLogger(UDPServer.class);
 
     public static String PROPERTIES_FILE = "proxy.properties";
-    public static String SERVER_ADDRESS = "ip";
-    public static String SERVER_PORT = "port";
+    public static String PROXIES = "proxy.hosts";
     public static String THREADS_NUM = "threads";
-    public static String PACKET_SIZE = "packet_size";
+    public static String PACKET_SIZE = "packet.size";
+    public static String MEMCACHED_SERVERS = "memcached.hosts";
 
     protected static DatagramSocket socket;
     protected static int packetSize;
@@ -89,10 +90,24 @@ public class UDPServer {
             properties.load(resourceStream);
         }
 
-        String host = properties.getProperty(SERVER_ADDRESS);
+        /* memcached servers from this data center */
+        List<String> memcachedHosts = Arrays.asList(properties.getProperty(MEMCACHED_SERVERS).split("\\s*,\\s*"));
+
+        /* proxies */
+        List<String> proxies = Arrays.asList(properties.getProperty(MEMCACHED_SERVERS).split("\\s*,\\s*"));
+
+        /* this proxy */
+        String[] pair = proxies.get(0).split(":");
+        String host = properties.getProperty(pair[0]);
         InetAddress address = InetAddress.getByName(host);
-        int port = Integer.parseInt(properties.getProperty(SERVER_PORT));
+        int port = Integer.parseInt(pair[1]);
         logger.trace("UDP server running on " + host + ":" + port);
+
+        /* other proxies */
+        List<String> otherProxies = new ArrayList<String>();
+        for (int i = 1; i < proxies.size(); i++)
+            otherProxies.add(proxies.get(i));
+
 
         /* number of threads to handle client requests */
         final int threadsNum = Integer.valueOf(properties.getProperty(THREADS_NUM));
