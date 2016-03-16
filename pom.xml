@@ -54,6 +54,8 @@ LICENSE file.
     <!-- our internals -->
     <module>core</module>
     <module>binding-parent</module>
+      <!-- commons -->
+      <module>common</module>
     <!-- all the datastore bindings, lex sorted please -->
     <module>dual</module>
       <module>proxy</module>

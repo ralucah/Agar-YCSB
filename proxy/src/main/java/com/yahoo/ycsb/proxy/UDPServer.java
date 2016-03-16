@@ -1,79 +1,71 @@
 package com.yahoo.ycsb.proxy;
 
+import com.yahoo.ycsb.common.CommonUtils;
+import com.yahoo.ycsb.common.ProxyGet;
+import com.yahoo.ycsb.common.ProxyGetResponse;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
-import java.util.ArrayList;
-import java.util.Arrays;
+import java.net.SocketException;
 import java.util.List;
-import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Created by Raluca on 04.03.16.
+ * Created by Raluca on 11.03.16.
  */
-public class UDPServer {
-    public static Logger logger = Logger.getLogger(UDPServer.class);
+public class UDPServer implements Runnable {
+    protected static Logger logger = Logger.getLogger(UDPServer.class);
 
-    public static String PROPERTIES_FILE = "proxy.properties";
-    public static String PROXIES = "proxy.hosts";
-    public static String THREADS_NUM = "threads";
-    public static String PACKET_SIZE = "packet.size";
-    public static String MEMCACHED_SERVERS = "memcached.hosts";
+    private DatagramSocket socket;
+    private ExecutorService executor;
+    private volatile CacheAddressManager cacheAddressManager; /* shared among executor threads */
 
-    protected static DatagramSocket socket;
-    protected static int packetSize;
+    /* set defaults */
+    private int packetSize = 1024;
+    private int threadsNum = 10;
 
-    protected static void handle(DatagramPacket packet) {
-        /* get list of blocks */
-        List<String> blockKeys = Utils.bytesToList(packet.getData());
-
-        /* process! */
-        List<String> processed = new ArrayList<String>();
-        for (String blockKey : blockKeys) {
-            logger.trace("Received: " + blockKey);
-            // assign to server and append ip
-            processed.add(blockKey + ":processed");
-        }
-
-        /* send back to client */
-        InetAddress clientIp = packet.getAddress();
-        int clientPort = packet.getPort();
-        byte[] sendData = new byte[packetSize];
-        sendData = Utils.listToBytes(processed);
-
-        DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, clientIp, clientPort);
+    public UDPServer(InetAddress address, int port, CacheAddressManager cacheAddressManager) {
+        /* create datagram socket */
         try {
-            socket.send(sendPacket);
-        } catch (IOException e) {
-            logger.error("Exception sending packet.");
+            socket = new DatagramSocket(port, address);
+            logger.trace("UDP server on " + address + ":" + port);
+        } catch (SocketException e) {
+            logger.error("Error creating socket.");
         }
-
-        /*String sentence = new String(packet.getData());
-        logger.debug("Received: " + sentence);
-
-        InetAddress clientIp = packet.getAddress();
-        int clientPort = packet.getPort();
-
-        String capitalizedSentence = sentence.toUpperCase();
-        byte[] sendData = new byte[packet.getLength()];
-        sendData = capitalizedSentence.getBytes();
-        logger.debug("Sent: " + capitalizedSentence);
-
-        DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, clientIp, clientPort);
-        try {
-            socket.send(sendPacket);
-        } catch(IOException e) {
-            logger.error("Exception sending packet.");
-        }*/
+        /* init executor service */
+        executor = Executors.newFixedThreadPool(threadsNum);
+        /* set cache addr manager */
+        this.cacheAddressManager = cacheAddressManager;
     }
 
-    protected static void handleAsync(ExecutorService executor, final DatagramPacket packet) {
+    public void setPacketSize(int packetSize) {
+        this.packetSize = packetSize;
+    }
+
+    public void setThreadsNum(int threadsNum) {
+        this.threadsNum = threadsNum;
+    }
+
+    @Override
+    public void run() {
+        /* listen from client requests */
+        byte[] receiveData = new byte[packetSize];
+        while (true) {
+            DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
+            try {
+                socket.receive(receivePacket);
+            } catch (IOException e) {
+                logger.error("Error receiving packet from client.");
+            }
+            handleAsync(receivePacket);
+        }
+    }
+
+    private void handleAsync(final DatagramPacket packet) {
         executor.execute(new Runnable() {
             public void run() {
                 handle(packet);
@@ -81,59 +73,50 @@ public class UDPServer {
         });
     }
 
-
-    public static void main(String args[]) throws Exception {
-        /* properties */
-        ClassLoader loader = Thread.currentThread().getContextClassLoader();
-        Properties properties = new Properties();
-        try (InputStream resourceStream = loader.getResourceAsStream(PROPERTIES_FILE)) {
-            properties.load(resourceStream);
-        }
-
-        /* memcached servers from this data center */
-        List<String> memcachedHosts = Arrays.asList(properties.getProperty(MEMCACHED_SERVERS).split("\\s*,\\s*"));
-
-        /* proxies */
-        List<String> proxies = Arrays.asList(properties.getProperty(MEMCACHED_SERVERS).split("\\s*,\\s*"));
-
-        /* this proxy */
-        String[] pair = proxies.get(0).split(":");
-        String host = properties.getProperty(pair[0]);
-        InetAddress address = InetAddress.getByName(host);
-        int port = Integer.parseInt(pair[1]);
-        logger.trace("UDP server running on " + host + ":" + port);
-
-        /* other proxies */
-        List<String> otherProxies = new ArrayList<String>();
-        for (int i = 1; i < proxies.size(); i++)
-            otherProxies.add(proxies.get(i));
-
-
-        /* number of threads to handle client requests */
-        final int threadsNum = Integer.valueOf(properties.getProperty(THREADS_NUM));
-        logger.trace("num threads: " + threadsNum);
-        ExecutorService executor = Executors.newFixedThreadPool(threadsNum);
-
-        /* packet length */
-        packetSize = Integer.valueOf(properties.getProperty(PACKET_SIZE));
-        logger.trace("packet size: " + packetSize);
-
-        socket = null;
-        try {
-            socket = new DatagramSocket(port, address);
-            byte[] receiveData = new byte[packetSize];
-
-            while (true) {
-                DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
-                socket.receive(receivePacket);
-                handle(receivePacket);
+    private void handleGet(final DatagramPacket packet, List<String> keys) {
+        /* access the cache address manager and build a reply */
+        // TODO HASH MAP CANNOT CONTAIN DUPLICATES!
+        ProxyGetResponse response = new ProxyGetResponse();
+        for (String key : keys) {
+            boolean isCached = true;
+            String serverAddress = cacheAddressManager.getCacheServer(key);
+            if (serverAddress == null) {
+                isCached = false;
+                serverAddress = cacheAddressManager.setCacheServer(key);
             }
-        } catch (IOException e) {
-            logger.error("IOException " + e.getMessage());
-        } finally {
-            logger.trace("Closing server socket.");
-            //if (socket!= null)
-            //    socket.close();
+            response.addKeyToCacheInfoPair(key, serverAddress, isCached);
         }
+        logger.debug("Computed: " + response.getType() + " " + CommonUtils.mapToStr(response.getKeyToCacheInfoPairs()));
+
+        /* send back to client */
+        InetAddress clientIp = packet.getAddress();
+        int clientPort = packet.getPort();
+        byte[] sendData = new byte[packetSize];
+        sendData = CommonUtils.serializeProxyMsg(response);
+
+        DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, clientIp, clientPort);
+        try {
+            socket.send(sendPacket);
+        } catch (IOException e) {
+            logger.error("Exception sending packet.");
+        }
+    }
+
+    private void handle(final DatagramPacket packet) {
+        /* get msg from client */
+        ProxyGet query = (ProxyGet) CommonUtils.deserializeProxyMsg(packet.getData());
+        logger.debug("Received: " + query.getType() + " " + CommonUtils.listToStr(query.getKeys()));
+        switch (query.getType()) {
+            case GET:
+                handleGet(packet, query.getKeys());
+                break;
+            case PUT:
+                break;
+            default:
+                logger.error("Unknown query type!");
+                break;
+        }
+
+
     }
 }

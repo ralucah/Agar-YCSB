@@ -10,33 +10,35 @@ import java.util.Map;
 public class CacheAddressManager {
     private Map<String, String> blocksToCaches;
     private List<String> memcachedServers;
-    private List<String> otherProxies;
+    private List<String> proxies; /* including self! */
 
-    public CacheAddressManager(List<String> memcachedServers, List<String> otherProxies) {
+    public CacheAddressManager(List<String> memcachedServers, List<String> proxies) {
         blocksToCaches = new HashMap<String, String>();
         this.memcachedServers = memcachedServers;
-        this.otherProxies = otherProxies;
+        this.proxies = proxies;
     }
 
     /* in the beginning, use some consistent hashing dummy function
     * and ignore everything else (workload patterns, server load) */
-    private String assignBlockToCache(String blockKey) {
-        int serverNum = Math.abs(blockKey.hashCode()) % memcachedServers.size();
+    private String assignToCacheServer(String key) {
+        int serverNum = Math.abs(key.hashCode()) % memcachedServers.size();
         return memcachedServers.get(serverNum);
     }
 
     /* broadcast to other proxies info about data cached in this data center
     * i.e., try to keep blocksToCaches in sync */
-    private void broadcast(String blockKey, String cache) {
-        System.out.println("Broadcast to other servers!");
+    private void broadcast(String key, String address) {
+        System.out.println("Broadcast to other servers about (" + key + ", " + address + ")");
     }
 
-    public String getCacheServer(String blockKey) {
-        return blocksToCaches.get(blockKey);
+    public String getCacheServer(String key) {
+        return blocksToCaches.get(key);
     }
 
-    public void setCacheServer(String blockKey) {
-        String address = assignBlockToCache(blockKey);
-        blocksToCaches.put(blockKey, address);
+    public String setCacheServer(String key) {
+        String address = assignToCacheServer(key);
+        blocksToCaches.put(key, address);
+
+        return address;
     }
 }

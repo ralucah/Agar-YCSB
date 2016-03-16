@@ -50,14 +50,29 @@
         <outputRelativeToContentRoot value="true" />
         <processorPath useClasspath="true" />
       </profile>
+      <profile default="false" name="Annotation profile for proxy" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="true" />
+        <module name="proxy" />
+      </profile>
+      <profile default="false" name="Annotation profile for common" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="true" />
+        <module name="common" />
+      </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
-      <module name="binding-parent" target="1.7" />
-      <module name="core" target="1.7" />
-      <module name="datastore-specific-descriptor" target="1.7" />
+      <module name="binding-parent" target="1.8" />
+      <module name="common" target="1.8" />
+      <module name="core" target="1.8" />
+      <module name="datastore-specific-descriptor" target="1.8" />
       <module name="dual-binding" target="1.8" />
-      <module name="root" target="1.7" />
-      <module name="YCSB" target="1.7" />
+      <module name="proxy" target="1.8" />
+      <module name="root" target="1.8" />
     </bytecodeTargetLevel>
   </component>
 </project>

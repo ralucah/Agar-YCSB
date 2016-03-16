@@ -45,17 +45,17 @@ public abstract class Utils {
         return new String(hexChars);
     }
 
-    public static boolean containsBlock(List<BlockResult> blocks, byte[] blockBytes) {
-        for (BlockResult res : blocks) {
+    public static boolean containsBlock(List<EncodedBlock> blocks, byte[] blockBytes) {
+        for (EncodedBlock res : blocks) {
             if (Arrays.equals(res.getBytes(), blockBytes))
                 return true;
         }
         return false;
     }
 
-    public static List<byte[]> blocksToBytes(List<BlockResult> blockResults) {
+    public static List<byte[]> blocksToBytes(List<EncodedBlock> encodedBlocks) {
         List<byte[]> blockBytes = new ArrayList<byte[]>();
-        for (BlockResult blockRes : blockResults)
+        for (EncodedBlock blockRes : encodedBlocks)
             blockBytes.add(blockRes.getBytes());
         return blockBytes;
     }
@@ -109,4 +109,7 @@ public abstract class Utils {
         return list;
     }
 
+    public static int computeBlockId(String key) {
+        return Integer.parseInt(key.substring(key.length() - 1));
+    }
 }
