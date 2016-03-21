@@ -1,6 +1,7 @@
 package com.yahoo.ycsb.common;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 
 /**
@@ -22,5 +23,16 @@ public class ProxyPut extends ProxyMessage {
 
     public Map<String, String> getKeyToHostPairs() {
         return keyToHost;
+    }
+
+    @Override
+    public String print() {
+        String str = getType().name();
+        Iterator it = keyToHost.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry pair = (Map.Entry) it.next();
+            str += " (" + pair.getKey() + ", " + pair.getValue() + ")";
+        }
+        return str;
     }
 }

@@ -24,9 +24,12 @@ public class BlockStoragePolicy {
      * @return position of S3 client in the S3 clients list
      */
     public int assignBlockToS3Client(String key, int id) {
-        int blocksPerRegion = (int) Math.round((double) (numBlocks / (double) numS3Clients));
-        int regionNum = (int) (id / blocksPerRegion);
-        logger.trace(key + ":" + id + " mapped to " + regionNum);
+        //int blocksPerRegion = (int) (Math.ceil((double)numBlocks / (double) numS3Clients));
+        //logger.debug("blocksPerRegion: " + blocksPerRegion);
+        //int regionNum = (int) (id / blocksPerRegion);
+        //logger.debug(key + ":" + id + " mapped to " + regionNum);
+        int regionNum = id % numS3Clients;
+        logger.debug(key + " id: " + id + " assigned to " + regionNum);
         return regionNum;
     }
 }

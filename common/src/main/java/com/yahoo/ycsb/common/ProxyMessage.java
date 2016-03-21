@@ -16,4 +16,6 @@ public abstract class ProxyMessage implements Serializable {
     public void setType(ProxyMessageType type) {
         this.type = type;
     }
+
+    public abstract String print();
 }

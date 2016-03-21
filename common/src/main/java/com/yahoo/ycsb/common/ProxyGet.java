@@ -28,4 +28,13 @@ public final class ProxyGet extends ProxyMessage {
     public List<String> getKeys() {
         return keys;
     }
+
+    @Override
+    public String print() {
+        String str = getType().name();
+        for (String key : keys) {
+            str += " " + key;
+        }
+        return str;
+    }
 }

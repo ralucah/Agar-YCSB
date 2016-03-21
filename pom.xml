@@ -1,19 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- 
-Copyright (c) 2012 - 2015 YCSB contributors. All rights reserved.
-
-Licensed under the Apache License, Version 2.0 (the "License"); you
-may not use this file except in compliance with the License. You
-may obtain a copy of the License at
-
-http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-implied. See the License for the specific language governing
-permissions and limitations under the License. See accompanying
-LICENSE file.
+Super POM.
+All POMs extend the Super POM unless explicitly set, meaning the configuration 
+specified in the Super POM is inherited by the POMs you created for your projects.
 -->
 
 <project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://maven.apache.org/POM/4.0.0"
@@ -28,18 +17,19 @@ LICENSE file.
   <name>YCSB Root</name>
 
   <description>
-    This is the top level project that builds, packages the core and all the DB bindings for YCSB infrastructure.
+      Top level project.
   </description>
 
-  <dependencyManagement>
-    <dependencies>
-      <dependency>
-        <groupId>org.slf4j</groupId>
-        <artifactId>slf4j-api</artifactId>
-        <version>1.6.4</version>
-      </dependency>
-    </dependencies>
-  </dependencyManagement>
+    <!-- Can I put the dependencies common to all modules here???-->
+    <!--dependencyManagement>
+      <dependencies>
+        <dependency>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-api</artifactId>
+          <version>1.6.4</version>
+        </dependency>
+      </dependencies>
+    </dependencyManagement-->
 
   <!-- Properties Management -->
   <properties>
@@ -51,13 +41,14 @@ LICENSE file.
   </properties>
 
   <modules>
-    <!-- our internals -->
+      <!-- internals -->
     <module>core</module>
     <module>binding-parent</module>
       <!-- commons -->
       <module>common</module>
-    <!-- all the datastore bindings, lex sorted please -->
+      <!-- dual client (memcached and s3) -->
     <module>dual</module>
+      <!-- proxy that manages cache -->
       <module>proxy</module>
   </modules>
 

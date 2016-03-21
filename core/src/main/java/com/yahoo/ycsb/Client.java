@@ -727,7 +727,7 @@ public class Client {
 
         //run the workload
 
-        System.err.println("Starting test.");
+        System.err.println("Starting test."); //System.nanoTime()
 
         int opcount;
         if (dotransactions) {

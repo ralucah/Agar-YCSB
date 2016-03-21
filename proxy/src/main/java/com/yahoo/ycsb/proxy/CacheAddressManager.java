@@ -1,6 +1,7 @@
 package com.yahoo.ycsb.proxy;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -8,7 +9,7 @@ import java.util.Map;
  * Created by Raluca on 10.03.16.
  */
 public class CacheAddressManager {
-    private Map<String, String> blocksToCaches;
+    public static Map<String, String> blocksToCaches;
     private List<String> memcachedServers;
     private List<String> proxies; /* including self! */
 
@@ -20,7 +21,7 @@ public class CacheAddressManager {
 
     /* in the beginning, use some consistent hashing dummy function
     * and ignore everything else (workload patterns, server load) */
-    private String assignToCacheServer(String key) {
+    public String assignToCacheServer(String key) {
         int serverNum = Math.abs(key.hashCode()) % memcachedServers.size();
         return memcachedServers.get(serverNum);
     }
@@ -40,5 +41,13 @@ public class CacheAddressManager {
         blocksToCaches.put(key, address);
 
         return address;
+    }
+
+    public void update(Map<String, String> keyToHost) {
+        Iterator it = keyToHost.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<String, String> pair = (Map.Entry<String, String>) it.next();
+            blocksToCaches.put(pair.getKey(), pair.getValue());
+        }
     }
 }

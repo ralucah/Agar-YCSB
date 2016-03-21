@@ -7,10 +7,7 @@ import com.yahoo.ycsb.ByteIterator;
 import com.yahoo.ycsb.DB;
 import com.yahoo.ycsb.DBException;
 import com.yahoo.ycsb.Status;
-import com.yahoo.ycsb.common.CacheInfo;
-import com.yahoo.ycsb.common.CommonUtils;
-import com.yahoo.ycsb.common.ProxyGet;
-import com.yahoo.ycsb.common.ProxyGetResponse;
+import com.yahoo.ycsb.common.*;
 import com.yahoo.ycsb.dual.utils.*;
 import org.apache.log4j.Logger;
 
@@ -163,6 +160,12 @@ public class DualClient extends DB {
         //System.exit(1);
     }
 
+    @Override
+    public void cleanup() throws DBException {
+        logger.trace("Cleaning up.");
+        executor.shutdown();
+    }
+
     private MemClient getMemClientByHost(String host) {
         for (MemClient client : memClients) {
             if (client.getHost().equals(host))
@@ -171,41 +174,42 @@ public class DualClient extends DB {
         return null;
     }
 
-    private EncodedBlock readBlock(String table, String key, CacheInfo cacheInfo) {
+    // when this method returns a valid block, the block is assumed to have been cached
+    private EncodedBlock readBlock(String key, CacheInfo cacheInfo) {
         EncodedBlock encodedBlock = new EncodedBlock(key);
+        MemClient memClient = getMemClientByHost(cacheInfo.getCacheServer());
 
         // if block is in cache, contact memcached host and download it
         if (cacheInfo.isCached()) {
             // get client by host str
-            MemClient memClient = getMemClientByHost(cacheInfo.getCacheServer());
             byte[] bytes = memClient.read(key);
             encodedBlock.setBytes(bytes);
         }
-        // otherwise, get the block from the backend
-        // TODO cache it + inform proxy
+        // otherwise, get the block from the backend and cache it
         else {
-            // get block from S3
+            // get block from s3
             int clientId = storagePolicy.assignBlockToS3Client(key, encodedBlock.getId());
             S3Client s3Client = s3Clients.get(clientId);
             byte[] bytes = s3Client.read(key);
             encodedBlock.setBytes(bytes);
-        }
 
+            // cache block
+            Status cacheStatus = memClient.insert(key, bytes);
+            if (cacheStatus != Status.OK)
+                logger.trace("Error caching block " + key);
+        }
         return encodedBlock;
     }
 
     @Override
     public Status read(String table, String key, Set<String> fields, HashMap<String, ByteIterator> result) {
+        Status status = Status.ERROR;
         if (s3Encode == true) {
             /* contact proxy to ask about cache status */
-            // proxy msg
             List<String> blockKeys = Utils.computeBlockKeys(key, LonghairLib.k + LonghairLib.m);
-            ProxyGet query = new ProxyGet(blockKeys);
-
-            // transform query into byte array
-            byte[] sendData = CommonUtils.serializeProxyMsg(query);
-
-            // ask proxy about the status of the blocks
+            ProxyGet proxyGet = new ProxyGet(blockKeys);
+            logger.debug(proxyGet.print());
+            byte[] sendData = CommonUtils.serializeProxyMsg(proxyGet);
             DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, proxy.getIp(), proxy.getPort());
             try {
                 socket.send(sendPacket);
@@ -213,7 +217,7 @@ public class DualClient extends DB {
                 logger.error("Error sending packet to Proxy.");
             }
 
-            // get answer from proxy
+            /* get answer from proxy */
             byte[] receiveData = new byte[packetSize];
             DatagramPacket receivePacket = new DatagramPacket(receiveData, packetSize);
             try {
@@ -221,29 +225,25 @@ public class DualClient extends DB {
             } catch (IOException e) {
                 logger.error("Error receiving packet from Proxy.");
             }
-            ProxyGetResponse response = (ProxyGetResponse) CommonUtils.deserializeProxyMsg(receivePacket.getData());
-            logger.debug(CommonUtils.mapToStr(response.getKeyToCacheInfoPairs()));
-            /* do stuff with the info from proxy
-            * -
-            * -
-            * */
+            final ProxyGetResponse getResponse = (ProxyGetResponse) CommonUtils.deserializeProxyMsg(receivePacket.getData());
+            logger.debug(getResponse.print());
 
             List<Future> futures = new ArrayList<Future>();
             CompletionService<EncodedBlock> completionService = new ExecutorCompletionService<EncodedBlock>(executor);
-            Iterator it = response.getKeyToCacheInfoPairs().entrySet().iterator();
+            Iterator it = getResponse.getKeyToCacheInfoPairs().entrySet().iterator();
             while (it.hasNext()) {
                 Map.Entry pair = (Map.Entry) it.next();
-                String blockKey = (String) pair.getKey();
-                CacheInfo cacheInfo = (CacheInfo) pair.getValue();
+                final String blockKey = (String) pair.getKey();
+                final CacheInfo cacheInfo = (CacheInfo) pair.getValue();
                 completionService.submit(new Callable<EncodedBlock>() {
                     @Override
                     public EncodedBlock call() throws Exception {
-                        return readBlock(table, blockKey, cacheInfo);
+                        return readBlock(blockKey, cacheInfo);
                     }
                 });
             }
 
-            // only k blocks are needed to reconstruct the data, but take care of all k+m blocks in the background
+            // wait for first k blocks, cancel the others
             List<EncodedBlock> results = new ArrayList<EncodedBlock>();
             int errors = 0;
             while (results.size() < LonghairLib.k) {
@@ -258,14 +258,62 @@ public class DualClient extends DB {
                         errors++;
                 } catch (Exception e) {
                     errors++;
-                    logger.trace("Exception reading a block.");
+                    logger.error("Error reading a block.");
                 }
                 if (errors > LonghairLib.m)
                     break;
             }
+            // shut down all execution threads
+            //executor.shutdownNow();
+
+            // inform proxy about caching
+            final List<EncodedBlock> resultsFin = results;
+            executor.execute(new Runnable() {
+                public void run() {
+                    // compute put proxyGet
+                    // TODO should I do a diff? or is it ok to send everything to the proxy to update
+                    ProxyPut proxyPut = new ProxyPut();
+                    Map<String, CacheInfo> keyToCacheInfo = getResponse.getKeyToCacheInfoPairs();
+                    boolean sendPut = false;
+                    for (EncodedBlock block : resultsFin) {
+                        String blockKey = block.getKey();
+                        //logger.trace(blockKey);
+                        CacheInfo keyInfo = keyToCacheInfo.get(blockKey);
+                        if (keyInfo.isCached() == false) {
+                            proxyPut.addKeyToHostPair(blockKey, keyInfo.getCacheServer());
+                            if (sendPut == false)
+                                sendPut = true;
+                        }
+                    }
+
+                    // send it to proxy
+                    if (sendPut == true) {
+                        logger.debug(proxyPut.print());
+                        byte[] sendData = CommonUtils.serializeProxyMsg(proxyPut);
+                        DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, proxy.getIp(), proxy.getPort());
+                        try {
+                            socket.send(sendPacket);
+                        } catch (IOException e) {
+                            logger.error("Error sending packet to Proxy.");
+                        }
+                    } //else
+                    //logger.debug("Nothing to update in the proxy DB");
+                }
+            });
+
+            // decode data
+            byte[] bytes = LonghairLib.decode(Utils.blocksToBytes(results));
+            if (bytes != null)
+                status = Status.OK;
         }
-        System.exit(1);
-        return null;
+
+        /*try {
+            System.out.println(executor.isTerminated());
+            executor.awaitTermination(10, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }*/
+        return status;
     }
 
     @Override
@@ -294,7 +342,7 @@ public class DualClient extends DB {
                 String blockKey = key + id;
                 int connId = storagePolicy.assignBlockToS3Client(key, id);
                 Status blockStatus = s3Clients.get(connId).insert(blockKey, blockBytes);
-                logger.trace("Block " + blockKey + " " + status.getName());
+                logger.trace("Block " + blockKey + " " + blockStatus.getName());
                 if (blockStatus != Status.OK) {
                     //logger.warn("Error inserting encoded block " + blockKey);
                     status = Status.ERROR;
@@ -302,7 +350,6 @@ public class DualClient extends DB {
                 id++;
             }
         }
-
         logger.debug("Item " + key + " " + status.getName());
         return status;
     }

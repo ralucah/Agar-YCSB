@@ -3,9 +3,6 @@ package com.yahoo.ycsb.common;
 import org.apache.log4j.Logger;
 
 import java.io.*;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
 
 /**
  * Created by Raluca on 10.03.16.
@@ -54,16 +51,16 @@ public abstract class CommonUtils {
         return msg;
     }
 
-    public static String listToStr(List<String> list) {
+    /*public static String listToStr(List<String> list) {
         String str = "";
         for (String s : list)
             str += s + " ";
         return str;
-    }
+    }*/
 
     //TODO what is this?? sun.security.util.Cache<K,V>
 
-    public static String mapToStr(Map<String, CacheInfo> map) {
+    /*public static String mapToStr(Map<String, CacheInfo> map) {
         String str = "";
         Iterator it = map.entrySet().iterator();
         while (it.hasNext()) {
@@ -72,5 +69,15 @@ public abstract class CommonUtils {
             str += "(" + pair.getKey() + ", " + value.getCacheServer() + ", " + value.isCached() + ") ";
         }
         return str;
-    }
+    }*/
+
+    /*public static String mapToStr2(Map<String, String> map) {
+        String str = "";
+        Iterator it = map.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry pair = (Map.Entry) it.next();
+            str += "(" + pair.getKey() + ", " + pair.getValue() + ") ";
+        }
+        return str;
+    }*/
 }

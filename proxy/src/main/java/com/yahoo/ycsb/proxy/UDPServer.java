@@ -1,8 +1,6 @@
 package com.yahoo.ycsb.proxy;
 
-import com.yahoo.ycsb.common.CommonUtils;
-import com.yahoo.ycsb.common.ProxyGet;
-import com.yahoo.ycsb.common.ProxyGetResponse;
+import com.yahoo.ycsb.common.*;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
@@ -11,6 +9,7 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -73,27 +72,27 @@ public class UDPServer implements Runnable {
         });
     }
 
-    private void handleGet(final DatagramPacket packet, List<String> keys) {
+    protected void handleGet(final DatagramPacket packet, ProxyGet msg) {
         /* access the cache address manager and build a reply */
         // TODO HASH MAP CANNOT CONTAIN DUPLICATES!
-        ProxyGetResponse response = new ProxyGetResponse();
+        List<String> keys = msg.getKeys();
+        ProxyGetResponse getResponse = new ProxyGetResponse();
         for (String key : keys) {
             boolean isCached = true;
             String serverAddress = cacheAddressManager.getCacheServer(key);
             if (serverAddress == null) {
                 isCached = false;
-                serverAddress = cacheAddressManager.setCacheServer(key);
+                serverAddress = cacheAddressManager.assignToCacheServer(key);
             }
-            response.addKeyToCacheInfoPair(key, serverAddress, isCached);
+            getResponse.addKeyToCacheInfoPair(key, serverAddress, isCached);
         }
-        logger.debug("Computed: " + response.getType() + " " + CommonUtils.mapToStr(response.getKeyToCacheInfoPairs()));
+        logger.debug(getResponse.print());
 
         /* send back to client */
         InetAddress clientIp = packet.getAddress();
         int clientPort = packet.getPort();
         byte[] sendData = new byte[packetSize];
-        sendData = CommonUtils.serializeProxyMsg(response);
-
+        sendData = CommonUtils.serializeProxyMsg(getResponse);
         DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, clientIp, clientPort);
         try {
             socket.send(sendPacket);
@@ -102,20 +101,30 @@ public class UDPServer implements Runnable {
         }
     }
 
+    protected void handlePut(ProxyPut msg) {
+        Map<String, String> keyToHost = msg.getKeyToHostPairs();
+        cacheAddressManager.update(keyToHost);
+    }
+
     private void handle(final DatagramPacket packet) {
         /* get msg from client */
-        ProxyGet query = (ProxyGet) CommonUtils.deserializeProxyMsg(packet.getData());
-        logger.debug("Received: " + query.getType() + " " + CommonUtils.listToStr(query.getKeys()));
-        switch (query.getType()) {
-            case GET:
-                handleGet(packet, query.getKeys());
-                break;
-            case PUT:
-                break;
-            default:
-                logger.error("Unknown query type!");
-                break;
-        }
+        ProxyMessage query = (ProxyMessage) CommonUtils.deserializeProxyMsg(packet.getData());
+        if (query != null) {
+            logger.debug(query.print());
+            switch (query.getType()) {
+                case GET:
+                    handleGet(packet, (ProxyGet) query);
+                    break;
+                case PUT:
+                    handlePut((ProxyPut) query);
+                    break;
+                default:
+                    logger.error("Unknown query type!");
+                    break;
+            }
+            logger.debug("Done with " + query.getType());
+        } else
+            logger.warn("Null query!");
 
 
     }
