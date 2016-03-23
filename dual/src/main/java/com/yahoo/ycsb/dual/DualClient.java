@@ -25,6 +25,7 @@ public class DualClient extends DB {
 
     public static Logger logger = Logger.getLogger(DualClient.class);
 
+    /* property names */
     public static String PROPERTIES_FILE = "client.properties";
     public static String PROXY_HOST = "proxy.host";
     public static String S3_REGIONS = "s3.regions";
@@ -34,8 +35,18 @@ public class DualClient extends DB {
     public static String MEMCACHED_HOSTS = "memcached.hosts";
     public static String LONGHAIR_K = "longhair.k";
     public static String LONGHAIR_M = "longhair.m";
-    public static String PACKET_SIZE = "packet.size";
     public static String THREADS_NUM = "executor.threads";
+    public static String PACKET_SIZE = "socket.packet_size";
+    public static String SOCKET_TIMEOUT = "socket.timeout"; // in ms
+    public static String SOCKET_RETRIES = "socket.retries";
+
+    public static String S3_ENCODE_DEFAULT = "false";
+    public static String LONGHAIR_K_DEFAULT = "3";
+    public static String LONGHAIR_M_DEFAULT = "2";
+    public static String THREADS_NUM_DEFAULT = "5";
+    public static String PACKET_SIZE_DEFAULT = "1024";
+    public static String SOCKET_TIMEOUT_DEFAULT = "1000";
+    public static String SOCKET_RETRIES_DEFAULT = "3";
 
     private Properties properties;
 
@@ -43,6 +54,7 @@ public class DualClient extends DB {
     private DatagramSocket socket;
     private Proxy proxy;
     private int packetSize;
+    private int socketRetries;
 
     /* connections to AWS S3 buckets */
     // TODO there should be a mapping between s3buckets and s3Connections
@@ -63,33 +75,43 @@ public class DualClient extends DB {
         proxy = new Proxy(pair[0], Integer.parseInt(pair[1]));
         logger.trace("Proxy " + proxy.getIp() + " " + proxy.getPort());
 
+        final int socketTimeout = Integer.valueOf(properties.getProperty(SOCKET_TIMEOUT, SOCKET_TIMEOUT_DEFAULT));
+        socketRetries = Integer.valueOf(properties.getProperty(SOCKET_RETRIES, SOCKET_RETRIES_DEFAULT));
         /* datagram socket */
         try {
             socket = new DatagramSocket();
+            socket.setSoTimeout(socketTimeout);
         } catch (SocketException e) {
             logger.error("Error creating datagram socket.");
         }
 
         /* packet size */
-        packetSize = Integer.valueOf(properties.getProperty(PACKET_SIZE));
+        packetSize = Integer.valueOf(properties.getProperty(PACKET_SIZE, PACKET_SIZE_DEFAULT));
         logger.trace("packet size: " + packetSize);
     }
 
-    private void initS3() throws DBException {
+    private void initS3() {
         List<String> regions = Arrays.asList(properties.getProperty(S3_REGIONS).split("\\s*,\\s*"));
         List<String> endpoints = Arrays.asList(properties.getProperty(S3_ENDPOINTS).split("\\s*,\\s*"));
         List<String> s3Buckets = Arrays.asList(properties.getProperty(S3_BUCKETS).split("\\s*,\\s*"));
-        if (s3Buckets.size() != regions.size() || s3Buckets.size() != endpoints.size() || regions.size() != endpoints.size())
+        if (s3Buckets.size() != regions.size() ||
+            s3Buckets.size() != endpoints.size() ||
+            regions.size() != endpoints.size())
             logger.error("Configuration error: #buckets must match #regions and #endpoints");
 
         s3Clients = new ArrayList<S3Client>();
         for (int i = 0; i < s3Buckets.size(); i++) {
-            logger.trace("Client" + i + " " + s3Buckets.get(i) + " " + regions.get(i) + " " + endpoints.get(i));
-            S3Client client = new S3Client(s3Buckets.get(i), regions.get(i), endpoints.get(i));
+            S3Client client = null;
+            try {
+                client = new S3Client(s3Buckets.get(i), regions.get(i), endpoints.get(i));
+            } catch (DBException e) {
+                logger.error("Error connecting to " + s3Buckets.get(i));
+            }
             s3Clients.add(client);
+            logger.trace("Client" + i + " " + s3Buckets.get(i) + " " + regions.get(i) + " " + endpoints.get(i));
         }
 
-        s3Encode = Boolean.valueOf(properties.getProperty(S3_ENCODE));
+        s3Encode = Boolean.valueOf(properties.getProperty(S3_ENCODE, S3_ENCODE_DEFAULT));
         logger.trace("s3Encode: " + s3Encode);
     }
 
@@ -105,8 +127,8 @@ public class DualClient extends DB {
     }
 
     private void initLonghair() {
-        LonghairLib.k = Integer.valueOf(properties.getProperty(LONGHAIR_K));
-        LonghairLib.m = Integer.valueOf(properties.getProperty(LONGHAIR_M));
+        LonghairLib.k = Integer.valueOf(properties.getProperty(LONGHAIR_K, LONGHAIR_K_DEFAULT));
+        LonghairLib.m = Integer.valueOf(properties.getProperty(LONGHAIR_M, LONGHAIR_M_DEFAULT));
         logger.trace("k: " + LonghairLib.k + " m: " + LonghairLib.m);
         /* check k >= 0 and k < 256 */
         if (LonghairLib.k < 0 || LonghairLib.k >= 256) {
@@ -152,7 +174,7 @@ public class DualClient extends DB {
         initMemcached();
 
         /* init executor service */
-        final int threadsNum = Integer.valueOf(properties.getProperty(THREADS_NUM));
+        final int threadsNum = Integer.valueOf(properties.getProperty(THREADS_NUM, THREADS_NUM_DEFAULT));
         logger.trace("threads num: " + threadsNum);
         executor = Executors.newFixedThreadPool(threadsNum);
 
@@ -211,20 +233,36 @@ public class DualClient extends DB {
             logger.debug(proxyGet.print());
             byte[] sendData = CommonUtils.serializeProxyMsg(proxyGet);
             DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, proxy.getIp(), proxy.getPort());
-            try {
-                socket.send(sendPacket);
-            } catch (IOException e) {
-                logger.error("Error sending packet to Proxy.");
-            }
 
-            /* get answer from proxy */
+            /* send GET with retries */
+            // continue trying to send get?
+            boolean retryGet = true;
+            // attempt number
+            int retryCounter = 0;
+            // data to be received from proxy
             byte[] receiveData = new byte[packetSize];
             DatagramPacket receivePacket = new DatagramPacket(receiveData, packetSize);
-            try {
-                socket.receive(receivePacket);
-            } catch (IOException e) {
-                logger.error("Error receiving packet from Proxy.");
+            while (retryGet == true && retryCounter < socketRetries) {
+                retryCounter++;
+                try {
+                    socket.send(sendPacket);
+                } catch (IOException e) {
+                    logger.error("Error sending packet to Proxy. Attempt #" + retryCounter);
+                }
+                try {
+                    socket.receive(receivePacket);
+                    retryGet = false;
+                } catch (IOException e) {
+                    logger.error("Error receiving packet from Proxy. Attempt #" + retryCounter);
+                }
             }
+
+            if (retryGet == true) {
+                logger.error("Read failed for " + key);
+                return Status.ERROR;
+            }
+            ;
+
             final ProxyGetResponse getResponse = (ProxyGetResponse) CommonUtils.deserializeProxyMsg(receivePacket.getData());
             logger.debug(getResponse.print());
 
@@ -251,7 +289,7 @@ public class DualClient extends DB {
                 try {
                     resultFuture = completionService.take();
                     EncodedBlock res = resultFuture.get();
-                    if (res != null) {
+                    if (res.getBytes() != null) {
                         if (!results.contains(res))
                             results.add(res);
                     } else
@@ -263,48 +301,48 @@ public class DualClient extends DB {
                 if (errors > LonghairLib.m)
                     break;
             }
+            logger.debug("Retrieved " + results.size() + " blocks for " + key);
             // shut down all execution threads
             //executor.shutdownNow();
 
-            // inform proxy about caching
-            final List<EncodedBlock> resultsFin = results;
-            executor.execute(new Runnable() {
-                public void run() {
-                    // compute put proxyGet
-                    // TODO should I do a diff? or is it ok to send everything to the proxy to update
-                    ProxyPut proxyPut = new ProxyPut();
-                    Map<String, CacheInfo> keyToCacheInfo = getResponse.getKeyToCacheInfoPairs();
-                    boolean sendPut = false;
-                    for (EncodedBlock block : resultsFin) {
-                        String blockKey = block.getKey();
-                        //logger.trace(blockKey);
-                        CacheInfo keyInfo = keyToCacheInfo.get(blockKey);
-                        if (keyInfo.isCached() == false) {
-                            proxyPut.addKeyToHostPair(blockKey, keyInfo.getCacheServer());
-                            if (sendPut == false)
-                                sendPut = true;
+            if (results.size() > 0) {
+                // compute put msg to inform proxy about caching
+                final List<EncodedBlock> resultsFin = results;
+                executor.execute(new Runnable() {
+                    public void run() {
+                        // compute put proxyGet
+                        // TODO should I do a diff? or is it ok to send everything to the proxy to update
+                        ProxyPut proxyPut = new ProxyPut();
+                        Map<String, CacheInfo> keyToCacheInfo = getResponse.getKeyToCacheInfoPairs();
+                        for (EncodedBlock block : resultsFin) {
+                            String blockKey = block.getKey();
+                            //logger.trace(blockKey);
+                            CacheInfo keyInfo = keyToCacheInfo.get(blockKey);
+                            if (keyInfo.isCached() == false) {
+                                proxyPut.addKeyToHostPair(blockKey, keyInfo.getCacheServer());
+                            }
                         }
+
+                        // send it to proxy
+                        if (proxyPut.getKeyToHostPairs().size() > 0) {
+                            logger.debug(proxyPut.print());
+                            byte[] sendData = CommonUtils.serializeProxyMsg(proxyPut);
+                            DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, proxy.getIp(), proxy.getPort());
+                            try {
+                                socket.send(sendPacket);
+                            } catch (IOException e) {
+                                logger.error("Error sending packet to Proxy.");
+                            }
+                        } //else
+                        //logger.debug("Nothing to update in the proxy DB");
                     }
+                });
 
-                    // send it to proxy
-                    if (sendPut == true) {
-                        logger.debug(proxyPut.print());
-                        byte[] sendData = CommonUtils.serializeProxyMsg(proxyPut);
-                        DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, proxy.getIp(), proxy.getPort());
-                        try {
-                            socket.send(sendPacket);
-                        } catch (IOException e) {
-                            logger.error("Error sending packet to Proxy.");
-                        }
-                    } //else
-                    //logger.debug("Nothing to update in the proxy DB");
-                }
-            });
-
-            // decode data
-            byte[] bytes = LonghairLib.decode(Utils.blocksToBytes(results));
-            if (bytes != null)
-                status = Status.OK;
+                // decode data
+                byte[] bytes = LonghairLib.decode(Utils.blocksToBytes(results));
+                if (bytes != null)
+                    status = Status.OK;
+            }
         }
 
         /*try {
@@ -346,6 +384,7 @@ public class DualClient extends DB {
                 if (blockStatus != Status.OK) {
                     //logger.warn("Error inserting encoded block " + blockKey);
                     status = Status.ERROR;
+                    break;
                 }
                 id++;
             }

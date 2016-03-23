@@ -1,5 +1,5 @@
-recordcount=10
-operationcount=30
+recordcount=100
+operationcount=10
 workload=com.yahoo.ycsb.workloads.CoreWorkload
 
 readallfields=true

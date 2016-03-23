@@ -58,23 +58,57 @@ import java.util.Properties;
  */
 public class S3Client {
     private static Logger logger = Logger.getLogger(S3Client.class);
+
     private static String sse;
     private static SSECustomerKey ssecKey;
+    private static String accessKeyId;
+    private static String secretKey;
+    private static String maxErrorRetry;
+    private static String maxConnections;
+    private static String protocol;
+    private static boolean init = true;
+
     private AmazonS3Client awsClient;
     private String bucket;
 
+    // TODO it is inefficient to read these properties every time a new S3Client is created; there must be a better way
     public S3Client(String bucket, String region, String endPoint) throws DBException {
         logger.debug("S3Client.establishConnection(" + region + "," + endPoint + ") bucket: " + bucket);
         org.apache.log4j.Logger.getLogger("com.amazonaws").setLevel(Level.OFF);
 
+        if (S3Client.init == true) {
+            init();
+            S3Client.init = false;
+        }
+
         this.bucket = bucket;
 
-        String accessKeyId = null;
-        String secretKey = null;
-        String maxErrorRetry = null;
-        String maxConnections = null;
-        String protocol = null;
+        try {
+            BasicAWSCredentials s3Credentials = new BasicAWSCredentials(accessKeyId, secretKey);
+            ClientConfiguration clientConfig = new ClientConfiguration();
+            clientConfig.setMaxErrorRetry(Integer.parseInt(maxErrorRetry));
+            if (protocol.equals("HTTP")) {
+                clientConfig.setProtocol(Protocol.HTTP);
+            } else {
+                clientConfig.setProtocol(Protocol.HTTPS);
+            }
+            if (maxConnections != null) {
+                clientConfig.setMaxConnections(Integer.parseInt(maxConnections));
+            }
 
+            logger.debug("Inizializing the S3 connection...");
+            awsClient = new AmazonS3Client(s3Credentials, clientConfig);
+            awsClient.setRegion(Region.getRegion(Regions.fromName(region)));
+            awsClient.setEndpoint(endPoint);
+            logger.debug("Connection successfully initialized");
+        } catch (Exception e) {
+            logger.error("Could not connect to S3 storage: " + e.toString());
+            e.printStackTrace();
+            throw new DBException(e);
+        }
+    }
+
+    public void init() {
         try {
             InputStream propFile = S3Client.class.getClassLoader()
                 .getResourceAsStream("s3.properties");
@@ -107,29 +141,6 @@ public class S3Client {
         } catch (Exception e) {
             logger.error("The file properties doesn't exist " + e.toString());
             e.printStackTrace();
-        }
-        try {
-            BasicAWSCredentials s3Credentials = new BasicAWSCredentials(accessKeyId, secretKey);
-            ClientConfiguration clientConfig = new ClientConfiguration();
-            clientConfig.setMaxErrorRetry(Integer.parseInt(maxErrorRetry));
-            if (protocol.equals("HTTP")) {
-                clientConfig.setProtocol(Protocol.HTTP);
-            } else {
-                clientConfig.setProtocol(Protocol.HTTPS);
-            }
-            if (maxConnections != null) {
-                clientConfig.setMaxConnections(Integer.parseInt(maxConnections));
-            }
-
-            logger.debug("Inizializing the S3 connection...");
-            awsClient = new AmazonS3Client(s3Credentials, clientConfig);
-            awsClient.setRegion(Region.getRegion(Regions.fromName(region)));
-            awsClient.setEndpoint(endPoint);
-            logger.debug("Connection successfully initialized");
-        } catch (Exception e) {
-            logger.error("Could not connect to S3 storage: " + e.toString());
-            e.printStackTrace();
-            throw new DBException(e);
         }
     }
 
@@ -200,12 +211,12 @@ public class S3Client {
                 return Status.OK;
             } catch (Exception e) {
                 logger.error("Not possible to write object :" + key);
-                e.printStackTrace();
+                //e.printStackTrace();
                 return Status.ERROR;
             }
         } catch (Exception e) {
             logger.error("Error in the creation of the stream :" + e.toString());
-            e.printStackTrace();
+            //e.printStackTrace();
             return Status.ERROR;
         }
     }

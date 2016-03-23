@@ -56,13 +56,17 @@ public class MemClient {
     private static final String TEMPORARY_FAILURE_MSG = "Temporary failure";
     private static final String CANCELLED_MSG = "cancelled";
     private static Logger logger = Logger.getLogger(MemClient.class);
-    private boolean checkOperationStatus;
-    private long shutdownTimeoutMillis;
-    private int objectExpirationTime;
+
+    private static boolean checkOperationStatus;
+    private static long shutdownTimeoutMillis;
+    private static int objectExpirationTime;
+    private static int bufferSize;
+    private static int opTimeout;
+    private static String failureString;
+    private static boolean init = true;
 
     private MemcachedClient client;
     private String host;
-    private Properties props;
 
     public MemClient(String hostsStr) throws DBException {
         this.host = hostsStr;
@@ -70,25 +74,41 @@ public class MemClient {
         System.setProperty("net.spy.log.LoggerImpl", "net.spy.memcached.compat.log.Log4JLogger");
         org.apache.log4j.Logger.getLogger("net.spy.memcached").setLevel(Level.OFF);
 
-        InputStream propFile = MemClient.class.getClassLoader()
-            .getResourceAsStream("memcached.properties");
-        props = new Properties();
+        if (MemClient.init == true) {
+            init();
+            MemClient.init = false;
+        }
+
+        try {
+            client = createMemcachedClient();
+        } catch (Exception e) {
+            throw new DBException(e);
+        }
+    }
+
+    private void init() {
+        InputStream propFile = MemClient.class.getClassLoader().getResourceAsStream("memcached.properties");
+        Properties props = new Properties();
         try {
             props.load(propFile);
         } catch (IOException e) {
             e.printStackTrace();
         }
-        try {
-            client = createMemcachedClient();
-            checkOperationStatus = Boolean.parseBoolean(
-                props.getProperty(CHECK_OPERATION_STATUS_PROPERTY, CHECK_OPERATION_STATUS_DEFAULT));
-            objectExpirationTime = Integer.parseInt(
-                props.getProperty(OBJECT_EXPIRATION_TIME_PROPERTY, DEFAULT_OBJECT_EXPIRATION_TIME));
-            shutdownTimeoutMillis = Integer.parseInt(
-                props.getProperty(SHUTDOWN_TIMEOUT_MILLIS_PROPERTY, DEFAULT_SHUTDOWN_TIMEOUT_MILLIS));
-        } catch (Exception e) {
-            throw new DBException(e);
-        }
+
+        checkOperationStatus = Boolean.parseBoolean(
+            props.getProperty(CHECK_OPERATION_STATUS_PROPERTY, CHECK_OPERATION_STATUS_DEFAULT));
+        objectExpirationTime = Integer.parseInt(
+            props.getProperty(OBJECT_EXPIRATION_TIME_PROPERTY, DEFAULT_OBJECT_EXPIRATION_TIME));
+        shutdownTimeoutMillis = Integer.parseInt(
+            props.getProperty(SHUTDOWN_TIMEOUT_MILLIS_PROPERTY, DEFAULT_SHUTDOWN_TIMEOUT_MILLIS));
+
+        bufferSize = Integer.parseInt(
+            props.getProperty(READ_BUFFER_SIZE_PROPERTY, DEFAULT_READ_BUFFER_SIZE));
+
+        opTimeout = Integer.parseInt(
+            props.getProperty(OP_TIMEOUT_PROPERTY, DEFAULT_OP_TIMEOUT));
+
+        failureString = props.getProperty(FAILURE_MODE_PROPERTY);
     }
 
     public String getHost() {
@@ -102,13 +122,10 @@ public class MemClient {
     protected MemcachedClient createMemcachedClient() throws Exception {
         ConnectionFactoryBuilder connectionFactoryBuilder = new ConnectionFactoryBuilder();
 
-        connectionFactoryBuilder.setReadBufferSize(Integer.parseInt(
-            props.getProperty(READ_BUFFER_SIZE_PROPERTY, DEFAULT_READ_BUFFER_SIZE)));
+        connectionFactoryBuilder.setReadBufferSize(bufferSize);
 
-        connectionFactoryBuilder.setOpTimeout(Integer.parseInt(
-            props.getProperty(OP_TIMEOUT_PROPERTY, DEFAULT_OP_TIMEOUT)));
+        connectionFactoryBuilder.setOpTimeout(opTimeout);
 
-        String failureString = props.getProperty(FAILURE_MODE_PROPERTY);
         connectionFactoryBuilder.setFailureMode(
             failureString == null ? FAILURE_MODE_PROPERTY_DEFAULT
                 : FailureMode.valueOf(failureString));
@@ -146,7 +163,7 @@ public class MemClient {
     public Status insert(String key, byte[] bytes) {
         try {
             OperationFuture<Boolean> future =
-                memcachedClient().add(key, objectExpirationTime, bytes); //toJson(values));
+                memcachedClient().add(key, objectExpirationTime, bytes);
             return getReturnCode(future);
         } catch (Exception e) {
             logger.error("Error inserting value", e);
