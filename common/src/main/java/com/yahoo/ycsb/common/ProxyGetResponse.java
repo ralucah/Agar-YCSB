@@ -1,6 +1,5 @@
 package com.yahoo.ycsb.common;
 
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -12,27 +11,27 @@ public class ProxyGetResponse extends ProxyMessage {
 
     private Map<String, CacheInfo> keyToCacheInfo;
 
-    public ProxyGetResponse() {
+    public ProxyGetResponse(Map<String, CacheInfo> keyToCacheInfo) {
         type = ProxyMessageType.GET_RESPONSE;
-        keyToCacheInfo = new HashMap<String, CacheInfo>();
+        this.keyToCacheInfo = keyToCacheInfo;
     }
 
     public Map<String, CacheInfo> getKeyToCacheInfoPairs() {
         return keyToCacheInfo;
     }
 
-    public void addKeyToCacheInfoPair(String key, String serverAddress, boolean isCached) {
+    /*public void addKeyToCacheInfoPair(String key, String serverAddress, boolean isCached) {
         keyToCacheInfo.put(key, new CacheInfo(serverAddress, isCached));
-    }
+    }*/
 
     @Override
-    public String print() {
+    public String prettyPrint() {
         String str = getType().name();
         Iterator it = keyToCacheInfo.entrySet().iterator();
         while (it.hasNext()) {
             Map.Entry pair = (Map.Entry) it.next();
             CacheInfo value = (CacheInfo) pair.getValue();
-            str += " (" + pair.getKey() + ", " + value.getCacheServer() + ", " + value.isCached() + ")";
+            str += " (" + pair.getKey() + ", " + value.getCacheAddress() + ", " + value.isCached() + ")";
         }
         return str;
     }

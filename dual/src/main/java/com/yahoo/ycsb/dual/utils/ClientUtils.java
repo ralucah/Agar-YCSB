@@ -12,9 +12,9 @@ import java.util.List;
 /**
  * Created by ubuntu on 10.01.16.
  */
-public abstract class Utils {
+public abstract class ClientUtils {
     final protected static char[] hexArray = "0123456789ABCDEF".toCharArray();
-    private static Logger logger = Logger.getLogger(Utils.class);
+    private static Logger logger = Logger.getLogger(ClientUtils.class);
 
     public static byte[] valuesToBytes(HashMap<String, ByteIterator> values) {
         // get the first value

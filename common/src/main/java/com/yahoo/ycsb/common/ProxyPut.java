@@ -26,7 +26,7 @@ public class ProxyPut extends ProxyMessage {
     }
 
     @Override
-    public String print() {
+    public String prettyPrint() {
         String str = getType().name();
         Iterator it = keyToHost.entrySet().iterator();
         while (it.hasNext()) {

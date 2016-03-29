@@ -8,6 +8,7 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -19,26 +20,38 @@ import java.util.concurrent.Executors;
 public class UDPServer implements Runnable {
     protected static Logger logger = Logger.getLogger(UDPServer.class);
 
+    /* get from bootstrapper */
+    private List<ProxyHost> proxyHosts;
+    private CacheStoragePolicy cacheStoragePolicy;
+
+    /* to create */
     private DatagramSocket socket;
-    private ExecutorService executor;
     private volatile CacheAddressManager cacheAddressManager; /* shared among executor threads */
+
+    /* server is multithreaded */
+    private ExecutorService executor;
 
     /* set defaults */
     private int packetSize = 1024;
     private int threadsNum = 10;
 
-    public UDPServer(InetAddress address, int port, CacheAddressManager cacheAddressManager) {
+    public UDPServer(List<ProxyHost> proxyHosts, CacheStoragePolicy cacheStoragePolicy) {
+        this.proxyHosts = proxyHosts;
+        this.cacheStoragePolicy = cacheStoragePolicy;
+
         /* create datagram socket */
+        ProxyHost me = proxyHosts.get(ProxyConstants.WHO_AM_I);
         try {
-            socket = new DatagramSocket(port, address);
-            logger.trace("UDP server on " + address + ":" + port);
+            socket = new DatagramSocket(me.getPort(), me.getAddress());
         } catch (SocketException e) {
             logger.error("Error creating socket.");
         }
+
         /* init executor service */
         executor = Executors.newFixedThreadPool(threadsNum);
-        /* set cache addr manager */
-        this.cacheAddressManager = cacheAddressManager;
+
+        /* create cache address manager */
+        cacheAddressManager = new CacheAddressManager();
     }
 
     public void setPacketSize(int packetSize) {
@@ -64,7 +77,7 @@ public class UDPServer implements Runnable {
         }
     }
 
-    private void handleAsync(final DatagramPacket packet) {
+    protected void handleAsync(final DatagramPacket packet) {
         executor.execute(new Runnable() {
             public void run() {
                 handle(packet);
@@ -72,28 +85,36 @@ public class UDPServer implements Runnable {
         });
     }
 
-    protected void handleGet(final DatagramPacket packet, ProxyGet msg) {
-        /* access the cache address manager and build a reply */
-        // TODO HASH MAP CANNOT CONTAIN DUPLICATES!
-        List<String> keys = msg.getKeys();
-        ProxyGetResponse getResponse = new ProxyGetResponse();
-        for (String key : keys) {
-            boolean isCached = true;
-            String serverAddress = cacheAddressManager.getCacheServer(key);
-            if (serverAddress == null) {
-                isCached = false;
-                serverAddress = cacheAddressManager.assignToCacheServer(key);
-            }
-            getResponse.addKeyToCacheInfoPair(key, serverAddress, isCached);
-        }
-        logger.debug(getResponse.print());
+    /* process get request, computes get response, and sends it back to the client */
+    protected void handleGet(ProxyGet msg, InetAddress senderIp, int senderPort) {
+        /* compute actual keys based on storage policy */
+        List<String> keys = cacheStoragePolicy.computeCacheKeys(msg.getKey());
 
-        /* send back to client */
-        InetAddress clientIp = packet.getAddress();
-        int clientPort = packet.getPort();
+        /* compute info for get response */
+        String address;
+        boolean isCached;
+        Map<String, CacheInfo> keyToCache = new HashMap<String, CacheInfo>();
+        for (String key : keys) {
+            isCached = true;
+            address = cacheAddressManager.getCacheAddress(key);
+            if (address == null) {
+                isCached = false;
+                address = cacheStoragePolicy.assignCacheAddress(key);
+            }
+            if (address != null)
+                keyToCache.put(key, new CacheInfo(address, isCached));
+            else
+                logger.warn(key + " cache address is null");
+        }
+
+        /* new get response msg */
+        ProxyGetResponse getResponseMsg = new ProxyGetResponse(keyToCache);
+        logger.debug(getResponseMsg.prettyPrint());
+
+        /* send get response to client */
         byte[] sendData = new byte[packetSize];
-        sendData = CommonUtils.serializeProxyMsg(getResponse);
-        DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, clientIp, clientPort);
+        sendData = Serializer.serializeProxyMsg(getResponseMsg);
+        DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, senderIp, senderPort);
         try {
             socket.send(sendPacket);
         } catch (IOException e) {
@@ -101,22 +122,60 @@ public class UDPServer implements Runnable {
         }
     }
 
-    protected void handlePut(ProxyPut msg) {
-        Map<String, String> keyToHost = msg.getKeyToHostPairs();
-        cacheAddressManager.update(keyToHost);
+    /* broadcast to other proxies info about data cached in this data center */
+    private void broadcast(final DatagramPacket packet) {
+        logger.debug("Broadcast!");
+        for (int i = 0; i < proxyHosts.size(); i++) {
+            // skip iteration for self
+            if (i == ProxyConstants.WHO_AM_I) {
+                logger.debug("Skipping iteration for self!");
+                continue;
+            }
+
+            // for others
+            ProxyHost proxy = proxyHosts.get(i);
+            packet.setAddress(proxy.getAddress());
+            packet.setPort(proxy.getPort());
+            logger.debug("Send packet to " + proxy.getAddress() + ":" + proxy.getPort());
+            try {
+                socket.send(packet);
+            } catch (IOException e) {
+                logger.error("Exception sending packet to " + proxy.getAddress() + ":" + proxy.getPort());
+            }
+        }
     }
 
-    private void handle(final DatagramPacket packet) {
+    protected void handlePut(ProxyPut msg, InetAddress senderIp, int senderPort) {
+        Map<String, String> keyToHost = msg.getKeyToHostPairs();
+        cacheAddressManager.updateRegistry(keyToHost);
+    }
+
+    private boolean isSenderClient(InetAddress senderAddress, int senderPort) {
+        for (ProxyHost proxy : proxyHosts) {
+            if (proxy.equals(senderAddress, senderPort) == true)
+                return false;
+        }
+        return true;
+    }
+
+    protected void handle(final DatagramPacket packet) {
         /* get msg from client */
-        ProxyMessage query = (ProxyMessage) CommonUtils.deserializeProxyMsg(packet.getData());
+        ProxyMessage query = (ProxyMessage) Serializer.deserializeProxyMsg(packet.getData());
+        InetAddress senderAddress = packet.getAddress();
+        int senderPort = packet.getPort();
+
         if (query != null) {
-            logger.debug(query.print());
+            logger.debug(query.prettyPrint());
             switch (query.getType()) {
                 case GET:
-                    handleGet(packet, (ProxyGet) query);
+                    handleGet((ProxyGet) query, senderAddress, senderPort);
                     break;
                 case PUT:
-                    handlePut((ProxyPut) query);
+                    handlePut((ProxyPut) query, senderAddress, senderPort);
+                    // if the sender was a client
+                    if (isSenderClient(senderAddress, senderPort) == true) {
+                        broadcast(packet);
+                    }
                     break;
                 default:
                     logger.error("Unknown query type!");
@@ -125,7 +184,5 @@ public class UDPServer implements Runnable {
             logger.debug("Done with " + query.getType());
         } else
             logger.warn("Null query!");
-
-
     }
 }

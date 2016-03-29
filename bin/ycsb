@@ -50,7 +50,7 @@ COMMANDS = {
     "proxy" : {
         "command"     : "-proxy",
         "description" : "Start proxy",
-        "main"        : "com.yahoo.ycsb.proxy.Proxy",
+        "main"        : "com.yahoo.ycsb.proxy.Bootstrapper",
     },
 }
 
