@@ -44,18 +44,10 @@ public class CacheOracle {
         String address = null;
         int hostNum;
         int memHostsSize = memcachedHosts.size();
-        /* cache full data item*/
-        if (memEncode == false) {
-            hostNum = Math.abs(key.hashCode()) % memHostsSize;
-            address = memcachedHosts.get(hostNum);
-        }
-        /* cache encoded blocks */
-        else {
-            for (int i = 0; i < numBlocks; i++) {
-                hostNum = i % memHostsSize;
-                address = memcachedHosts.get(hostNum);
-            }
-        }
+
+        hostNum = Math.abs(key.hashCode()) % memHostsSize;
+        address = memcachedHosts.get(hostNum);
+
         return address;
     }
 }

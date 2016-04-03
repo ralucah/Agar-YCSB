@@ -213,15 +213,17 @@ public class DualClient extends DB {
         }
 
         int errors = 0;
-        while (readResults.size() < strategy.size()) {
+        while (readResults.size() < LonghairLib.k) {
             Future<ReadResult> resultFuture = null;
             try {
                 resultFuture = completionService.take();
                 ReadResult res = resultFuture.get();
                 if (res.getBytes() == null)
                     errors++;
-                else
-                    readResults.add(res);
+                else {
+                    if (ClientUtils.readResultsContains(readResults, res.getKey()) == false)
+                        readResults.add(res);
+                }
             } catch (Exception e) {
                 errors++;
                 logger.trace("Exception reading a block.");
@@ -232,6 +234,8 @@ public class DualClient extends DB {
     }
 
     private void cacheBlocks(Map<String, String> toCache, List<ReadResult> readResults) {
+        logger.debug("toCache: " + toCache.keySet());
+        logger.debug("readResults: " + readResults.size());
         for (ReadResult result : readResults) {
             String key = result.getKey();
             if (toCache.containsKey(key) == true)
@@ -266,11 +270,14 @@ public class DualClient extends DB {
                     success = false;
             } else
                 success = false;
+            logger.debug("success: " + success);
             // check for cache misses
+            logger.debug("readResults: " + readResults.size());
             for (StorageSubitem subitem : strategy) {
                 String key = subitem.getKey();
                 if (subitem.getLayer() == StorageLayer.CACHE &&
                     ClientUtils.readResultsContains(readResults, key) == false) {
+                    logger.debug("toCache.put " + key);
                     toCache.put(key, subitem.getHost());
                 }
             }
@@ -306,10 +313,10 @@ public class DualClient extends DB {
                         success = false;
                 } else {
                     // read missing blocks from backend
-                    List<ReadResult> readResultsBackend = new ArrayList<ReadResult>();
+                    //List<ReadResult> readResultsBackend = new ArrayList<ReadResult>();
                     Set<StorageSubitem> strategyDiffBackend = new HashSet<StorageSubitem>();
                     for (StorageSubitem subitem : backend) {
-                        if (readResults.contains(subitem.getKey()) == false) {
+                        if (ClientUtils.readResultsContains(readResults, subitem.getKey()) == false) {
                             strategyDiffBackend.add(subitem);
                         }
                     }
@@ -326,19 +333,20 @@ public class DualClient extends DB {
         if (toCache.size() > 0) {
             final byte[] dataFin = data;
             final List<ReadResult> readResultsFin = readResults;
+            final Map<String, String> toCacheFin = toCache;
             executor.submit(new Runnable() {
                 @Override
                 public void run() {
                     if (storageItem.isEncodedInCache() == false) {
-                        Map.Entry<String, String> first = toCache.entrySet().iterator().next();
+                        Map.Entry<String, String> first = toCacheFin.entrySet().iterator().next();
                         cacheData(first.getKey(), dataFin, first.getValue());
                     } else {
                         if (readResultsFin.size() == 0) {
                             List<byte[]> encodedBlocks = LonghairLib.encode(dataFin);
-                            String firstKey = toCache.entrySet().iterator().next().getKey();
-                            cacheBlocks(toCache, ClientUtils.blocksToReadResults(ClientUtils.getBaseKey(firstKey), encodedBlocks));
+                            String firstKey = toCacheFin.entrySet().iterator().next().getKey();
+                            cacheBlocks(toCacheFin, ClientUtils.blocksToReadResults(ClientUtils.getBaseKey(firstKey), encodedBlocks));
                         } else
-                            cacheBlocks(toCache, readResultsFin);
+                            cacheBlocks(toCacheFin, readResultsFin);
                     }
                 }
             });
@@ -366,6 +374,11 @@ public class DualClient extends DB {
             status = Status.OK;
 
         logger.debug("Read " + key + " " + status.getName() + " " + ClientUtils.bytesToHash(data));
+        /*try {
+            Thread.sleep(600000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }*/
         return status;
     }
 
@@ -382,7 +395,7 @@ public class DualClient extends DB {
     private Status cacheData(String key, byte[] data, String host) {
         MemcachedConnection memConn = memConnections.get(host);
         Status status = memConn.insert(key, data);
-        logger.debug("Cached " + key + " " + status.getName());
+        logger.debug("Cached " + key + " " + host + " " + status.getName());
         return status;
     }
 
