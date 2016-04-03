@@ -1,11 +1,9 @@
-package com.yahoo.ycsb.dual.utils;
+package com.yahoo.ycsb.dual.policy;
 
 import org.apache.log4j.Logger;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
-import java.util.Collections;
-import java.util.List;
 
 /**
  * Created by ubuntu on 01.02.16.
@@ -38,7 +36,7 @@ public abstract class ProximityClassifier {
         return avgTime;
     }
 
-    public static void sortS3Regions(List<S3Region> s3Regions) {
+    /*public static void sortS3Regions(List<S3Region> s3Regions) {
         // compute avg ping time
         for (S3Region region : s3Regions) {
             region.setAvgPingTime(ping(region.getEndPoint()));
@@ -48,9 +46,9 @@ public abstract class ProximityClassifier {
 
         for (S3Region region : s3Regions)
             logger.debug(region.getRegion());
-    }
+    }*/
 
-    public static void sortMemcachedRegions(List<MemcachedRegion> memcachedRegions) {
+    /*public static void sortMemcachedRegions(List<MemcachedRegion> memcachedRegions) {
         // compute avg ping time
         for (MemcachedRegion region : memcachedRegions) {
             region.setAvgPingTime(ping(region.getIp()));
@@ -60,5 +58,5 @@ public abstract class ProximityClassifier {
 
         for (MemcachedRegion region : memcachedRegions)
             logger.debug(region.getIp() + ":" + region.getPort());
-    }
+    }*/
 }

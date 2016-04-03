@@ -22,7 +22,7 @@ public class UDPServer implements Runnable {
 
     /* get from bootstrapper */
     private List<ProxyHost> proxyHosts;
-    private CacheStoragePolicy cacheStoragePolicy;
+    private CacheOracle cacheOracle;
 
     /* to create */
     private DatagramSocket socket;
@@ -35,9 +35,9 @@ public class UDPServer implements Runnable {
     private int packetSize = 1024;
     private int threadsNum = 10;
 
-    public UDPServer(List<ProxyHost> proxyHosts, CacheStoragePolicy cacheStoragePolicy) {
+    public UDPServer(List<ProxyHost> proxyHosts, CacheOracle cacheOracle) {
         this.proxyHosts = proxyHosts;
-        this.cacheStoragePolicy = cacheStoragePolicy;
+        this.cacheOracle = cacheOracle;
 
         /* create datagram socket */
         ProxyHost me = proxyHosts.get(ProxyConstants.WHO_AM_I);
@@ -88,27 +88,23 @@ public class UDPServer implements Runnable {
     /* process get request, computes get response, and sends it back to the client */
     protected void handleGet(ProxyGet msg, InetAddress senderIp, int senderPort) {
         /* compute actual keys based on storage policy */
-        List<String> keys = cacheStoragePolicy.computeCacheKeys(msg.getKey());
+        List<String> keys = cacheOracle.computeCacheKeys(msg.getKey());
 
         /* compute info for get response */
         String address;
-        boolean isCached;
-        Map<String, CacheInfo> keyToCache = new HashMap<String, CacheInfo>();
+        Map<String, String> keyToCacheHost = new HashMap<String, String>();
         for (String key : keys) {
-            isCached = true;
             address = cacheAddressManager.getCacheAddress(key);
             if (address == null) {
-                isCached = false;
-                address = cacheStoragePolicy.assignCacheAddress(key);
+                address = cacheOracle.assignCacheAddress(key);
+                cacheAddressManager.setCacheAddress(key, address);
             }
-            if (address != null)
-                keyToCache.put(key, new CacheInfo(address, isCached));
-            else
-                logger.warn(key + " cache address is null");
+            keyToCacheHost.put(key, address);
+            logger.debug(key + " - " + address);
         }
 
         /* new get response msg */
-        ProxyGetResponse getResponseMsg = new ProxyGetResponse(keyToCache);
+        ProxyGetResponse getResponseMsg = new ProxyGetResponse(keyToCacheHost);
         logger.debug(getResponseMsg.prettyPrint());
 
         /* send get response to client */

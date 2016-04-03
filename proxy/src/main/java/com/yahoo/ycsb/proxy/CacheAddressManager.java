@@ -4,7 +4,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
-/* Manages the cache address registry, i.e., <key, cache-address> pairs */
+/* Manages the cache address registry, i.e., <key, cache-host> pairs */
 public class CacheAddressManager {
     public static Map<String, String> cacheAddressRegistry;
 

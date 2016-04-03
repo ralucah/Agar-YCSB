@@ -8,8 +8,8 @@ import java.util.List;
 /**
  * Created by Raluca on 26.03.16.
  */
-public class CacheStoragePolicy {
-    public static Logger logger = Logger.getLogger(CacheStoragePolicy.class);
+public class CacheOracle {
+    public static Logger logger = Logger.getLogger(CacheOracle.class);
 
     private List<String> memcachedHosts;
     private boolean memEncode;
@@ -17,7 +17,7 @@ public class CacheStoragePolicy {
     /* in case the data is encoded in the cache */
     private int numBlocks;
 
-    public CacheStoragePolicy(List<String> memcachedHosts, boolean memEncode) {
+    public CacheOracle(List<String> memcachedHosts, boolean memEncode) {
         this.memcachedHosts = memcachedHosts;
         this.memEncode = memEncode;
         if (memEncode == true)

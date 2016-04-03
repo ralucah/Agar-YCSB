@@ -9,29 +9,24 @@ import java.util.Map;
 public class ProxyGetResponse extends ProxyMessage {
     private static final long serialVersionUID = 7526472295622776148L;
 
-    private Map<String, CacheInfo> keyToCacheInfo;
+    private Map<String, String> keyToCacheHost;
 
-    public ProxyGetResponse(Map<String, CacheInfo> keyToCacheInfo) {
+    public ProxyGetResponse(Map<String, String> keyToCacheHost) {
         type = ProxyMessageType.GET_RESPONSE;
-        this.keyToCacheInfo = keyToCacheInfo;
+        this.keyToCacheHost = keyToCacheHost;
     }
 
-    public Map<String, CacheInfo> getKeyToCacheInfoPairs() {
-        return keyToCacheInfo;
+    public Map<String, String> getKeyToCacheHost() {
+        return keyToCacheHost;
     }
-
-    /*public void addKeyToCacheInfoPair(String key, String serverAddress, boolean isCached) {
-        keyToCacheInfo.put(key, new CacheInfo(serverAddress, isCached));
-    }*/
 
     @Override
     public String prettyPrint() {
         String str = getType().name();
-        Iterator it = keyToCacheInfo.entrySet().iterator();
+        Iterator it = keyToCacheHost.entrySet().iterator();
         while (it.hasNext()) {
             Map.Entry pair = (Map.Entry) it.next();
-            CacheInfo value = (CacheInfo) pair.getValue();
-            str += " (" + pair.getKey() + ", " + value.getCacheAddress() + ", " + value.isCached() + ")";
+            str += " (" + pair.getKey() + ", " + pair.getValue() + ")";
         }
         return str;
     }

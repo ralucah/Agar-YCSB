@@ -37,9 +37,9 @@ import java.util.Properties;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
-// TODO Assumption: this class represents one connection to one memcached host
+// TODO assumption: one connection to one memcached host
 // TODO table does not matter, only key does
-public class MemClient {
+public class MemcachedConnection {
     public static final String SHUTDOWN_TIMEOUT_MILLIS_PROPERTY = "memcached.shutdownTimeoutMillis";
     public static final String DEFAULT_SHUTDOWN_TIMEOUT_MILLIS = "30000";
     public static final String OBJECT_EXPIRATION_TIME_PROPERTY = "memcached.objectExpirationTime";
@@ -55,7 +55,7 @@ public class MemClient {
     protected static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String TEMPORARY_FAILURE_MSG = "Temporary failure";
     private static final String CANCELLED_MSG = "cancelled";
-    private static Logger logger = Logger.getLogger(MemClient.class);
+    private static Logger logger = Logger.getLogger(MemcachedConnection.class);
 
     private static boolean checkOperationStatus;
     private static long shutdownTimeoutMillis;
@@ -68,15 +68,15 @@ public class MemClient {
     private MemcachedClient client;
     private String host;
 
-    public MemClient(String hostsStr) throws DBException {
+    public MemcachedConnection(String hostsStr) throws DBException {
         this.host = hostsStr;
         // turn off logging for spy memcached
         System.setProperty("net.spy.log.LoggerImpl", "net.spy.memcached.compat.log.Log4JLogger");
         org.apache.log4j.Logger.getLogger("net.spy.memcached").setLevel(Level.OFF);
 
-        if (MemClient.init == true) {
+        if (MemcachedConnection.init == true) {
             init();
-            MemClient.init = false;
+            MemcachedConnection.init = false;
         }
 
         try {
@@ -87,7 +87,7 @@ public class MemClient {
     }
 
     private void init() {
-        InputStream propFile = MemClient.class.getClassLoader().getResourceAsStream("memcached.properties");
+        InputStream propFile = MemcachedConnection.class.getClassLoader().getResourceAsStream("memcached.properties");
         Properties props = new Properties();
         try {
             props.load(propFile);
@@ -171,7 +171,7 @@ public class MemClient {
         }
     }
 
-    protected Status getReturnCode(OperationFuture<Boolean> future) {
+    private Status getReturnCode(OperationFuture<Boolean> future) {
         if (!checkOperationStatus) {
             return Status.OK;
         }

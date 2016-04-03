@@ -1,16 +1,20 @@
-package com.yahoo.ycsb.dual.utils;
+package com.yahoo.ycsb.dual.policy;
 
 /**
  * Created by ubuntu on 08.02.16.
  */
-public class EncodedBlock {
+public class ReadResult {
     private String key;
     private byte[] bytes;
-    private int id; // it's the last character of the key string
 
-    public EncodedBlock(String key) {
+    public ReadResult(String key) {
         this.key = key;
-        id = Integer.parseInt(key.substring(key.length() - 1));
+        //id = Integer.parseInt(key.substring(key.length() - 1));
+    }
+
+    public ReadResult(String key, byte[] bytes) {
+        this.key = key;
+        this.bytes = bytes;
     }
 
     public String getKey() {
@@ -23,9 +27,5 @@ public class EncodedBlock {
 
     public void setBytes(byte[] bytes) {
         this.bytes = bytes;
-    }
-
-    public int getId() {
-        return id;
     }
 }

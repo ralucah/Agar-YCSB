@@ -17,9 +17,9 @@ public class ProxyPut extends ProxyMessage {
         keyToHost = new HashMap<String, String>();
     }
 
-    public void addKeyToHostPair(String key, String host) {
+    /*public void addKeyToHostPair(String key, String host) {
         keyToHost.put(key, host);
-    }
+    }*/
 
     public Map<String, String> getKeyToHostPairs() {
         return keyToHost;

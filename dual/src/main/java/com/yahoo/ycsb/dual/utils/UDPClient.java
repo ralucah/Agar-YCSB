@@ -1,6 +1,5 @@
 package com.yahoo.ycsb.dual.utils;
 
-import com.yahoo.ycsb.common.CacheInfo;
 import com.yahoo.ycsb.common.ProxyGet;
 import com.yahoo.ycsb.common.ProxyGetResponse;
 import com.yahoo.ycsb.common.Serializer;
@@ -10,32 +9,29 @@ import java.io.IOException;
 import java.net.*;
 import java.util.Map;
 
-/**
- * Created by Raluca on 25.03.16.
- */
-public class ProxyClient {
-    /* logger */
-    protected static Logger logger = Logger.getLogger(ProxyClient.class);
+/* Establish connection to proxy */
+public class UDPClient {
+    protected static Logger logger = Logger.getLogger(UDPClient.class);
 
-    /* address + port */
-    private InetAddress address;
-    private int port;
+    /* proxy udp server running on.. */
+    private InetAddress udpServerAddress;
+    private int udpServerPort;
 
     /* socket + socket configs */
     private DatagramSocket socket;
     private int socketRetries;
     private int packetSize;
 
-    public ProxyClient(String host, int port) {
+    public UDPClient(String host, int port) {
         logger.debug("Proxy connection on " + host + ":" + port);
 
-        /* set address + port */
+        /* set udpServerAddress + udpServerPort */
         try {
-            address = InetAddress.getByName(host);
+            udpServerAddress = InetAddress.getByName(host);
         } catch (UnknownHostException e) {
             logger.error("Error getting InetAddress from host.");
         }
-        this.port = port;
+        this.udpServerPort = port;
 
         /* establish connection */
         try {
@@ -45,19 +41,19 @@ public class ProxyClient {
         }
 
         /* set default socket config */
-        socketRetries = Integer.parseInt(Constants.SOCKET_RETRIES_DEFAULT);
-        packetSize = Integer.parseInt(Constants.PACKET_SIZE_DEFAULT);
-        // no timeout by default
+        socketRetries = Integer.parseInt(ClientConstants.SOCKET_RETRIES_DEFAULT);
+        packetSize = Integer.parseInt(ClientConstants.PACKET_SIZE_DEFAULT);
+        // no timeout by default, so the client might stall
     }
 
     /* set socket timeout in ms */
     public void setSocketTimeout(int socketTimeout) {
-        logger.debug("Set socket timeout to " + socketTimeout + " ms");
         try {
             socket.setSoTimeout(socketTimeout);
         } catch (SocketException e) {
             logger.error("Error setting socket timeout.");
         }
+        logger.debug("Set socket timeout to " + socketTimeout + " ms");
     }
 
     /* set the number of retires */
@@ -72,16 +68,14 @@ public class ProxyClient {
         this.packetSize = packetSize;
     }
 
-    /* send GET msg */
-    public Map<String, CacheInfo> sendGET(String key) {
+    /* send GET msg with retries */
+    public Map<String, String> sendGET(String key) {
         ProxyGet getMsg = new ProxyGet(key);
-        getMsg.setNumBlocks(LonghairLib.k + LonghairLib.m);
         logger.debug(getMsg.prettyPrint());
 
         byte[] sendData = Serializer.serializeProxyMsg(getMsg);
-        DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, address, port);
+        DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, udpServerAddress, udpServerPort);
 
-        // send get with retries
         boolean retryGet = true; // send get with retries
         int retryCounter = 0; // attempt number
         byte[] receiveData = new byte[packetSize];
@@ -106,11 +100,11 @@ public class ProxyClient {
             logger.error("Read failed for " + key);
 
         ProxyGetResponse proxyGetResp = (ProxyGetResponse) Serializer.deserializeProxyMsg(receivePacket.getData());
-        return proxyGetResp.getKeyToCacheInfoPairs();
+        return proxyGetResp.getKeyToCacheHost();
     }
 
     /* send PUT msg */
     public void sendPUT() {
-
+        // TODO
     }
 }

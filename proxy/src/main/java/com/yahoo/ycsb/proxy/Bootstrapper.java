@@ -32,12 +32,12 @@ public class Bootstrapper {
         boolean memEncode = Boolean.valueOf(properties.getProperty(ProxyConstants.MEMCACHED_ENCODE, "false"));
         logger.debug("memEncode: " + memEncode);
 
-        CacheStoragePolicy cacheStoragePolicy = new CacheStoragePolicy(memcachedServers, memEncode);
+        CacheOracle cacheOracle = new CacheOracle(memcachedServers, memEncode);
 
         if (memEncode == true) {
             final int numBlocks = Integer.valueOf(properties.getProperty(ProxyConstants.MEMCACHED_NUM_BLOCKS));
             logger.trace("num blocks: " + numBlocks);
-            cacheStoragePolicy.setNumBlocks(numBlocks);
+            cacheOracle.setNumBlocks(numBlocks);
         }
 
         /* udp server */
@@ -56,7 +56,7 @@ public class Bootstrapper {
         final int packetSize = Integer.valueOf(properties.getProperty(ProxyConstants.PACKET_SIZE));
         logger.trace("packet size: " + packetSize);
 
-        UDPServer udpServer = new UDPServer(proxyHosts, cacheStoragePolicy);
+        UDPServer udpServer = new UDPServer(proxyHosts, cacheOracle);
         udpServer.setPacketSize(packetSize);
         udpServer.setThreadsNum(threadsNum);
         udpServer.run();

@@ -3,7 +3,7 @@ package com.yahoo.ycsb.dual.utils;
 /**
  * Created by Raluca on 26.03.16.
  */
-public final class Constants {
+public final class ClientConstants {
     /* property names */
     public static String PROPERTIES_FILE = "client.properties";
     public static String PROXY_HOST = "proxy";

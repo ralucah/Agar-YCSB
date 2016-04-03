@@ -1,13 +1,10 @@
 package com.yahoo.ycsb.dual.utils;
 
 import com.yahoo.ycsb.ByteIterator;
+import com.yahoo.ycsb.dual.policy.ReadResult;
 import org.apache.log4j.Logger;
 
-import java.io.*;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
+import java.util.*;
 
 /**
  * Created by ubuntu on 10.01.16.
@@ -45,30 +42,72 @@ public abstract class ClientUtils {
         return new String(hexChars);
     }
 
-    public static boolean containsBlock(List<EncodedBlock> blocks, byte[] blockBytes) {
+    public static int bytesToHash(byte[] data) {
+        return java.util.Arrays.hashCode(data);
+    }
+
+    /*public static boolean containsBlock(List<EncodedBlock> blocks, byte[] blockBytes) {
         for (EncodedBlock res : blocks) {
             if (Arrays.equals(res.getBytes(), blockBytes))
                 return true;
         }
         return false;
-    }
+    }*/
 
-    public static List<byte[]> blocksToBytes(List<EncodedBlock> encodedBlocks) {
+    public static List<byte[]> resultsToBytes(List<ReadResult> readResults) {
         List<byte[]> blockBytes = new ArrayList<byte[]>();
-        for (EncodedBlock blockRes : encodedBlocks)
+        for (ReadResult blockRes : readResults)
             blockBytes.add(blockRes.getBytes());
         return blockBytes;
     }
 
-    public static List<String> computeBlockKeys(String key, int numBlocks) {
+    public static Set<String> extractKeys(List<ReadResult> readResults) {
+        Set<String> keys = new HashSet<String>();
+        for (ReadResult res : readResults) {
+            keys.add(res.getKey());
+        }
+        return keys;
+    }
+
+    public static boolean readResultsContains(List<ReadResult> readResults, String key) {
+        for (ReadResult result : readResults) {
+            if (result.getKey().equals(key))
+                return true;
+        }
+        return false;
+    }
+
+    public static String getBaseKey(String blockKey) {
+        return blockKey.substring(0, blockKey.length() - 1);
+    }
+
+    public static List<ReadResult> blocksToReadResults(String key, List<byte[]> blocks) {
+        List<ReadResult> readResults = new ArrayList<ReadResult>();
+        int counter = 0;
+        for (byte[] block : blocks) {
+            readResults.add(new ReadResult(key + counter, block));
+            counter++;
+        }
+        return readResults;
+    }
+
+    /*public List<byte[]> readResultsToBlocks(List<ReadResult> readResults) {
+        List<byte[]> blocks = new ArrayList<byte[]>();
+        for (ReadResult result : readResults) {
+            blocks.add(result.getBytes());
+        }
+        return blocks;
+    }*/
+
+    /*public static List<String> computeBlockKeys(String key, int numBlocks) {
         List<String> blockKeys = new ArrayList<String>();
         for (int i = 0; i < numBlocks; i++) {
             blockKeys.add(key + i);
         }
         return blockKeys;
-    }
+    }*/
 
-    public static byte[] listToBytes(List<String> list) {
+    /*public static byte[] listToBytes(List<String> list) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         ObjectOutputStream outStream = null;
         try {
@@ -85,9 +124,9 @@ public abstract class ClientUtils {
                 }
         }
         return out.toByteArray();
-    }
+    }*/
 
-    public static List<String> bytesToList(byte[] bytes) {
+    /*public static List<String> bytesToList(byte[] bytes) {
         List<String> list = new ArrayList<String>();
         ByteArrayInputStream in = new ByteArrayInputStream(bytes);
         ObjectInputStream inStream = null;
@@ -107,9 +146,9 @@ public abstract class ClientUtils {
                 }
         }
         return list;
-    }
+    }*/
 
-    public static int computeBlockId(String key) {
+    /*public static int computeBlockId(String key) {
         return Integer.parseInt(key.substring(key.length() - 1));
-    }
+    }*/
 }
