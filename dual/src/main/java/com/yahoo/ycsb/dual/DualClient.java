@@ -148,9 +148,9 @@ public class DualClient extends DB {
         storageOracle = new StorageOracle(s3Buckets, memcachedHosts, s3Encode);
 
         /* set up Longhair erasure coding library and storage policy */
-        if (s3Encode == true) {
+        //if (s3Encode == true) {
             initLonghair();
-        }
+        //}
 
         /* init executor service */
         final int threadsNum = Integer.valueOf(properties.getProperty(ClientConstants.THREADS_NUM, ClientConstants.THREADS_NUM_DEFAULT));
@@ -247,12 +247,12 @@ public class DualClient extends DB {
         }
     }
 
-    private byte[] readByStrategy(StorageItem storageItem) {
+    private byte[] readByStrategy(final StorageItem storageItem) {
         boolean success = true;
         byte[] data = null;
 
         // read according to strategy
-        List<ReadResult> readResults = Collections.synchronizedList(new ArrayList<>());
+        List<ReadResult> readResults = Collections.synchronizedList(new ArrayList<ReadResult>());
 
         //new ArrayList<ReadResult>();
         Set<StorageSubitem> strategy = storageItem.getStrategy();
