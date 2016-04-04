@@ -212,23 +212,27 @@ public class DualClient extends DB {
             });
         }
 
-        int errors = 0;
+        //int errors = 0;
+        int resultsNum = 0;
         while (readResults.size() < LonghairLib.k) {
             Future<ReadResult> resultFuture = null;
             try {
                 resultFuture = completionService.take();
                 ReadResult res = resultFuture.get();
-                if (res.getBytes() == null)
-                    errors++;
-                else {
-                    if (ClientUtils.readResultsContains(readResults, res.getKey()) == false)
+                resultsNum++;
+                /*if (res.getBytes() == null)
+                    errors++;*/
+                if (res.getBytes() != null &&
+                    ClientUtils.readResultsContains(readResults, res.getKey()) == false)
                         readResults.add(res);
-                }
             } catch (Exception e) {
-                errors++;
+                //errors++;
+                resultsNum++;
                 logger.trace("Exception reading a block.");
             }
-            if (errors > LonghairLib.m)
+            //if (errors > LonghairLib.m)
+            //    break;
+            if (resultsNum == strategy.size())
                 break;
         }
     }
@@ -248,7 +252,9 @@ public class DualClient extends DB {
         byte[] data = null;
 
         // read according to strategy
-        List<ReadResult> readResults = new ArrayList<ReadResult>();
+        List<ReadResult> readResults = Collections.synchronizedList(new ArrayList<>());
+
+        //new ArrayList<ReadResult>();
         Set<StorageSubitem> strategy = storageItem.getStrategy();
         Map<String, String> toCache = new HashMap<String, String>();
         // read full data
@@ -273,6 +279,8 @@ public class DualClient extends DB {
             logger.debug("success: " + success);
             // check for cache misses
             logger.debug("readResults: " + readResults.size());
+            // TODO observation: sometimes readResults is filled in after readBlcoks returns
+            // TODO and after toCache is computed
             for (StorageSubitem subitem : strategy) {
                 String key = subitem.getKey();
                 if (subitem.getLayer() == StorageLayer.CACHE &&
@@ -330,7 +338,7 @@ public class DualClient extends DB {
         }
 
         // cache in the background
-        if (toCache.size() > 0) {
+        if (toCache.size() > 0 && data != null) {
             final byte[] dataFin = data;
             final List<ReadResult> readResultsFin = readResults;
             final Map<String, String> toCacheFin = toCache;
@@ -345,7 +353,7 @@ public class DualClient extends DB {
                             List<byte[]> encodedBlocks = LonghairLib.encode(dataFin);
                             String firstKey = toCacheFin.entrySet().iterator().next().getKey();
                             cacheBlocks(toCacheFin, ClientUtils.blocksToReadResults(ClientUtils.getBaseKey(firstKey), encodedBlocks));
-                        } else
+                        } else if (readResultsFin.size() >= LonghairLib.k)
                             cacheBlocks(toCacheFin, readResultsFin);
                     }
                 }
