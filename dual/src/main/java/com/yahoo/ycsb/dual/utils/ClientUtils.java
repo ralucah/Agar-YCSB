@@ -61,13 +61,13 @@ public abstract class ClientUtils {
         return blockBytes;
     }
 
-    public static Set<String> extractKeys(List<ReadResult> readResults) {
+    /*public static Set<String> extractKeys(List<ReadResult> readResults) {
         Set<String> keys = new HashSet<String>();
         for (ReadResult res : readResults) {
             keys.add(res.getKey());
         }
         return keys;
-    }
+    }*/
 
     public static boolean readResultsContains(List<ReadResult> readResults, String key) {
         for (ReadResult result : readResults) {
@@ -89,6 +89,24 @@ public abstract class ClientUtils {
             counter++;
         }
         return readResults;
+    }
+
+    public static String toCacheToString(Map<String, String> toCache) {
+        String str = "";
+        Iterator iter = toCache.entrySet().iterator();
+        while (iter.hasNext()) {
+            Map.Entry<String, String> pair = (Map.Entry<String, String>) iter.next();
+            str += pair.getKey() + ":" + pair.getValue() + " ";
+        }
+        return str;
+    }
+
+    public static String readResultsToString(List<ReadResult> readResults) {
+        String str = "";
+        for (ReadResult readResult : readResults) {
+            str += readResult.getKey() + " ";
+        }
+        return str;
     }
 
     /*public List<byte[]> readResultsToBlocks(List<ReadResult> readResults) {

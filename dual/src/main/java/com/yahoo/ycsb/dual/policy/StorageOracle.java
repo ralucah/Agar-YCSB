@@ -49,8 +49,8 @@ public class StorageOracle {
         return bucket;
     }
 
-    public StorageItem compileStorageInfo(String key, Map<String, String> keyToCacheHost) {
-        StorageItem storageItem = new StorageItem(key);
+    public StorageItem compileStorageInfo(String itemKey, Map<String, String> keyToCacheHost) {
+        StorageItem storageItem = new StorageItem(itemKey);
 
         /* compute cache set */
         Iterator iter = keyToCacheHost.entrySet().iterator();
@@ -61,10 +61,10 @@ public class StorageOracle {
 
         /* compute backend set */
         if (s3Encode == false) {
-            storageItem.addToBackend(key, assignS3Bucket(key));
+            storageItem.addToBackend(itemKey, assignS3Bucket(itemKey));
         } else {
             for (int i = 0; i < LonghairLib.k + LonghairLib.m; i++) {
-                String blockKey = key + i;
+                String blockKey = itemKey + i;
                 storageItem.addToBackend(blockKey, assignS3Bucket(blockKey));
             }
         }

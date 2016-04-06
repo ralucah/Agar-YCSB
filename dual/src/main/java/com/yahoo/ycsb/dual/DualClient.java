@@ -163,7 +163,7 @@ public class DualClient extends DB {
 
     @Override
     public void cleanup() throws DBException {
-        logger.trace("Cleaning up.");
+        logger.debug("Cleaning up.");
         executor.shutdown();
     }
 
@@ -173,28 +173,34 @@ public class DualClient extends DB {
         String host = subItem.getHost();
         StorageLayer storageLayer = subItem.getLayer();
 
-        byte[] data = null;
+        byte[] bytes = null;
         switch (storageLayer) {
             case CACHE:
                 MemcachedConnection memConn = memConnections.get(host);
-                data = memConn.read(key);
+                bytes = memConn.read(key);
                 break;
             case BACKEND:
                 S3Connection s3Conn = s3Connections.get(host);
-                data = s3Conn.read(key);
+                bytes = s3Conn.read(key);
                 break;
             default:
                 logger.error("Unknown read storage layer!");
                 break;
         }
-        return data;
+
+        if (bytes != null)
+            logger.debug("ReadBytes " + key + ":" + host + ":" + bytes.length + " bytes");
+        else
+            logger.debug("ReadBytes " + key + ":" + host + ":null");
+
+        return bytes;
     }
 
     /* read an encoded block of data */
     private ReadResult readBlock(StorageSubitem subItem) {
         ReadResult result = new ReadResult(subItem.getKey());
-        byte[] data = readBytes(subItem);
-        result.setBytes(data);
+        byte[] bytes = readBytes(subItem);
+        result.setBytes(bytes);
         return result;
     }
 
@@ -228,7 +234,7 @@ public class DualClient extends DB {
             } catch (Exception e) {
                 //errors++;
                 resultsNum++;
-                logger.trace("Exception reading a block.");
+                logger.debug("Exception reading a block.");
             }
             //if (errors > LonghairLib.m)
             //    break;
@@ -237,9 +243,16 @@ public class DualClient extends DB {
         }
     }
 
+    private Status cacheData(String key, byte[] data, String host) {
+        MemcachedConnection memConn = memConnections.get(host);
+        Status status = memConn.insert(key, data);
+        logger.info("Cache " + key + ":" + host + ":" + status.getName());
+        return status;
+    }
+
     private void cacheBlocks(Map<String, String> toCache, List<ReadResult> readResults) {
-        logger.debug("toCache: " + toCache.keySet());
-        logger.debug("readResults: " + readResults.size());
+        logger.debug("toCache: " + ClientUtils.toCacheToString(toCache));
+        logger.debug("readResults: " + ClientUtils.readResultsToString(readResults));
         for (ReadResult result : readResults) {
             String key = result.getKey();
             if (toCache.containsKey(key) == true)
@@ -249,7 +262,7 @@ public class DualClient extends DB {
 
     private byte[] readByStrategy(final StorageItem storageItem) {
         boolean success = true;
-        byte[] data = null;
+        byte[] bytes = null;
 
         // read according to strategy
         List<ReadResult> readResults = Collections.synchronizedList(new ArrayList<ReadResult>());
@@ -260,8 +273,8 @@ public class DualClient extends DB {
         // read full data
         if (storageItem.isEncodedInStrategy() == false) {
             StorageSubitem first = strategy.iterator().next();
-            data = readBytes(first);
-            if (data == null) {
+            bytes = readBytes(first);
+            if (bytes == null) {
                 success = false;
                 if (first.getLayer() == StorageLayer.CACHE)
                     toCache.put(first.getKey(), first.getHost());
@@ -271,43 +284,40 @@ public class DualClient extends DB {
         else {
             readBlocks(strategy, readResults);
             if (readResults.size() >= LonghairLib.k) {
-                data = LonghairLib.decode(ClientUtils.resultsToBytes(readResults));
-                if (data == null)
+                bytes = LonghairLib.decode(ClientUtils.resultsToBytes(readResults));
+                if (bytes == null)
                     success = false;
             } else
                 success = false;
-            logger.debug("success: " + success);
+
             // check for cache misses
-            logger.debug("readResults: " + readResults.size());
-            // TODO observation: sometimes readResults is filled in after readBlcoks returns
-            // TODO and after toCache is computed
             for (StorageSubitem subitem : strategy) {
                 String key = subitem.getKey();
                 if (subitem.getLayer() == StorageLayer.CACHE &&
                     ClientUtils.readResultsContains(readResults, key) == false) {
-                    logger.debug("toCache.put " + key);
                     toCache.put(key, subitem.getHost());
                 }
             }
         }
+        logger.debug("Read according to strategy: " + success);
+        //logger.debug("toCache: " + ClientUtils.toCacheToString(toCache));
 
-        // if read (partially) failed, fallback to backend
+        // if reading according to strategy failed, fallback to backend
         if (success == false) {
             Set<StorageSubitem> backend = storageItem.getBackendSet();
             // if strategy = full data
             if (storageItem.isEncodedInStrategy() == false) {
-                // read from backend
                 if (storageItem.isEncodedInBackend() == false) {
                     // read full data from backend
                     StorageSubitem first = backend.iterator().next();
-                    data = readBytes(first);
-                    if (data == null)
+                    bytes = readBytes(first);
+                    if (bytes == null)
                         success = false;
                 } else {
                     // read blocks from backend, in parallel
                     readBlocks(backend, readResults);
                     if (readResults.size() >= LonghairLib.k)
-                        data = LonghairLib.decode(ClientUtils.resultsToBytes(readResults));
+                        bytes = LonghairLib.decode(ClientUtils.resultsToBytes(readResults));
                     else
                         success = false;
                 }
@@ -316,8 +326,8 @@ public class DualClient extends DB {
                 if (storageItem.isEncodedInBackend() == false) {
                     // read full data from backend
                     StorageSubitem first = backend.iterator().next();
-                    data = readBytes(first);
-                    if (data == null)
+                    bytes = readBytes(first);
+                    if (bytes == null)
                         success = false;
                 } else {
                     // read missing blocks from backend
@@ -330,7 +340,7 @@ public class DualClient extends DB {
                     }
                     readBlocks(strategyDiffBackend, readResults);
                     if (readResults.size() >= LonghairLib.k)
-                        data = LonghairLib.decode(ClientUtils.resultsToBytes(readResults));
+                        bytes = LonghairLib.decode(ClientUtils.resultsToBytes(readResults));
                     else
                         success = false;
                 }
@@ -338,8 +348,9 @@ public class DualClient extends DB {
         }
 
         // cache in the background
-        if (toCache.size() > 0 && data != null) {
-            final byte[] dataFin = data;
+        //logger.debug("toCache: " + ClientUtils.toCacheToString(toCache));
+        if (toCache.size() > 0 && bytes != null) {
+            final byte[] dataFin = bytes;
             final List<ReadResult> readResultsFin = readResults;
             final Map<String, String> toCacheFin = toCache;
             executor.submit(new Runnable() {
@@ -349,44 +360,45 @@ public class DualClient extends DB {
                         Map.Entry<String, String> first = toCacheFin.entrySet().iterator().next();
                         cacheData(first.getKey(), dataFin, first.getValue());
                     } else {
-                        if (readResultsFin.size() == 0) {
+                        if (readResultsFin.size() < LonghairLib.k) {
                             List<byte[]> encodedBlocks = LonghairLib.encode(dataFin);
                             String firstKey = toCacheFin.entrySet().iterator().next().getKey();
                             cacheBlocks(toCacheFin, ClientUtils.blocksToReadResults(ClientUtils.getBaseKey(firstKey), encodedBlocks));
-                        } else if (readResultsFin.size() >= LonghairLib.k)
+                        } else
                             cacheBlocks(toCacheFin, readResultsFin);
                     }
                 }
             });
         }
 
-        return data;
+        return bytes;
     }
 
     @Override
     public Status read(String table, String key, Set<String> fields, HashMap<String, ByteIterator> result) {
-        /* operation status to be returned */
         Status status = Status.UNEXPECTED_STATE;
 
-        /* obtain cache info from proxy */
-        Map<String, String> keyToCacheHost = proxyConnection.sendGET(key);
+        // obtain the (key, memhost) mapping from proxy
+        Map<String, String> keyToMemhost = proxyConnection.sendGET(key);
 
-        /* ask storage oracle to compile storage info */
-        StorageItem storageItem = storageOracle.compileStorageInfo(key, keyToCacheHost);
+        // ask storage oracle to compile storage info about this item
+        StorageItem storageItem = storageOracle.compileStorageInfo(key, keyToMemhost);
 
         /* try to read data according to strategy */
-        byte[] data = readByStrategy(storageItem);
-        if (data == null)
+        byte[] bytes = readByStrategy(storageItem);
+        if (bytes == null)
             status = Status.ERROR;
         else
             status = Status.OK;
+        logger.info("Read " + key + " " + status.getName() + " " + ClientUtils.bytesToHash(bytes));
 
-        logger.debug("Read " + key + " " + status.getName() + " " + ClientUtils.bytesToHash(data));
+        // for debugging purposes
         /*try {
             Thread.sleep(600000);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }*/
+
         return status;
     }
 
@@ -400,36 +412,28 @@ public class DualClient extends DB {
         return null;
     }
 
-    private Status cacheData(String key, byte[] data, String host) {
-        MemcachedConnection memConn = memConnections.get(host);
-        Status status = memConn.insert(key, data);
-        logger.debug("Cached " + key + " " + host + " " + status.getName());
-        return status;
-    }
-
-    private Status insertData(String key, byte[] data) {
+    private Status insertBytes(String key, byte[] data) {
         String bucket = storageOracle.assignS3Bucket(key);
         S3Connection s3Conn = s3Connections.get(bucket);
         Status status = s3Conn.insert(key, data);
-        logger.debug("Item " + key + " " + status.getName());
+        logger.debug("InsertBytes " + key + ":" + bucket + ":" + status.getName());
         return status;
     }
 
     /* insert data (encoded or full) in S3 buckets */
     @Override
     public Status insert(String table, String key, HashMap<String, ByteIterator> values) {
-        // operation status
         Status status = Status.UNEXPECTED_STATE;
 
         // generate bytes array based on values
         byte[] bytes = ClientUtils.valuesToBytes(values);
 
-        /* encode data? */
+        // if backend stores data encoded
         if (storageOracle.getS3Encode() == true) {
-            /* encode data */
+            // encode data
             List<byte[]> encodedBlocks = LonghairLib.encode(bytes);
 
-            /* insert encoded blocks in parallel */
+            // insert encoded blocks in parallel
             List<Status> statuses = new ArrayList<Status>();
 
             CompletionService<Status> completionService = new ExecutorCompletionService<Status>(executor);
@@ -439,7 +443,7 @@ public class DualClient extends DB {
                 completionService.submit(new Callable<Status>() {
                     @Override
                     public Status call() throws Exception {
-                        return insertData(blockKey, block);
+                        return insertBytes(blockKey, block);
                     }
                 });
             }
@@ -462,7 +466,7 @@ public class DualClient extends DB {
                     break;
             }
 
-            /* set final status */
+            // compute operation status
             if (statuses.size() != encodedBlocks.size())
                 status = Status.ERROR;
             else {
@@ -475,10 +479,10 @@ public class DualClient extends DB {
 
         } else {
             /* insert the full data item */
-            status = insertData(key, bytes);
+            status = insertBytes(key, bytes);
         }
 
-        logger.debug("Insert " + key + " " + status.getName());
+        logger.info("Insert " + key + " " + status.getName() + " " + ClientUtils.bytesToHash(bytes));
         return status;
     }
 
