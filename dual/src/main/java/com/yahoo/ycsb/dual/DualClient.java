@@ -1,9 +1,8 @@
 package com.yahoo.ycsb.dual;
 
-// -db com.yahoo.ycsb.dual.DualClient -p fieldlength=10 -p fieldcount=20 -s -P workloads/myworkload -load
-// -db com.yahoo.ycsb.dual.DualClient -p fieldlength=10 -p fieldcount=20 -s -P workloads/myworkload
+// -db com.yahoo.ycsb.dual.DualClient -p fieldlength=100 -s -P workloads/myworkload -load
+// -db com.yahoo.ycsb.dual.DualClient -p fieldlength=100 -s -P workloads/myworkload
 
-import com.yahoo.ycsb.ByteIterator;
 import com.yahoo.ycsb.DB;
 import com.yahoo.ycsb.DBException;
 import com.yahoo.ycsb.Status;
@@ -117,14 +116,12 @@ public class DualClient extends DB {
         String blockKey = baseKey + blockNum;
         S3Connection s3Connection = s3Connections.get(blockNum);
         byte[] block = s3Connection.read(blockKey);
-        logger.debug("ReadBlock " + blockKey + ":" + blockNum + " " + ClientUtils.bytesToHash(block));
+        logger.debug("ReadBlock " + blockNum + " " + blockKey + " " + ClientUtils.bytesToHash(block));
         return block;
     }
 
     @Override
-    public Status read(String table, String key, Set<String> fields, HashMap<String, ByteIterator> result) {
-        Status status = Status.OK;
-
+    public byte[] read(String key) {
         // read blocks in parallel
         final String keyFin = key;
         CompletionService<byte[]> completionService = new ExecutorCompletionService<byte[]>(executor);
@@ -141,7 +138,7 @@ public class DualClient extends DB {
         int success = 0;
         int errors = 0;
         Set<byte[]> blocks = new HashSet<byte[]>();
-        while (success + errors < LonghairLib.k + LonghairLib.m) {
+        while (success < LonghairLib.k) {
             try {
                 Future<byte[]> resultFuture = completionService.take();
                 byte[] block = resultFuture.get();
@@ -161,13 +158,9 @@ public class DualClient extends DB {
         byte[] data = null;
         if (success >= LonghairLib.k) {
             data = LonghairLib.decode(blocks);
-            if (data == null)
-                status = Status.ERROR;
         }
-        else
-            status = Status.ERROR;
 
-        logger.info("Read " + key + " " + status.getName() + " " + ClientUtils.bytesToHash(data));
+        logger.info("Read " + key + " " + data.length + " bytes " + ClientUtils.bytesToHash(data));
 
         // for debugging purposes
         /*try {
@@ -176,16 +169,11 @@ public class DualClient extends DB {
             e.printStackTrace();
         }*/
 
-        return status;
+        return data;
     }
 
     @Override
-    public Status scan(String table, String startkey, int recordcount, Set<String> fields, Vector<HashMap<String, ByteIterator>> result) {
-        return null;
-    }
-
-    @Override
-    public Status update(String table, String key, HashMap<String, ByteIterator> values) {
+    public Status update(String key, byte[] value) {
         return null;
     }
 
@@ -193,20 +181,20 @@ public class DualClient extends DB {
         String blockKey = baseKey + blockNum;
         S3Connection s3Connection = s3Connections.get(blockNum);
         Status status = s3Connection.insert(blockKey, block);
-        logger.debug("InsertBlock " + blockKey + ":" + blockNum + ":" + status.getName());
+        logger.debug("InsertBlock " + blockNum + " " + blockKey + " " + ClientUtils.bytesToHash(block));
         return status;
     }
 
     /* insert data (encoded or full) in S3 buckets */
     @Override
-    public Status insert(String table, String key, HashMap<String, ByteIterator> values) {
+    public Status insert(String key, byte[] value) {
         Status status = Status.OK;
 
         // generate bytes array based on values
-        byte[] data = ClientUtils.valuesToBytes(values);
+        //byte[] data = ClientUtils.valuesToBytes(values);
 
         // encode data
-        Set<byte[]> encodedBlocks = LonghairLib.encode(data);
+        Set<byte[]> encodedBlocks = LonghairLib.encode(value);
 
         // insert encoded blocks in parallel
         final String keyFin = key;
@@ -225,7 +213,7 @@ public class DualClient extends DB {
 
         int success = 0;
         int errors = 0;
-        while (success + errors < encodedBlocks.size()) {
+        while (success < encodedBlocks.size()) {
             Future<Status> statusFuture = null;
             try {
                 statusFuture = completionService.take();
@@ -246,12 +234,12 @@ public class DualClient extends DB {
         if (success < LonghairLib.k)
             status = Status.ERROR;
 
-        logger.info("Insert " + key + " " + status.getName() + " " + ClientUtils.bytesToHash(data));
+        logger.info("Insert " + key + " " + value.length + " bytes " + ClientUtils.bytesToHash(value));
         return status;
     }
 
     @Override
-    public Status delete(String table, String key) {
+    public Status delete(String key) {
         return null;
     }
 }

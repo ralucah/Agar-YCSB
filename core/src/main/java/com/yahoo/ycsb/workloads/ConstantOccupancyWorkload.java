@@ -16,11 +16,11 @@
  */
 package com.yahoo.ycsb.workloads;
 
-import java.util.Properties;
-
-import com.yahoo.ycsb.WorkloadException;
 import com.yahoo.ycsb.Client;
+import com.yahoo.ycsb.WorkloadException;
 import com.yahoo.ycsb.generator.IntegerGenerator;
+
+import java.util.Properties;
 
 /**
  * A disk-fragmenting workload.
@@ -45,23 +45,19 @@ import com.yahoo.ycsb.generator.IntegerGenerator;
  *
  */
 public class ConstantOccupancyWorkload extends CoreWorkload {
-	long disksize;
-	long storageages;
-	IntegerGenerator objectsizes;
-	double occupancy;
-	
-	long object_count;
-	
 	public static final String STORAGE_AGE_PROPERTY = "storageages";
 	public static final long   STORAGE_AGE_PROPERTY_DEFAULT = 10;
-	
 	public static final String DISK_SIZE_PROPERTY = "disksize";
 	public static final long   DISK_SIZE_PROPERTY_DEFAULT = 100 * 1000 * 1000;
-	
 	public static final String OCCUPANCY_PROPERTY = "occupancy";
 	public static final double OCCUPANCY_PROPERTY_DEFAULT = 0.9;
-	
-	@Override
+    long disksize;
+    long storageages;
+    IntegerGenerator objectsizes;
+    double occupancy;
+    long object_count;
+
+    @Override
 	public void init(Properties p) throws WorkloadException
 	{
 		disksize    = Long.parseLong(    p.getProperty(DISK_SIZE_PROPERTY, DISK_SIZE_PROPERTY_DEFAULT+""));
@@ -75,9 +71,8 @@ public class ConstantOccupancyWorkload extends CoreWorkload {
 		}
 		IntegerGenerator g = CoreWorkload.getFieldLengthGenerator(p);
 		double fieldsize = g.mean();
-		int fieldcount = Integer.parseInt(p.getProperty(FIELD_COUNT_PROPERTY, FIELD_COUNT_PROPERTY_DEFAULT));
 
-		object_count = (long)(occupancy * ((double)disksize / (fieldsize * (double)fieldcount)));
+        object_count = (long) (occupancy * ((double) disksize / fieldsize));
                 if(object_count == 0) {
                     throw new IllegalStateException("Object count was zero.  Perhaps disksize is too low?");
                 }
