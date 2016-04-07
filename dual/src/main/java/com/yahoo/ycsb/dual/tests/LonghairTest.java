@@ -4,7 +4,7 @@ import com.yahoo.ycsb.dual.utils.LonghairLib;
 import org.apache.log4j.Logger;
 
 import java.io.UnsupportedEncodingException;
-import java.util.List;
+import java.util.Set;
 
 /**
  * Created by ubuntu on 09.01.16.
@@ -26,7 +26,7 @@ public class LonghairTest {
         } catch (UnsupportedEncodingException e) {
             e.printStackTrace();
         }
-        List<byte[]> blocks = LonghairLib.encode(original);
+        Set<byte[]> blocks = LonghairLib.encode(original);
 
         blocks.remove(2);
         blocks.remove(2);

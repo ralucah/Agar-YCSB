@@ -7,6 +7,7 @@ public final class ClientConstants {
     /* property names */
     public static String PROPERTIES_FILE = "client.properties";
     public static String PROXY_HOST = "proxy";
+    public static String S3_ZONES = "s3.zones";
     public static String S3_REGIONS = "s3.regions";
     public static String S3_ENDPOINTS = "s3.endpoints";
     public static String S3_BUCKETS = "s3.buckets";

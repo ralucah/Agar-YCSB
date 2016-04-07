@@ -4,9 +4,10 @@ import com.sun.jna.*;
 import org.apache.log4j.Logger;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Created by ubuntu on 06.01.16.
@@ -18,7 +19,7 @@ public class LonghairLib {
     public static boolean initialized = false;
     private static Logger logger = Logger.getLogger(LonghairLib.class);
 
-    public static byte[] decode(List<byte[]> blockBytes) {
+    public static byte[] decode(Set<byte[]> blockBytes) {
         //Block.ByReference[] blocks = new Block.ByReference[blocksBytes.size()];
         Block[] blocks = (Block[]) new Block().toArray(blockBytes.size());
         /*for (int i = 0; i < blocksBytes.size(); i++) {
@@ -79,8 +80,8 @@ public class LonghairLib {
     }
 
     /* helper function for encode */
-    private static List<byte[]> appendLengthAndRow(Block.ByReference[] blocks, int blockSize, int originalLen) {
-        List<byte[]> blocksAsBytes = new ArrayList<byte[]>();
+    private static Set<byte[]> appendLengthAndRow(Block.ByReference[] blocks, int blockSize, int originalLen) {
+        Set<byte[]> blocksAsBytes = new HashSet<>();
         for (Block.ByReference block : blocks) {
             byte[] newBlock = new byte[(LonghairLib.reservedBytes * 2) + blockSize];
             int offset = 0;
@@ -101,7 +102,7 @@ public class LonghairLib {
         return blocksAsBytes;
     }
 
-    public static List<byte[]> encode(byte[] originalData) {
+    public static Set<byte[]> encode(byte[] originalData) {
         // pad data
         int paddedLen = originalData.length;
         while (paddedLen % (8 * k) != 0) {

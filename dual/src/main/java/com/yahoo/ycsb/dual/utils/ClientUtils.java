@@ -42,6 +42,7 @@ public abstract class ClientUtils {
         return new String(hexChars);
     }
 
+    // hashcode of null is 0
     public static int bytesToHash(byte[] data) {
         return java.util.Arrays.hashCode(data);
     }
