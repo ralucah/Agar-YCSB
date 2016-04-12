@@ -145,8 +145,8 @@ def get_classpath_from_maven(module):
               "with return code '" + str(err.returncode) + "'. The output from "
               "Maven follows, try running "
               "'mvn -DskipTests package dependency:build=classpath' on your "
-              "own and correct errors." + os.linesep + os.linesep + "mvn output:" + os.linesep
-              + err.output)
+              "own and correct errors." + os.linesep + os.linesep + "mvn output:" + os.linesep)
+              #+ err.output)
         sys.exit(err.returncode)
 
 def main():

@@ -11,8 +11,13 @@ import java.util.Map;
 
 /* Establish connection to proxy */
 public class UDPClient {
+    public static String PACKET_SIZE = "socket.packet_size";
+    public static String SOCKET_TIMEOUT = "socket.timeout"; // in ms
+    public static String SOCKET_RETRIES = "socket.retries";
+    public static String PACKET_SIZE_DEFAULT = "1024";
+    public static String SOCKET_TIMEOUT_DEFAULT = "1000";
+    public static String SOCKET_RETRIES_DEFAULT = "3";
     protected static Logger logger = Logger.getLogger(UDPClient.class);
-
     /* proxy udp server running on.. */
     private InetAddress udpServerAddress;
     private int udpServerPort;
@@ -41,8 +46,8 @@ public class UDPClient {
         }
 
         /* set default socket config */
-        socketRetries = Integer.parseInt(ClientConstants.SOCKET_RETRIES_DEFAULT);
-        packetSize = Integer.parseInt(ClientConstants.PACKET_SIZE_DEFAULT);
+        socketRetries = Integer.parseInt(SOCKET_RETRIES_DEFAULT);
+        packetSize = Integer.parseInt(PACKET_SIZE_DEFAULT);
         // no timeout by default, so the client might stall
     }
 

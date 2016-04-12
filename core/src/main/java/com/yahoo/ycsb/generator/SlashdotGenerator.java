@@ -10,17 +10,20 @@ import java.util.concurrent.TimeUnit;
  * Created by Raluca on 07.04.16.
  */
 public class SlashdotGenerator extends IntegerGenerator {
-
-    private final double skew = 1;
     private final int constant = 1000000;
+    private double skew;
+    private int delay;
     private double[] buckets;
     private double area = 0;
-    private volatile int offset = 0;
-    private int delay = 50;
     private int recordCount;
 
-    public SlashdotGenerator(final int recordCount) {
+    private volatile int offset = 0;
+
+    public SlashdotGenerator(final int recordCount, final double skew, final int delay) {
         this.recordCount = recordCount;
+        this.skew = skew;
+        this.delay = delay;
+
         ZipfGenerator zipf = new ZipfGenerator(recordCount, skew);
 
         buckets = new double[recordCount];
@@ -34,10 +37,20 @@ public class SlashdotGenerator extends IntegerGenerator {
         exec.scheduleAtFixedRate(new Runnable() {
             @Override
             public void run() {
+                //System.err.println("offset!");
                 offset = (offset + 1) % recordCount;
             }
         }, delay, delay, TimeUnit.MILLISECONDS);
 
+    }
+
+    public static void main(String[] args) {
+        SlashdotGenerator slashgen = new SlashdotGenerator(10, 1.75, 10000);
+        //slashgen.printBuckets();
+
+        System.out.println("nextInt(): ");
+        for (int i = 0; i < 10000; i++)
+            System.out.println(slashgen.nextInt());
     }
 
     @Override
@@ -66,13 +79,4 @@ public class SlashdotGenerator extends IntegerGenerator {
     public double mean() {
         return 0.0;
     }
-
-    /*public static void main(String[] args) throws IOException {
-        SlashdotGenerator slashgen = new SlashdotGenerator(10);
-        //slashgen.printBuckets();
-
-        System.out.println("nextInt(): ");
-        for(int i = 0; i < 1000000; i++)
-            System.out.println(slashgen.nextInt());
-    }*/
 }

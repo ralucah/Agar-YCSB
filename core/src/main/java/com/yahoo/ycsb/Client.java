@@ -1,20 +1,3 @@
-/**
- * Copyright (c) 2010 Yahoo! Inc. All rights reserved.
- * <p>
- * Licensed under the Apache License, Version 2.0 (the "License"); you
- * may not use this file except in compliance with the License. You
- * may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
- * implied. See the License for the specific language governing
- * permissions and limitations under the License. See accompanying
- * LICENSE file.
- */
-
 package com.yahoo.ycsb;
 
 
@@ -33,28 +16,18 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
 
-/**
- * A thread to periodically show the status of the experiment, to reassure you that progress is being made.
- *
- * @author cooperb
- */
+// A thread to periodically show the status of the experiment, to reassure you that progress is being made.
 class StatusThread extends Thread {
-    /**
-     * Counts down each of the clients completing.
-     */
+    // Counts down each of the clients completing.
     private final CountDownLatch _completeLatch;
 
-    /**
-     * The clients that are running.
-     */
+    // The clients that are running.
     private final List<ClientThread> _clients;
 
     private final String _label;
     private final boolean _standardstatus;
 
-    /**
-     * The interval for reporting status.
-     */
+    // The interval for reporting status.
     private long _sleeptimeNs;
 
     /**
@@ -75,9 +48,7 @@ class StatusThread extends Thread {
         _sleeptimeNs = TimeUnit.SECONDS.toNanos(statusIntervalSeconds);
     }
 
-    /**
-     * Run and periodically report status.
-     */
+    // Run and periodically report status.
     @Override
     public void run() {
         final long startTimeMs = System.currentTimeMillis();
@@ -218,16 +189,12 @@ class RemainingFormatter {
 
 /**
  * A thread for executing transactions or data inserts to the database.
- *
- * @author cooperb
- *
  */
 class ClientThread extends Thread {
     private static boolean _spinSleep;
     final Measurements _measurements;
-    /**
-     * Counts down each of the clients completing.
-     */
+
+    // Counts down each of the clients completing.
     private final CountDownLatch _completeLatch;
     DB _db;
     boolean _dotransactions;
@@ -380,44 +347,26 @@ class ClientThread extends Thread {
  * Main class for executing YCSB.
  */
 public class Client {
-
-    public static final String DEFAULT_RECORD_COUNT = "0";
-
-    /**
-     * The target number of operations to perform.
-     */
+    // The target number of operations to perform.
     public static final String OPERATION_COUNT_PROPERTY = "operationcount";
 
-    /**
-     * The number of records to load into the database initially.
-     */
+    // The number of records to load into the database initially.
     public static final String RECORD_COUNT_PROPERTY = "recordcount";
+    public static final String DEFAULT_RECORD_COUNT = "0";
 
-    /**
-     * The workload class to be loaded.
-     */
+    // The workload class to be loaded.
     public static final String WORKLOAD_PROPERTY = "workload";
 
-    /**
-     * The database class to be used.
-     */
+    // The database class to be used.
     public static final String DB_PROPERTY = "db";
 
-    /**
-     * The exporter class to be used. The default is
-     * com.yahoo.ycsb.measurements.exporter.TextMeasurementsExporter.
-     */
+    // The exporter class to be used. The default is com.yahoo.ycsb.measurements.exporter.TextMeasurementsExporter.
     public static final String EXPORTER_PROPERTY = "exporter";
 
-    /**
-     * If set to the path of a file, YCSB will write all output to this file
-     * instead of STDOUT.
-     */
+    // If set to the path of a file, YCSB will write all output to this file instead of STDOUT.
     public static final String EXPORT_FILE_PROPERTY = "exportfile";
 
-    /**
-     * The number of YCSB client threads to run.
-     */
+    // The number of YCSB client threads to run.
     public static final String THREAD_COUNT_PROPERTY = "threadcount";
 
     /**
@@ -427,14 +376,10 @@ public class Client {
      */
     public static final String INSERT_COUNT_PROPERTY = "insertcount";
 
-    /**
-     * Target number of operations per second
-     */
+    // Target number of operations per second
     public static final String TARGET_PROPERTY = "target";
 
-    /**
-     * The maximum amount of time (in seconds) for which the benchmark will be run.
-     */
+    // The maximum amount of time (in seconds) for which the benchmark will be run.
     public static final String MAX_EXECUTION_TIME = "maxexecutiontime";
 
     public static long st;
@@ -443,29 +388,22 @@ public class Client {
     public static void usageMessage() {
         System.out.println("Usage: java com.yahoo.ycsb.Client [options]");
         System.out.println("Options:");
-        System.out.println("  -threads n: execute using n threads (default: 1) - can also be specified as the \n" +
-            "        \"threadcount\" property using -p");
-        System.out.println("  -target n: attempt to do n operations per second (default: unlimited) - can also\n" +
-            "       be specified as the \"target\" property using -p");
-        System.out.println("  -load:  run the loading phase of the workload");
-        System.out.println("  -t:  run the transactions phase of the workload (default)");
-        System.out.println("  -db dbname: specify the name of the DB to use (default: com.yahoo.ycsb.BasicDB) - \n" +
-            "        can also be specified as the \"db\" property using -p");
-        System.out.println("  -P propertyfile: load properties from the given file. Multiple files can");
-        System.out.println("           be specified, and will be processed in the order specified");
-        System.out.println("  -p name=value:  specify a property to be passed to the DB and workloads;");
-        System.out.println("          multiple properties can be specified, and override any");
-        System.out.println("          values in the propertyfile");
-        System.out.println("  -s:  show status during run (default: no status)");
-        System.out.println("  -l label:  use label for status (e.g. to label one experiment out of a whole batch)");
-        System.out.println("  -flush-cache:  flush cache after running a test");
+        System.out.println("-threads n: execute using n threads (default: 1) - \"-p threadcount\"");
+        System.out.println("-target n: attempt to do n operations per second (default: unlimited) - \"-p target\"");
+        System.out.println("-load:  run the loading phase of the workload");
+        System.out.println("-t:  run the transactions phase of the workload (default)");
+        System.out.println("-db dbname: specify the name of the DB to use (default: com.yahoo.ycsb.BasicDB) - \"-p db\"");
+        System.out.println("-P propertyfile: load properties from the given file");
+        System.out.println("-s:  show status during run (default: no status)");
+        System.out.println("-l label:  use label for status (e.g. to label one experiment out of a whole batch)");
+        System.out.println("-flush-cache:  flush cache after running a test");
         System.out.println("");
         System.out.println("Required properties:");
-        System.out.println("  " + WORKLOAD_PROPERTY + ": the name of the workload class to use (e.g. com.yahoo.ycsb.workloads.CoreWorkload)");
+        System.out.println(WORKLOAD_PROPERTY + ": the name of the workload class to use (e.g. com.yahoo.ycsb.workloads.CoreWorkload)");
         System.out.println("");
         System.out.println("To run the transaction phase from multiple servers, start a separate client on each.");
-        System.out.println("To run the load phase from multiple servers, start a separate client on each; additionally,");
-        System.out.println("use the \"insertcount\" and \"insertstart\" properties to divide up the records to be inserted");
+        System.out.println("To run the load phase from multiple servers, start a separate client on each; additionally " +
+            "use the \"insertcount\" and \"insertstart\" properties to divide up the records to be inserted");
     }
 
     public static boolean checkRequiredProperties(Properties props) {
@@ -473,7 +411,6 @@ public class Client {
             System.out.println("Missing property: " + WORKLOAD_PROPERTY);
             return false;
         }
-
         return true;
     }
 
@@ -502,8 +439,7 @@ public class Client {
             try {
                 exporter = (MeasurementsExporter) Class.forName(exporterStr).getConstructor(OutputStream.class).newInstance(out);
             } catch (Exception e) {
-                System.err.println("Could not find exporter " + exporterStr
-                    + ", will use default text reporter.");
+                System.err.println("Could not find exporter " + exporterStr + ", will use default text reporter.");
                 e.printStackTrace();
                 exporter = new TextMeasurementsExporter(out);
             }
@@ -600,7 +536,6 @@ public class Client {
                     System.exit(0);
                 }
 
-                //Issue #5 - remove call to stringPropertyNames to make compilable under Java 1.5
                 for (Enumeration e = myfileprops.propertyNames(); e.hasMoreElements(); ) {
                     String prop = (String) e.nextElement();
 

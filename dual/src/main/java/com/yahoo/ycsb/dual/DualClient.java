@@ -6,13 +6,10 @@ package com.yahoo.ycsb.dual;
 import com.yahoo.ycsb.DB;
 import com.yahoo.ycsb.DBException;
 import com.yahoo.ycsb.Status;
-import com.yahoo.ycsb.dual.utils.ClientConstants;
 import com.yahoo.ycsb.dual.utils.ClientUtils;
 import com.yahoo.ycsb.dual.utils.LonghairLib;
 import org.apache.log4j.Logger;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -23,8 +20,18 @@ import java.util.concurrent.*;
  */
 
 public class DualClient extends DB {
+    public static String S3_ZONES = "s3.zones";
+    public static String S3_REGIONS_PROPERTIES = "s3.regions";
+    public static String S3_ENDPOINTS_PROPERTIES = "s3.endpoints";
+    public static String S3_BUCKETS_PROPERTIES = "s3.buckets";
+    public static String MEMCACHED_SERVER_PROPERTY = "memcached";
+    public static String LONGHAIR_K_PROPERTY = "longhair.k";
+    public static String LONGHAIR_K_DEFAULT = "3";
+    public static String LONGHAIR_M_PROPERTY = "longhair.m";
+    public static String LONGHAIR_M_DEFAULT = "2";
+    public static String EXECUTOR_THREADS_PROPERTY = "executor.threads";
+    public static String EXECUTOR_THREADS_DEFAULT = "5";
     protected static Logger logger = Logger.getLogger(DualClient.class);
-
     private Properties properties;
 
     // S3 bucket names mapped to connections to AWS S3 buckets
@@ -33,15 +40,15 @@ public class DualClient extends DB {
     // for concurrent processing
     private ExecutorService executor;
 
+    private MemcachedConnection memConnection;
+
     // TODO Assumption: one bucket per region (num regions = num endpoints = num buckets)
     private void initS3() {
-        // s3-related configuration
-        int s3ZonesNum = Integer.valueOf(properties.getProperty(ClientConstants.S3_ZONES));
-        List<String> regions = Arrays.asList(properties.getProperty(ClientConstants.S3_REGIONS).split("\\s*,\\s*"));
-        List<String> endpoints = Arrays.asList(properties.getProperty(ClientConstants.S3_ENDPOINTS).split("\\s*,\\s*"));
-        List<String> s3Buckets = Arrays.asList(properties.getProperty(ClientConstants.S3_BUCKETS).split("\\s*,\\s*"));
-        if (s3Buckets.size() != s3ZonesNum || endpoints.size() != s3ZonesNum || regions.size() != s3ZonesNum)
-            logger.error("Configuration error: #buckets = #regions = #endpoints = " + s3ZonesNum);
+        List<String> regions = Arrays.asList(properties.getProperty(S3_REGIONS_PROPERTIES).split("\\s*,\\s*"));
+        List<String> endpoints = Arrays.asList(properties.getProperty(S3_ENDPOINTS_PROPERTIES).split("\\s*,\\s*"));
+        List<String> s3Buckets = Arrays.asList(properties.getProperty(S3_BUCKETS_PROPERTIES).split("\\s*,\\s*"));
+        if (s3Buckets.size() != endpoints.size() || endpoints.size() != regions.size())
+            logger.error("Configuration error: #buckets = #regions = #endpoints");
 
         // establish S3 connections
         s3Connections = new ArrayList<S3Connection>();
@@ -50,9 +57,9 @@ public class DualClient extends DB {
             String region = regions.get(i);
             String endpoint = endpoints.get(i);
             try {
-                logger.debug("S3 connection " + i + " " + bucket + " " + region + " " + endpoint);
                 S3Connection client = new S3Connection(s3Buckets.get(i), regions.get(i), endpoints.get(i));
                 s3Connections.add(client);
+                logger.debug("S3 connection " + i + " " + bucket + " " + region + " " + endpoint);
             } catch (DBException e) {
                 logger.error("Error connecting to " + s3Buckets.get(i));
             }
@@ -61,8 +68,8 @@ public class DualClient extends DB {
 
     private void initLonghair() {
         // erasure coding-related configuration
-        LonghairLib.k = Integer.valueOf(properties.getProperty(ClientConstants.LONGHAIR_K, ClientConstants.LONGHAIR_K_DEFAULT));
-        LonghairLib.m = Integer.valueOf(properties.getProperty(ClientConstants.LONGHAIR_M, ClientConstants.LONGHAIR_M_DEFAULT));
+        LonghairLib.k = Integer.valueOf(properties.getProperty(LONGHAIR_K_PROPERTY, LONGHAIR_K_DEFAULT));
+        LonghairLib.m = Integer.valueOf(properties.getProperty(LONGHAIR_M_PROPERTY, LONGHAIR_M_DEFAULT));
         logger.debug("k: " + LonghairLib.k + " m: " + LonghairLib.m);
 
         // check k >= 0 and k < 256
@@ -80,25 +87,23 @@ public class DualClient extends DB {
         }
     }
 
+    private void initMemcachedServer() throws DBException {
+        String memHost = properties.getProperty(MEMCACHED_SERVER_PROPERTY);
+        memConnection = new MemcachedConnection(memHost);
+        logger.debug("Memcached connection " + memHost);
+    }
+
     @Override
     public void init() throws DBException {
         logger.debug("DualClient.init() start");
-
-        // load properties
-        ClassLoader loader = Thread.currentThread().getContextClassLoader();
-        properties = new Properties();
-        InputStream in = loader.getResourceAsStream(ClientConstants.PROPERTIES_FILE);
-        try {
-            properties.load(in);
-        } catch (IOException e) {
-            logger.error("Error loading properties.");
-        }
+        properties = getProperties();
 
         initS3();
         initLonghair();
+        initMemcachedServer();
 
         // init executor service
-        final int threadsNum = Integer.valueOf(properties.getProperty(ClientConstants.THREADS_NUM, ClientConstants.THREADS_NUM_DEFAULT));
+        final int threadsNum = Integer.valueOf(properties.getProperty(EXECUTOR_THREADS_PROPERTY, EXECUTOR_THREADS_DEFAULT));
         logger.debug("threads num: " + threadsNum);
         executor = Executors.newFixedThreadPool(threadsNum);
 
@@ -120,17 +125,15 @@ public class DualClient extends DB {
         return block;
     }
 
-    @Override
-    public byte[] read(String key) {
+    private byte[] readFromBackend(final String key) {
         // read blocks in parallel
-        final String keyFin = key;
         CompletionService<byte[]> completionService = new ExecutorCompletionService<byte[]>(executor);
         for (int i = 0; i < LonghairLib.k + LonghairLib.m; i++) {
             final int blockNumFin = i;
             completionService.submit(new Callable<byte[]>() {
                 @Override
                 public byte[] call() throws Exception {
-                    return readBlock(keyFin, blockNumFin);
+                    return readBlock(key, blockNumFin);
                 }
             });
         }
@@ -159,8 +162,39 @@ public class DualClient extends DB {
         if (success >= LonghairLib.k) {
             data = LonghairLib.decode(blocks);
         }
+        return data;
+    }
 
-        logger.info("Read " + key + " " + data.length + " bytes " + ClientUtils.bytesToHash(data));
+    private byte[] readFromCache(String key) {
+        byte[] data = memConnection.read(key);
+        return data;
+    }
+
+    private void cacheData(String key, byte[] data) {
+        Status status = memConnection.insert(key, data);
+        /*if (status.equals(Status.OK) == false)
+            logger.debug("Error caching data " + key);
+        else
+            logger.debug("Cached data " + key);*/
+    }
+
+    @Override
+    public byte[] read(final String key) {
+        byte[] data = readFromCache(key);
+        if (data == null) {
+            data = readFromBackend(key);
+            if (data != null) {
+                logger.info("Read BACKEND " + key + " " + data.length + " bytes " + ClientUtils.bytesToHash(data));
+                final byte[] dataFin = data;
+                executor.submit(new Runnable() {
+                    @Override
+                    public void run() {
+                        cacheData(key, dataFin);
+                    }
+                });
+            }
+        } else
+            logger.info("Read CACHE " + key + " " + data.length + " bytes " + ClientUtils.bytesToHash(data));
 
         // for debugging purposes
         /*try {

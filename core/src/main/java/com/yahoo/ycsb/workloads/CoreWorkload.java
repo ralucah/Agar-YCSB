@@ -1,20 +1,3 @@
-/**
- * Copyright (c) 2010 Yahoo! Inc. All rights reserved.
- * <p>
- * Licensed under the Apache License, Version 2.0 (the "License"); you
- * may not use this file except in compliance with the License. You
- * may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
- * implied. See the License for the specific language governing
- * permissions and limitations under the License. See accompanying
- * LICENSE file.
- */
-
 package com.yahoo.ycsb.workloads;
 
 import com.yahoo.ycsb.*;
@@ -29,156 +12,89 @@ import java.util.Properties;
  * The core benchmark scenario. Represents a set of clients doing simple CRUD operations. The
  * relative proportion of different kinds of operations, and other properties of the workload,
  * are controlled by parameters specified at runtime.
- * <p>
+
  * Properties to control the client:
- * <UL>
- * <LI><b>fieldlength</b>: the size of each field (default: 100)
- * <LI><b>readallfields</b>: should reads read all fields (true) or just one (false) (default: true)
- * <LI><b>writeallfields</b>: should updates and read/modify/writes update all fields (true) or just
- * one (false) (default: false)
- * <LI><b>readproportion</b>: what proportion of operations should be reads (default: 0.95)
- * <LI><b>updateproportion</b>: what proportion of operations should be updates (default: 0.05)
- * <LI><b>insertproportion</b>: what proportion of operations should be inserts (default: 0)
- * <LI><b>scanproportion</b>: what proportion of operations should be scans (default: 0)
- * <LI><b>readmodifywriteproportion</b>: what proportion of operations should be read a record,
- * modify it, write it back (default: 0)
- * <LI><b>requestdistribution</b>: what distribution should be used to select the records to operate
- * on - uniform, zipfian, hotspot, or latest (default: uniform)
- * <LI><b>maxscanlength</b>: for scans, what is the maximum number of records to scan (default: 1000)
- * <LI><b>scanlengthdistribution</b>: for scans, what distribution should be used to choose the
- * number of records to scan, for each scan, between 1 and maxscanlength (default: uniform)
- * <LI><b>insertorder</b>: should records be inserted in order by key ("ordered"), or in hashed
- * order ("hashed") (default: hashed)
- * </ul>
+ * - fieldlength: the size of each field (default: 100)
+ * - readproportion: what proportion of operations should be reads (default: 0.95)
+ * - updateproportion: what proportion of operations should be updates (default: 0.05)
+ * - insertproportion: what proportion of operations should be inserts (default: 0)
+ * - requestdistribution: what distribution should be used to select the records to operate on - uniform, zipfian, hotspot, or latest (default: uniform)
+ * - insertorder: should records be inserted in order by key ("ordered"), or in hashed order ("hashed") (default: hashed)
  */
 public class CoreWorkload extends Workload {
-    /**
-     * The name of the property for the field length distribution. Options are "uniform", "zipfian"
-     * (favoring short records), "constant", and "histogram".
-     * If "uniform", "zipfian" or "constant", the maximum field length will be that specified by the
-     * fieldlength property.  If "histogram", then the histogram will be read from the filename specified
-     * in the "fieldlengthhistogram" property.
-     */
+    // "uniform", "zipfian" (favoring short records), "constant", "histogram".
+    // "uniform", "zipfian" or "constant" - max field length given by the fieldlength property
+    // "histogram" - read from the filename specified in the "fieldlengthhistogram" property.
     public static final String FIELD_LENGTH_DISTRIBUTION_PROPERTY = "fieldlengthdistribution";
-    /**
-     * The default field length distribution.
-     */
     public static final String FIELD_LENGTH_DISTRIBUTION_PROPERTY_DEFAULT = "constant";
-    /**
-     * The name of the property for the length of a field in bytes.
-     */
+
+    // field length in bytes
     public static final String FIELD_LENGTH_PROPERTY = "fieldlength";
-    /**
-     * The default maximum length of a field in bytes.
-     */
     public static final String FIELD_LENGTH_PROPERTY_DEFAULT = "100";
-    /**
-     * The name of a property that specifies the filename containing the field length histogram (only
-     * used if fieldlengthdistribution is "histogram").
-     */
+
+    // for histogram distribution
     public static final String FIELDLENGTH_HISTOGRAM_FILE_PROPERTY = "fieldlengthhistogram";
-    /**
-     * The default filename containing a field length histogram.
-     */
     public static final String FIELDLENGTH_HISTOGRAM_FILE_PROPERTY_DEFAULT = "hist.txt";
 
-    public static final String SLASHDOT_HISTOGRAM = "slashdothistogram";
-    public static final String SLASHDOT_HISTOGRAM_DEFAULT = "slashdot.txt";
-
-    /**
-     * The name of the property for deciding whether to check all returned
-     * data against the formation template to ensure data integrity.
-     */
+    // check returned data or not
     public static final String DATA_INTEGRITY_PROPERTY = "dataintegrity";
-    /**
-     * The default value for the dataintegrity property.
-     */
     public static final String DATA_INTEGRITY_PROPERTY_DEFAULT = "false";
-    /**
-     * The name of the property for the proportion of transactions that are reads.
-     */
+
+    // proportion of transactions that are read
     public static final String READ_PROPORTION_PROPERTY = "readproportion";
-    /**
-     * The default proportion of transactions that are reads.
-     */
     public static final String READ_PROPORTION_PROPERTY_DEFAULT = "0.95";
-    /**
-     * The name of the property for the proportion of transactions that are updates.
-     */
+
+    // proportion of transactions that are updates
     public static final String UPDATE_PROPORTION_PROPERTY = "updateproportion";
-    /**
-     * The default proportion of transactions that are updates.
-     */
     public static final String UPDATE_PROPORTION_PROPERTY_DEFAULT = "0.05";
-    /**
-     * The name of the property for the proportion of transactions that are inserts.
-     */
+
+    // proportion of transactions that are inserts
     public static final String INSERT_PROPORTION_PROPERTY = "insertproportion";
-    /**
-     * The default proportion of transactions that are inserts.
-     */
     public static final String INSERT_PROPORTION_PROPERTY_DEFAULT = "0.0";
-    /**
-     * The name of the property for the the distribution of requests across the keyspace. Options are
-     * "uniform", "zipfian" and "latest"
-     */
+
+    // distribution of requests across the keyspace: "uniform", "zipfian", "latest", "slashdot"
     public static final String REQUEST_DISTRIBUTION_PROPERTY = "requestdistribution";
-    /**
-     * The default distribution of requests across the keyspace
-     */
     public static final String REQUEST_DISTRIBUTION_PROPERTY_DEFAULT = "uniform";
-    /**
-     * The name of the property for the order to insert records. Options are "ordered" or "hashed"
-     */
+
+    // order to insert records: "ordered" or "hashed"
     public static final String INSERT_ORDER_PROPERTY = "insertorder";
-    /**
-     * Default insert order.
-     */
     public static final String INSERT_ORDER_PROPERTY_DEFAULT = "hashed";
-    /**
-     * Percentage data items that constitute the hot set.
-     */
+
+    // percentage data items that constitute the hot set.
     public static final String HOTSPOT_DATA_FRACTION = "hotspotdatafraction";
-    /**
-     * Default value of the size of the hot set.
-     */
     public static final String HOTSPOT_DATA_FRACTION_DEFAULT = "0.2";
-    /**
-     * Percentage operations that access the hot set.
-     */
+
+    // percentage operations that access the hot set.
     public static final String HOTSPOT_OPN_FRACTION = "hotspotopnfraction";
-    /**
-     * Default value of the percentage operations accessing the hot set.
-     */
     public static final String HOTSPOT_OPN_FRACTION_DEFAULT = "0.8";
-    /**
-     * How many times to retry when insertion of a single item to a DB fails.
-     */
+
+    // how many times to retry when insertion of a single item to a DB fails.
     public static final String INSERTION_RETRY_LIMIT = "core_workload_insertion_retry_limit";
     public static final String INSERTION_RETRY_LIMIT_DEFAULT = "0";
-    /**
-     * On average, how long to wait between the retries, in seconds.
-     */
+
+    // on average, how long to wait between the retries, in seconds.
     public static final String INSERTION_RETRY_INTERVAL = "core_workload_insertion_retry_interval";
     public static final String INSERTION_RETRY_INTERVAL_DEFAULT = "3";
 
-    /**
-     * Generator object that produces field lengths.  The value of this depends on the properties that
-     * start with "FIELD_LENGTH_".
-     */
+    // skew and delay for Slashdot Generator
+    public static final String SLASHDOT_SKEW_PROPERTY = "skew";
+    public static final String SLASHDOT_DELAY_PROPERTY = "delay";
+    public static final String SLASHDOT_SKEW_DEFAULT = "1.75";
+    public static final String SLASHDOT_DELAY_DEFAULT = "10000"; // 10s
+
+    // generator object that produces field lengths. Depends on the properties that start with "FIELD_LENGTH_"
     IntegerGenerator fieldlengthgenerator;
     IntegerGenerator keysequence;
     DiscreteGenerator operationchooser;
     IntegerGenerator keychooser;
-    //Generator fieldchooser;
+
+    // generator fieldchooser;
     AcknowledgedCounterGenerator transactioninsertkeysequence;
     boolean orderedinserts;
     int insertionRetryLimit;
     int insertionRetryInterval;
-    /**
-     * Set to true if want to check correctness of reads. Must also
-     * be set to true during loading phase to function.
-     */
+
+    // set to true if want to check correctness of reads. Must also be set to true during loading phase to function.
     private boolean dataintegrity;
     private Measurements _measurements = Measurements.getMeasurements();
 
@@ -200,16 +116,12 @@ public class CoreWorkload extends Workload {
                 throw new WorkloadException("Couldn't read field length histogram file: " + fieldlengthhistogram, e);
             }
         } else {
-            throw new WorkloadException(
-                "Unknown field length distribution \"" + fieldlengthdistribution + "\"");
+            throw new WorkloadException("Unknown field length distribution \"" + fieldlengthdistribution + "\"");
         }
         return fieldlengthgenerator;
     }
 
-    /**
-     * Initialize the scenario.
-     * Called once, in the main client thread, before any operations are started.
-     */
+    // Initialize the scenario. Called once, in the main client thread, before any operations are started.
     public void init(Properties p) throws WorkloadException {
         fieldlengthgenerator = CoreWorkload.getFieldLengthGenerator(p);
 
@@ -218,10 +130,8 @@ public class CoreWorkload extends Workload {
         double insertproportion = Double.parseDouble(p.getProperty(INSERT_PROPORTION_PROPERTY, INSERT_PROPORTION_PROPERTY_DEFAULT));
         String requestdistrib = p.getProperty(REQUEST_DISTRIBUTION_PROPERTY, REQUEST_DISTRIBUTION_PROPERTY_DEFAULT);
         int insertstart = Integer.parseInt(p.getProperty(INSERT_START_PROPERTY, INSERT_START_PROPERTY_DEFAULT));
-
         dataintegrity = Boolean.parseBoolean(p.getProperty(DATA_INTEGRITY_PROPERTY, DATA_INTEGRITY_PROPERTY_DEFAULT));
-        // Confirm that fieldlengthgenerator returns a constant if data
-        // integrity check requested.
+        // Confirm that fieldlengthgenerator returns a constant if data integrity check requested.
         if (dataintegrity && !(p.getProperty(FIELD_LENGTH_DISTRIBUTION_PROPERTY, FIELD_LENGTH_DISTRIBUTION_PROPERTY_DEFAULT)).equals("constant")) {
             System.err.println("Must have constant field size to check data integrity.");
             System.exit(-1);
@@ -242,21 +152,23 @@ public class CoreWorkload extends Workload {
         if (readproportion > 0) {
             operationchooser.addValue(readproportion, "READ");
         }
-
         if (updateproportion > 0) {
             operationchooser.addValue(updateproportion, "UPDATE");
         }
-
         if (insertproportion > 0) {
             operationchooser.addValue(insertproportion, "INSERT");
         }
 
         transactioninsertkeysequence = new AcknowledgedCounterGenerator(1);
-        if (requestdistrib.compareTo("uniform") == 0) {
+        if (requestdistrib.equals("slashdot")) {
+            int recordCount = Integer.parseInt(p.getProperty(Client.RECORD_COUNT_PROPERTY, Client.DEFAULT_RECORD_COUNT));
+            double skew = Double.parseDouble(p.getProperty(SLASHDOT_SKEW_PROPERTY, SLASHDOT_SKEW_DEFAULT));
+            int delay = Integer.parseInt(p.getProperty(SLASHDOT_DELAY_PROPERTY, SLASHDOT_DELAY_DEFAULT));
+            keychooser = new SlashdotGenerator(recordCount, skew, delay);
+        } else if (requestdistrib.compareTo("uniform") == 0) {
             keychooser = new UniformIntegerGenerator(0, 1);
         } else if (requestdistrib.compareTo("zipfian") == 0) {
-            // it does this by generating a random "next key" in part by taking the modulus over the
-            // number of keys.
+            // it does this by generating a random "next key" in part by taking the modulus over the number of keys.
             // If the number of keys changes, this would shift the modulus, and we don't want that to
             // change which keys are popular so we'll actually construct the scrambled zipfian generator
             // with a keyspace that is larger than exists at the beginning of the test. that is, we'll predict
@@ -264,10 +176,8 @@ public class CoreWorkload extends Workload {
             // plus the number of predicted keys as the total keyspace. then, if the generator picks a key
             // that hasn't been inserted yet, will just ignore it and pick another key. this way, the size of
             // the keyspace doesn't change from the perspective of the scrambled zipfian generator
-
             int opcount = Integer.parseInt(p.getProperty(Client.OPERATION_COUNT_PROPERTY));
             int expectednewkeys = (int) ((opcount) * insertproportion * 2.0); // 2 is fudge factor
-
             keychooser = new ScrambledZipfianGenerator(expectednewkeys);
         } else if (requestdistrib.compareTo("latest") == 0) {
             keychooser = new SkewedLatestGenerator(transactioninsertkeysequence);
@@ -275,18 +185,13 @@ public class CoreWorkload extends Workload {
             double hotsetfraction = Double.parseDouble(p.getProperty(HOTSPOT_DATA_FRACTION, HOTSPOT_DATA_FRACTION_DEFAULT));
             double hotopnfraction = Double.parseDouble(p.getProperty(HOTSPOT_OPN_FRACTION, HOTSPOT_OPN_FRACTION_DEFAULT));
             keychooser = new HotspotIntegerGenerator(0, 1, hotsetfraction, hotopnfraction);
-        } else if (requestdistrib.equals("slashdot")) {
-            int recordCount = Integer.parseInt(p.getProperty(Client.RECORD_COUNT_PROPERTY, Client.DEFAULT_RECORD_COUNT));
-            keychooser = new SlashdotGenerator(recordCount);
         } else {
             throw new WorkloadException("Unknown request distribution \"" + requestdistrib + "\"");
         }
 
-        insertionRetryLimit = Integer.parseInt(p.getProperty(
-            INSERTION_RETRY_LIMIT, INSERTION_RETRY_LIMIT_DEFAULT));
+        insertionRetryLimit = Integer.parseInt(p.getProperty(INSERTION_RETRY_LIMIT, INSERTION_RETRY_LIMIT_DEFAULT));
 
-        insertionRetryInterval = Integer.parseInt(p.getProperty(
-            INSERTION_RETRY_INTERVAL, INSERTION_RETRY_INTERVAL_DEFAULT));
+        insertionRetryInterval = Integer.parseInt(p.getProperty(INSERTION_RETRY_INTERVAL, INSERTION_RETRY_INTERVAL_DEFAULT));
     }
 
     public String buildKeyName(long keynum) {
