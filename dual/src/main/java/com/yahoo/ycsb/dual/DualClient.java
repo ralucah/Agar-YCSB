@@ -95,7 +95,7 @@ public class DualClient extends DB {
 
     @Override
     public void init() throws DBException {
-        logger.debug("DualClient.init() start");
+        logger.info("DualClient.init() start");
         properties = getProperties();
 
         initS3();
@@ -107,7 +107,7 @@ public class DualClient extends DB {
         logger.debug("threads num: " + threadsNum);
         executor = Executors.newFixedThreadPool(threadsNum);
 
-        logger.debug("DualClient.init() end");
+        logger.info("DualClient.init() end");
     }
 
     @Override
