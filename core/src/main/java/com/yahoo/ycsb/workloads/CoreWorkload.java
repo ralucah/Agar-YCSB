@@ -5,7 +5,6 @@ import com.yahoo.ycsb.generator.*;
 import com.yahoo.ycsb.measurements.Measurements;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Properties;
 
 /**
@@ -35,10 +34,6 @@ public class CoreWorkload extends Workload {
     // for histogram distribution
     public static final String FIELDLENGTH_HISTOGRAM_FILE_PROPERTY = "fieldlengthhistogram";
     public static final String FIELDLENGTH_HISTOGRAM_FILE_PROPERTY_DEFAULT = "hist.txt";
-
-    // check returned data or not
-    public static final String DATA_INTEGRITY_PROPERTY = "dataintegrity";
-    public static final String DATA_INTEGRITY_PROPERTY_DEFAULT = "false";
 
     // proportion of transactions that are read
     public static final String READ_PROPORTION_PROPERTY = "readproportion";
@@ -95,7 +90,6 @@ public class CoreWorkload extends Workload {
     int insertionRetryInterval;
 
     // set to true if want to check correctness of reads. Must also be set to true during loading phase to function.
-    private boolean dataintegrity;
     private Measurements _measurements = Measurements.getMeasurements();
 
     protected static IntegerGenerator getFieldLengthGenerator(Properties p) throws WorkloadException {
@@ -130,12 +124,6 @@ public class CoreWorkload extends Workload {
         double insertproportion = Double.parseDouble(p.getProperty(INSERT_PROPORTION_PROPERTY, INSERT_PROPORTION_PROPERTY_DEFAULT));
         String requestdistrib = p.getProperty(REQUEST_DISTRIBUTION_PROPERTY, REQUEST_DISTRIBUTION_PROPERTY_DEFAULT);
         int insertstart = Integer.parseInt(p.getProperty(INSERT_START_PROPERTY, INSERT_START_PROPERTY_DEFAULT));
-        dataintegrity = Boolean.parseBoolean(p.getProperty(DATA_INTEGRITY_PROPERTY, DATA_INTEGRITY_PROPERTY_DEFAULT));
-        // Confirm that fieldlengthgenerator returns a constant if data integrity check requested.
-        if (dataintegrity && !(p.getProperty(FIELD_LENGTH_DISTRIBUTION_PROPERTY, FIELD_LENGTH_DISTRIBUTION_PROPERTY_DEFAULT)).equals("constant")) {
-            System.err.println("Must have constant field size to check data integrity.");
-            System.exit(-1);
-        }
 
         if (p.getProperty(INSERT_ORDER_PROPERTY, INSERT_ORDER_PROPERTY_DEFAULT).compareTo("hashed") == 0) {
             orderedinserts = false;
@@ -203,7 +191,7 @@ public class CoreWorkload extends Workload {
 
     private byte[] buildDeterministicValue(String key) {
         int size = fieldlengthgenerator.nextInt();
-        StringBuilder sb = new StringBuilder(size);
+        /*StringBuilder sb = new StringBuilder(size);
         sb.append(key);
         while (sb.length() < size) {
             sb.append(':');
@@ -211,7 +199,8 @@ public class CoreWorkload extends Workload {
         }
         sb.setLength(size);
         byte[] value = sb.toString().getBytes();
-        return value;
+        return value;*/
+        return new byte[size];
     }
 
     /**
@@ -277,28 +266,6 @@ public class CoreWorkload extends Workload {
         return true;
     }
 
-    /**
-     * Results are reported in the first three buckets of the histogram under
-     * the label "VERIFY".
-     * Bucket 0 means the expected data was returned.
-     * Bucket 1 means incorrect data was returned.
-     * Bucket 2 means null data was returned when some data was expected.
-     */
-    protected void verifyResult(String key, byte[] result) {
-        Status verifyStatus = Status.OK;
-        long startTime = System.nanoTime();
-        if (result != null) {
-            if (Arrays.equals(result, buildDeterministicValue(key)) == false)
-                verifyStatus = Status.UNEXPECTED_STATE;
-        } else {
-            // This assumes that null data is never valid
-            verifyStatus = Status.ERROR;
-        }
-        long endTime = System.nanoTime();
-        _measurements.measure("VERIFY", (int) (endTime - startTime) / 1000);
-        _measurements.reportStatus("VERIFY", verifyStatus);
-    }
-
     int nextKeynum() {
         int keynum;
         if (keychooser instanceof ExponentialGenerator) {
@@ -319,9 +286,6 @@ public class CoreWorkload extends Workload {
         String keyname = buildKeyName(keynum);
         //System.out.println(keynum + " " + keyname);
         byte[] result = db.read(keyname);
-        if (dataintegrity) {
-            verifyResult(keyname, result);
-        }
     }
 
     public void doTransactionUpdate(DB db) {

@@ -19,21 +19,19 @@ import java.util.concurrent.*;
  - there is one S3 bucket per Amazon region
  */
 
-public class BackendClient extends DB {
+public class ECCacheClient extends DB {
     public static String S3_ZONES = "s3.zones";
     public static String S3_REGIONS_PROPERTIES = "s3.regions";
     public static String S3_ENDPOINTS_PROPERTIES = "s3.endpoints";
     public static String S3_BUCKETS_PROPERTIES = "s3.buckets";
-
+    public static String MEMCACHED_SERVERS_PROPERTY = "memcached.servers";
     public static String LONGHAIR_K_PROPERTY = "longhair.k";
     public static String LONGHAIR_K_DEFAULT = "3";
     public static String LONGHAIR_M_PROPERTY = "longhair.m";
     public static String LONGHAIR_M_DEFAULT = "2";
-
     public static String EXECUTOR_THREADS_PROPERTY = "executor.threads";
     public static String EXECUTOR_THREADS_DEFAULT = "5";
-    protected static Logger logger = Logger.getLogger(BackendClient.class);
-
+    protected static Logger logger = Logger.getLogger(CacheClient.class);
     private Properties properties;
 
     // S3 bucket names mapped to connections to AWS S3 buckets
@@ -41,6 +39,8 @@ public class BackendClient extends DB {
 
     // for concurrent processing
     private ExecutorService executor;
+
+    private List<MemcachedConnection> memConnections;
 
     // TODO Assumption: one bucket per region (num regions = num endpoints = num buckets)
     private void initS3() {
@@ -87,6 +87,14 @@ public class BackendClient extends DB {
         }
     }
 
+    private void initMemcachedServers() throws DBException {
+        List<String> memHosts = Arrays.asList(properties.getProperty(MEMCACHED_SERVERS_PROPERTY));
+        for (String memHost : memHosts) {
+            memConnections.add(new MemcachedConnection(memHost));
+            logger.debug("Memcached connection " + memHost);
+        }
+    }
+
     @Override
     public void init() throws DBException {
         logger.debug("DualClient.init() start");
@@ -94,6 +102,7 @@ public class BackendClient extends DB {
 
         initS3();
         initLonghair();
+        initMemcachedServers();
 
         // init executor service
         final int threadsNum = Integer.valueOf(properties.getProperty(EXECUTOR_THREADS_PROPERTY, EXECUTOR_THREADS_DEFAULT));
@@ -118,8 +127,7 @@ public class BackendClient extends DB {
         return block;
     }
 
-    @Override
-    public byte[] read(final String key) {
+    private byte[] readFromBackend(final String key) {
         // read blocks in parallel
         CompletionService<byte[]> completionService = new ExecutorCompletionService<byte[]>(executor);
         for (int i = 0; i < LonghairLib.k + LonghairLib.m; i++) {
@@ -156,9 +164,47 @@ public class BackendClient extends DB {
         if (success >= LonghairLib.k) {
             data = LonghairLib.decode(blocks);
         }
+        return data;
+    }
 
-        if (data != null)
-            logger.info("Read BACKEND " + key + " " + data.length + " bytes " + ClientUtils.bytesToHash(data));
+    private byte[] readFromCache(String key) {
+        //byte[] data = memConnection.read(key);
+        // return data;
+        return null;
+    }
+
+    private void cacheData(String key, byte[] data) {
+        //Status status = memConnection.insert(key, data);
+        /*if (status.equals(Status.OK) == false)
+            logger.debug("Error caching data " + key);
+        else
+            logger.debug("Cached data " + key);*/
+    }
+
+    @Override
+    public byte[] read(final String key) {
+        byte[] data = readFromCache(key);
+        if (data == null) {
+            data = readFromBackend(key);
+            if (data != null) {
+                logger.info("Read BACKEND " + key + " " + data.length + " bytes " + ClientUtils.bytesToHash(data));
+                final byte[] dataFin = data;
+                executor.submit(new Runnable() {
+                    @Override
+                    public void run() {
+                        cacheData(key, dataFin);
+                    }
+                });
+            }
+        } else
+            logger.info("Read CACHE " + key + " " + data.length + " bytes " + ClientUtils.bytesToHash(data));
+
+        // for debugging purposes
+        /*try {
+            Thread.sleep(600000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }*/
 
         return data;
     }
@@ -181,6 +227,9 @@ public class BackendClient extends DB {
     public Status insert(String key, byte[] value) {
         Status status = Status.OK;
 
+        // generate bytes array based on values
+        //byte[] data = ClientUtils.valuesToBytes(values);
+
         // encode data
         Set<byte[]> encodedBlocks = LonghairLib.encode(value);
 
@@ -202,7 +251,6 @@ public class BackendClient extends DB {
         int success = 0;
         int errors = 0;
         while (success < encodedBlocks.size()) {
-            logger.debug("success: " + success);
             Future<Status> statusFuture = null;
             try {
                 statusFuture = completionService.take();

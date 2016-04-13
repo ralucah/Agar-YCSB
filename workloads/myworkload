@@ -1,4 +1,4 @@
-recordcount=100
+recordcount=500
 operationcount=10
 workload=com.yahoo.ycsb.workloads.CoreWorkload
 
