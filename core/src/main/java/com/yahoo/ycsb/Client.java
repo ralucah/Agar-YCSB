@@ -392,7 +392,7 @@ public class Client {
         System.out.println("-target n: attempt to do n operations per second (default: unlimited) - \"-p target\"");
         System.out.println("-load:  run the loading phase of the workload");
         System.out.println("-t:  run the transactions phase of the workload (default)");
-        System.out.println("-db dbname: specify the name of the DB to use (default: com.yahoo.ycsb.BasicDB) - \"-p db\"");
+        System.out.println("-db dbname: specify the name of the DB to use (default: com.yahoo.ycsb.dual.BackendClient) - \"-p db\"");
         System.out.println("-P propertyfile: load properties from the given file");
         System.out.println("-s:  show status during run (default: no status)");
         System.out.println("-l label:  use label for status (e.g. to label one experiment out of a whole batch)");
@@ -597,7 +597,7 @@ public class Client {
 
         //get number of threads, target and db
         threadcount = Integer.parseInt(props.getProperty(THREAD_COUNT_PROPERTY, "1"));
-        dbname = props.getProperty(DB_PROPERTY, "com.yahoo.ycsb.BasicDB");
+        dbname = props.getProperty(DB_PROPERTY, "com.yahoo.ycsb.dual.BackendClient");
         target = Integer.parseInt(props.getProperty(TARGET_PROPERTY, "0"));
 
         //compute the target throughput

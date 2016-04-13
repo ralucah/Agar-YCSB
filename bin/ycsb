@@ -46,15 +46,13 @@ COMMANDS = {
         "command"     : "-t",
         "description" : "Execute the transaction phase",
         "main"        : "com.yahoo.ycsb.Client",
-    },
-    "proxy" : {
-        "command"     : "-proxy",
-        "description" : "Start proxy",
-        "main"        : "com.yahoo.ycsb.proxy.Bootstrapper",
-    },
+    }
 }
 
-DB_CLASSNAME = "com.yahoo.ycsb.dual.DualClient"
+DATABASES = {
+    "backend" : "com.yahoo.ycsb.dual.BackendClient",
+    "cache" : "com.yahoo.ycsb.dual.CacheClient"
+}
 BINDING = "dual"
 
 OPTIONS = {
@@ -160,6 +158,8 @@ def main():
                    help="""Additional arguments to pass to 'java', e.g. '-Xmx4g'""")
     p.add_argument("command", choices=sorted(COMMANDS),
                    help="""Command to run.""")
+    p.add_argument("database", choices=sorted(DATABASES),
+                   help="""Database to test.""")
 
     # get home dir
     ycsb_home = get_ycsb_home()
@@ -174,26 +174,22 @@ def main():
 
     # get args
     args, remaining = p.parse_known_args()
+    #print(args)
+    #print(remaining)
+    #sys.exit(1)
     command = COMMANDS[args.command]["command"]
     main_classname = COMMANDS[args.command]["main"]
+    db_classname = DATABASES[args.database]
     #print("command: " + command)
     #print("main_classname: " + main_classname)
 
-    if command != "-proxy":
-        # db location
-        db_location = BINDING
-        project = BINDING + "-binding"
-        db_dir = os.path.join(ycsb_home, db_location)
-    else:
-        db_location = "proxy"
-        project = "proxy"
-        db_dir = os.path.join(ycsb_home, db_location)
+    db_location = BINDING
+    project = BINDING + "-binding"
+    db_dir = os.path.join(ycsb_home, db_location)
 
     #print("db_location: " + db_location)
     #print("project: " + project)
     #print("db_dir: " + db_dir)
-
-
 
     # goes first so we can rely on side-effect of package
     maven_says = get_classpath_from_maven(project)
@@ -207,14 +203,9 @@ def main():
     if args.classpath:
         classpath = os.pathsep.join([args.classpath, classpath])
 
-    if command != "-proxy":
-        ycsb_command = ([java] + args.jvm_args +
+    ycsb_command = ([java] + args.jvm_args +
                     ["-cp", classpath,
-                     main_classname, "-db", DB_CLASSNAME] + remaining)
-    else:
-        ycsb_command = ([java] + args.jvm_args +
-                    ["-cp", classpath,
-                     main_classname] + remaining)
+                     main_classname, "-db", db_classname] + remaining)
     #print(ycsb_command)
 
     ycsb_command.append(command)

@@ -19,7 +19,7 @@ import java.util.concurrent.*;
  - there is one S3 bucket per Amazon region
  */
 
-public class DualClient extends DB {
+public class CacheClient extends DB {
     public static String S3_ZONES = "s3.zones";
     public static String S3_REGIONS_PROPERTIES = "s3.regions";
     public static String S3_ENDPOINTS_PROPERTIES = "s3.endpoints";
@@ -31,7 +31,7 @@ public class DualClient extends DB {
     public static String LONGHAIR_M_DEFAULT = "2";
     public static String EXECUTOR_THREADS_PROPERTY = "executor.threads";
     public static String EXECUTOR_THREADS_DEFAULT = "5";
-    protected static Logger logger = Logger.getLogger(DualClient.class);
+    protected static Logger logger = Logger.getLogger(CacheClient.class);
     private Properties properties;
 
     // S3 bucket names mapped to connections to AWS S3 buckets
@@ -95,7 +95,7 @@ public class DualClient extends DB {
 
     @Override
     public void init() throws DBException {
-        logger.info("DualClient.init() start");
+        logger.debug("DualClient.init() start");
         properties = getProperties();
 
         initS3();
@@ -107,7 +107,7 @@ public class DualClient extends DB {
         logger.debug("threads num: " + threadsNum);
         executor = Executors.newFixedThreadPool(threadsNum);
 
-        logger.info("DualClient.init() end");
+        logger.debug("DualClient.init() end");
     }
 
     @Override
