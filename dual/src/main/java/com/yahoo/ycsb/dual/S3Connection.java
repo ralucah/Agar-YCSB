@@ -25,7 +25,7 @@ import com.amazonaws.regions.Region;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.model.*;
-import com.yahoo.ycsb.DBException;
+import com.yahoo.ycsb.ClientException;
 import com.yahoo.ycsb.Status;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -71,7 +71,7 @@ public class S3Connection {
     private AmazonS3Client awsClient;
     private String bucket;
 
-    public S3Connection(String bucket, String region, String endPoint) throws DBException {
+    public S3Connection(String bucket, String region, String endPoint) throws ClientException {
         logger.debug("S3Client.establishConnection(" + region + "," + endPoint + ") bucket: " + bucket);
         org.apache.log4j.Logger.getLogger("com.amazonaws").setLevel(Level.OFF);
 
@@ -103,7 +103,7 @@ public class S3Connection {
         } catch (Exception e) {
             logger.error("Could not connect to S3 storage: " + e.toString());
             e.printStackTrace();
-            throw new DBException(e);
+            throw new ClientException(e);
         }
     }
 
@@ -147,7 +147,7 @@ public class S3Connection {
      * Clean up any state for this storage.
      * Called once per S3 instance;
      */
-    public void cleanup() throws DBException {
+    public void cleanup() throws ClientException {
         try {
             awsClient.shutdown();
             logger.debug("The client is shutdown successfully");

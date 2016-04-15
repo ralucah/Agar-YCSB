@@ -17,7 +17,7 @@
 
 package com.yahoo.ycsb.dual;
 
-import com.yahoo.ycsb.DBException;
+import com.yahoo.ycsb.ClientException;
 import com.yahoo.ycsb.Status;
 import net.spy.memcached.ConnectionFactoryBuilder;
 import net.spy.memcached.FailureMode;
@@ -68,7 +68,7 @@ public class MemcachedConnection {
     private MemcachedClient client;
     private String host;
 
-    public MemcachedConnection(String hostsStr) throws DBException {
+    public MemcachedConnection(String hostsStr) throws ClientException {
         this.host = hostsStr;
         // turn off logging for spy memcached
         System.setProperty("net.spy.log.LoggerImpl", "net.spy.memcached.compat.log.Log4JLogger");
@@ -82,7 +82,7 @@ public class MemcachedConnection {
         try {
             client = createMemcachedClient();
         } catch (Exception e) {
-            throw new DBException(e);
+            throw new ClientException(e);
         }
     }
 
@@ -185,7 +185,7 @@ public class MemcachedConnection {
         return new Status("ERROR", future.getStatus().getMessage());
     }
 
-    public void cleanup() throws DBException {
+    public void cleanup() throws ClientException {
         if (client != null) {
             memcachedClient().shutdown(shutdownTimeoutMillis, MILLISECONDS);
         }

@@ -49,9 +49,11 @@ COMMANDS = {
     }
 }
 
-DATABASES = {
+CLIENTS = {
     "backend" : "com.yahoo.ycsb.dual.BackendClient",
-    "cache" : "com.yahoo.ycsb.dual.CacheClient"
+    "allcache" : "com.yahoo.ycsb.dual.AllCachesClient",
+    "fixcache" : "com.yahoo.ycsb.dual.FixCacheClient",
+    "eccache" : "com.yahoo.ycsb.dual.ECCacheClient"
 }
 BINDING = "dual"
 
@@ -67,7 +69,7 @@ OPTIONS = {
 
 def usage():
     output = io.BytesIO()
-    print >> output, "%s command database [options]" % sys.argv[0]
+    print >> output, "%s command client [options]" % sys.argv[0]
 
     print >> output, "\nCommands:"
     for command in sorted(COMMANDS.keys()):
@@ -158,8 +160,8 @@ def main():
                    help="""Additional arguments to pass to 'java', e.g. '-Xmx4g'""")
     p.add_argument("command", choices=sorted(COMMANDS),
                    help="""Command to run.""")
-    p.add_argument("database", choices=sorted(DATABASES),
-                   help="""Database to test.""")
+    p.add_argument("client", choices=sorted(CLIENTS),
+                   help="""Client to test.""")
 
     # get home dir
     ycsb_home = get_ycsb_home()
@@ -179,33 +181,33 @@ def main():
     #sys.exit(1)
     command = COMMANDS[args.command]["command"]
     main_classname = COMMANDS[args.command]["main"]
-    db_classname = DATABASES[args.database]
+    client_classname = CLIENTS[args.client]
     #print("command: " + command)
     #print("main_classname: " + main_classname)
 
-    db_location = BINDING
+    client_location = BINDING
     project = BINDING + "-binding"
-    db_dir = os.path.join(ycsb_home, db_location)
+    client_dir = os.path.join(ycsb_home, client_location)
 
-    #print("db_location: " + db_location)
+    #print("client_location: " + client_location)
     #print("project: " + project)
-    #print("db_dir: " + db_dir)
+    #print("client_dir: " + client_dir)
 
     # goes first so we can rely on side-effect of package
     maven_says = get_classpath_from_maven(project)
     #print("maven_says: " + maven_says)
 
     # classpath
-    cp = find_jars(os.path.join(db_dir, "target"), project + "*.jar")
+    cp = find_jars(os.path.join(client_dir, "target"), project + "*.jar")
     cp.append(maven_says)
-    cp.insert(0, os.path.join(db_dir, "conf"))
+    cp.insert(0, os.path.join(client_dir, "conf"))
     classpath = os.pathsep.join(cp)
     if args.classpath:
         classpath = os.pathsep.join([args.classpath, classpath])
 
     ycsb_command = ([java] + args.jvm_args +
                     ["-cp", classpath,
-                     main_classname, "-db", db_classname] + remaining)
+                     main_classname, "-client", client_classname] + remaining)
     #print(ycsb_command)
 
     ycsb_command.append(command)

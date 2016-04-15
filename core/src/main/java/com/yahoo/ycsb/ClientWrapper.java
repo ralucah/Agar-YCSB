@@ -27,20 +27,20 @@ import java.util.Properties;
  * Wrapper around a "real" DB that measures latencies and counts return codes.
  * Also reports latency separately between OK and failed operations.
  */
-public class DBWrapper extends DB {
+public class ClientWrapper extends ClientBlueprint {
     private static final String REPORT_LATENCY_FOR_EACH_ERROR_PROPERTY =
         "reportlatencyforeacherror";
     private static final String REPORT_LATENCY_FOR_EACH_ERROR_PROPERTY_DEFAULT =
         "false";
     private static final String LATENCY_TRACKED_ERRORS_PROPERTY =
         "latencytrackederrors";
-    private DB _db;
+    private ClientBlueprint _clientBlueprint;
     private Measurements _measurements;
     private boolean reportLatencyForEachError = false;
     private HashSet<String> latencyTrackedErrors = new HashSet<String>();
 
-    public DBWrapper(DB db) {
-        _db = db;
+    public ClientWrapper(ClientBlueprint clientBlueprint) {
+        _clientBlueprint = clientBlueprint;
         _measurements = Measurements.getMeasurements();
     }
 
@@ -48,22 +48,22 @@ public class DBWrapper extends DB {
      * Get the set of properties for this DB.
      */
     public Properties getProperties() {
-        return _db.getProperties();
+        return _clientBlueprint.getProperties();
     }
 
     /**
      * Set the properties for this DB.
      */
     public void setProperties(Properties p) {
-        _db.setProperties(p);
+        _clientBlueprint.setProperties(p);
     }
 
     /**
      * Initialize any state for this DB.
      * Called once per DB instance; there is one DB instance per client thread.
      */
-    public void init() throws DBException {
-        _db.init();
+    public void init() throws ClientException {
+        _clientBlueprint.init();
 
         this.reportLatencyForEachError = Boolean.parseBoolean(getProperties().
             getProperty(REPORT_LATENCY_FOR_EACH_ERROR_PROPERTY,
@@ -87,10 +87,10 @@ public class DBWrapper extends DB {
      * Cleanup any state for this DB.
      * Called once per DB instance; there is one DB instance per client thread.
      */
-    public void cleanup() throws DBException {
+    public void cleanup() throws ClientException {
         long ist = _measurements.getIntendedtartTimeNs();
         long st = System.nanoTime();
-        _db.cleanup();
+        _clientBlueprint.cleanup();
         long en = System.nanoTime();
         measure("CLEANUP", Status.OK, ist, st, en);
     }
@@ -105,7 +105,7 @@ public class DBWrapper extends DB {
     public byte[] read(String key) {
         long ist = _measurements.getIntendedtartTimeNs();
         long st = System.nanoTime();
-        byte[] res = _db.read(key);
+        byte[] res = _clientBlueprint.read(key);
         long en = System.nanoTime();
         Status status = Status.OK;
         if (res == null)
@@ -142,7 +142,7 @@ public class DBWrapper extends DB {
     public Status update(String key, byte[] value) {
         long ist = _measurements.getIntendedtartTimeNs();
         long st = System.nanoTime();
-        Status res = _db.update(key, value);
+        Status res = _clientBlueprint.update(key, value);
         long en = System.nanoTime();
         measure("UPDATE", res, ist, st, en);
         _measurements.reportStatus("UPDATE", res);
@@ -160,7 +160,7 @@ public class DBWrapper extends DB {
     public Status insert(String key, byte[] value) {
         long ist = _measurements.getIntendedtartTimeNs();
         long st = System.nanoTime();
-        Status res = _db.insert(key, value);
+        Status res = _clientBlueprint.insert(key, value);
         long en = System.nanoTime();
         measure("INSERT", res, ist, st, en);
         _measurements.reportStatus("INSERT", res);
@@ -176,7 +176,7 @@ public class DBWrapper extends DB {
     public Status delete(String key) {
         long ist = _measurements.getIntendedtartTimeNs();
         long st = System.nanoTime();
-        Status res = _db.delete(key);
+        Status res = _clientBlueprint.delete(key);
         long en = System.nanoTime();
         measure("DELETE", res, ist, st, en);
         _measurements.reportStatus("DELETE", res);

@@ -38,7 +38,7 @@ import java.util.Properties;
  * target application.  For the sake of comparison between experiments we also 
  * recommend you explain the semantics you chose when presenting performance results.
  */
-public abstract class DB {
+public abstract class ClientBlueprint {
     /**
      * Properties for configuring this DB.
      */
@@ -52,24 +52,24 @@ public abstract class DB {
     }
 
     /**
-     * Set the properties for this DB.
+     * Set the properties for this Client.
      */
     public void setProperties(Properties p) {
         _p = p;
     }
 
     /**
-     * Initialize any state for this DB.
+     * Initialize any state for this Client.
      * Called once per DB instance; there is one DB instance per client thread.
      */
-    public void init() throws DBException {
+    public void init() throws ClientException {
     }
 
     /**
      * Cleanup any state for this DB.
      * Called once per DB instance; there is one DB instance per client thread.
      */
-    public void cleanup() throws DBException {
+    public void cleanup() throws ClientException {
     }
 
     public abstract byte[] read(String key);

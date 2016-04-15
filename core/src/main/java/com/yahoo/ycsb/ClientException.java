@@ -20,29 +20,29 @@ package com.yahoo.ycsb;
 /**
  * Something bad happened while interacting with the database.
  */
-public class DBException extends Exception
+public class ClientException extends Exception
 {
       /**
 	 * 
 	 */
 	private static final long serialVersionUID = 6646883591588721475L;
 
-	public DBException(String message) 
+    public ClientException(String message)
       {
 	 super(message);
       }
-      
-      public DBException()
+
+    public ClientException()
       {
 	 super();
       }
 
-      public DBException(String message, Throwable cause)
+    public ClientException(String message, Throwable cause)
       {
 	 super(message,cause);
       }
-      
-      public DBException(Throwable cause)
+
+    public ClientException(Throwable cause)
       {
 	 super(cause);
       }

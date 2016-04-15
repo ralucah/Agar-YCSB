@@ -1,7 +1,7 @@
 package com.yahoo.ycsb.dual;
 
-// -client com.yahoo.ycsb.dual.BackendClient -p fieldlength=100 -s -P workloads/myworkload -load
-// -client com.yahoo.ycsb.dual.BackendClient -p skew=1.5 -p delay=1000 -p fieldlength=100 -s -P workloads/myworkload
+// -db com.yahoo.ycsb.dual.DualClient -p fieldlength=100 -s -P workloads/myworkload -load
+// -db com.yahoo.ycsb.dual.DualClient -p fieldlength=100 -s -P workloads/myworkload
 
 import com.yahoo.ycsb.ClientBlueprint;
 import com.yahoo.ycsb.ClientException;
@@ -17,23 +17,21 @@ import java.util.concurrent.*;
  Assumptions:
  - number of Amazon regions = k + m
  - there is one S3 bucket per Amazon region
-*/
+ */
 
-public class BackendClient extends ClientBlueprint {
+public class FixCacheClient extends ClientBlueprint {
     public static String S3_ZONES = "s3.zones";
     public static String S3_REGIONS_PROPERTIES = "s3.regions";
     public static String S3_ENDPOINTS_PROPERTIES = "s3.endpoints";
     public static String S3_BUCKETS_PROPERTIES = "s3.buckets";
-
+    public static String MEMCACHED_SERVER_PROPERTY = "memcached.servers";
     public static String LONGHAIR_K_PROPERTY = "longhair.k";
     public static String LONGHAIR_K_DEFAULT = "3";
     public static String LONGHAIR_M_PROPERTY = "longhair.m";
     public static String LONGHAIR_M_DEFAULT = "2";
-
     public static String EXECUTOR_THREADS_PROPERTY = "executor.threads";
     public static String EXECUTOR_THREADS_DEFAULT = "5";
-    protected static Logger logger = Logger.getLogger(BackendClient.class);
-
+    protected static Logger logger = Logger.getLogger(AllCachesClient.class);
     private Properties properties;
 
     // S3 bucket names mapped to connections to AWS S3 buckets
@@ -41,6 +39,8 @@ public class BackendClient extends ClientBlueprint {
 
     // for concurrent processing
     private ExecutorService executor;
+
+    private List<MemcachedConnection> memConnections;
 
     // TODO Assumption: one bucket per region (num regions = num endpoints = num buckets)
     private void initS3() {
@@ -87,6 +87,16 @@ public class BackendClient extends ClientBlueprint {
         }
     }
 
+    private void initMemcachedServer() throws ClientException {
+        memConnections = new ArrayList<MemcachedConnection>();
+        List<String> memHosts = Arrays.asList(properties.getProperty(MEMCACHED_SERVER_PROPERTY).split("\\s*,\\s*"));
+        for (String memHost : memHosts) {
+            MemcachedConnection memConnection = new MemcachedConnection(memHost);
+            memConnections.add(memConnection);
+            logger.debug("Memcached connection " + memHost);
+        }
+    }
+
     @Override
     public void init() throws ClientException {
         logger.debug("DualClient.init() start");
@@ -94,6 +104,7 @@ public class BackendClient extends ClientBlueprint {
 
         initS3();
         initLonghair();
+        initMemcachedServer();
 
         // init executor service
         final int threadsNum = Integer.valueOf(properties.getProperty(EXECUTOR_THREADS_PROPERTY, EXECUTOR_THREADS_DEFAULT));
@@ -106,7 +117,7 @@ public class BackendClient extends ClientBlueprint {
     @Override
     public void cleanup() throws ClientException {
         logger.debug("Cleaning up.");
-        //executor.shutdown();
+        executor.shutdown();
     }
 
 
@@ -114,13 +125,11 @@ public class BackendClient extends ClientBlueprint {
         String blockKey = baseKey + blockNum;
         S3Connection s3Connection = s3Connections.get(blockNum);
         byte[] block = s3Connection.read(blockKey);
-        //logger.debug("ReadBlock " + blockNum + " " + blockKey + " " + ClientUtils.bytesToHash(block));
-        logger.debug("Read " + baseKey + " block" + blockNum + " " + block.length + "B bucket" + blockNum);
+        logger.debug("ReadBlock " + blockNum + " " + blockKey + " " + ClientUtils.bytesToHash(block));
         return block;
     }
 
-    @Override
-    public byte[] read(final String key) {
+    private byte[] readFromBackend(final String key) {
         // read blocks in parallel
         CompletionService<byte[]> completionService = new ExecutorCompletionService<byte[]>(executor);
         for (int i = 0; i < LonghairLib.k + LonghairLib.m; i++) {
@@ -157,10 +166,46 @@ public class BackendClient extends ClientBlueprint {
         if (success >= LonghairLib.k) {
             data = LonghairLib.decode(blocks);
         }
+        return data;
+    }
 
+    private byte[] readFromCache(String key) {
+        int memConnectionId = Math.abs(key.hashCode()) % memConnections.size();
+        MemcachedConnection memConnection = memConnections.get(memConnectionId);
+        byte[] data = memConnection.read(key);
         if (data != null)
-            logger.info("Read " + key + " " + data.length + "B " + ClientUtils.bytesToHash(data));
+            logger.info("Read CACHE " + key + " " + data.length + " bytes from " + memConnection.getHost());
+        return data;
+    }
 
+    private void cacheData(String key, byte[] data) {
+        int memConnectionId = Math.abs(key.hashCode()) % memConnections.size();
+        MemcachedConnection memConnection = memConnections.get(memConnectionId);
+        logger.debug("Cache " + key + " at " + memConnection.getHost());
+        Status status = memConnection.insert(key, data);
+        /*if (status.equals(Status.OK) == false)
+            logger.debug("Error caching data " + key);
+        else
+            logger.debug("Cached data " + key);*/
+    }
+
+    @Override
+    public byte[] read(final String key) {
+        byte[] data = readFromCache(key);
+        if (data == null) {
+            data = readFromBackend(key);
+            if (data != null) {
+                logger.info("Read BACKEND " + key + " " + data.length + " bytes " + ClientUtils.bytesToHash(data));
+                final byte[] dataFin = data;
+                executor.submit(new Runnable() {
+                    @Override
+                    public void run() {
+                        cacheData(key, dataFin);
+                    }
+                });
+            }
+        } //else
+        //logger.info("Read CACHE " + key + " " + data.length + " bytes " + ClientUtils.bytesToHash(data));
         return data;
     }
 
@@ -173,7 +218,7 @@ public class BackendClient extends ClientBlueprint {
         String blockKey = baseKey + blockNum;
         S3Connection s3Connection = s3Connections.get(blockNum);
         Status status = s3Connection.insert(blockKey, block);
-        logger.debug("Insert " + baseKey + " block" + blockNum + " " + block.length + "Bss bucket" + blockNum);
+        logger.debug("InsertBlock " + blockNum + " " + blockKey + " " + ClientUtils.bytesToHash(block));
         return status;
     }
 
@@ -181,6 +226,9 @@ public class BackendClient extends ClientBlueprint {
     @Override
     public Status insert(String key, byte[] value) {
         Status status = Status.OK;
+
+        // generate bytes array based on values
+        //byte[] data = ClientUtils.valuesToBytes(values);
 
         // encode data
         Set<byte[]> encodedBlocks = LonghairLib.encode(value);
@@ -206,27 +254,15 @@ public class BackendClient extends ClientBlueprint {
             Future<Status> statusFuture = null;
             try {
                 statusFuture = completionService.take();
-            } catch (InterruptedException e) {
-                logger.error("Exception completionService.take()");
-                //e.printStackTrace();
-            }
-            if (statusFuture != null) {
-                Status insertStatus = null;
-                try {
-                    insertStatus = statusFuture.get();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                } catch (ExecutionException e) {
-                    logger.error("Exception for block insert operation.");
-                    errors++;
-                    //e.printStackTrace();
-                }
+                Status insertStatus = statusFuture.get();
                 if (insertStatus == Status.OK)
                     success++;
                 else
                     errors++;
+            } catch (Exception e) {
+                errors++;
+                logger.error("Exception for block insert operation.");
             }
-
             if (errors > LonghairLib.m)
                 break;
         }
@@ -235,7 +271,7 @@ public class BackendClient extends ClientBlueprint {
         if (success < LonghairLib.k)
             status = Status.ERROR;
 
-        logger.info("Insert " + key + " " + value.length + "B " + ClientUtils.bytesToHash(value));
+        logger.info("Insert " + key + " " + value.length + " bytes " + ClientUtils.bytesToHash(value));
         return status;
     }
 

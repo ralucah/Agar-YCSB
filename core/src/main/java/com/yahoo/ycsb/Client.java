@@ -196,7 +196,7 @@ class ClientThread extends Thread {
 
     // Counts down each of the clients completing.
     private final CountDownLatch _completeLatch;
-    DB _db;
+    ClientBlueprint __client;
     boolean _dotransactions;
     Workload _workload;
     int _opcount;
@@ -211,7 +211,7 @@ class ClientThread extends Thread {
     /**
      * Constructor.
      *
-     * @param db                   the DB implementation to use
+     * @param client               the DB implementation to use
      * @param dotransactions       true to do transactions, false to insert data
      * @param workload             the workload to use
      * @param props                the properties defining the experiment
@@ -219,8 +219,8 @@ class ClientThread extends Thread {
      * @param targetperthreadperms target number of operations per thread per ms
      * @param completeLatch        The latch tracking the completion of all clients.
      */
-    public ClientThread(DB db, boolean dotransactions, Workload workload, Properties props, int opcount, double targetperthreadperms, CountDownLatch completeLatch) {
-        _db = db;
+    public ClientThread(ClientBlueprint client, boolean dotransactions, Workload workload, Properties props, int opcount, double targetperthreadperms, CountDownLatch completeLatch) {
+        __client = client;
         _dotransactions = dotransactions;
         _workload = workload;
         _opcount = opcount;
@@ -251,8 +251,8 @@ class ClientThread extends Thread {
     @Override
     public void run() {
         try {
-            _db.init();
-        } catch (DBException e) {
+            __client.init();
+        } catch (ClientException e) {
             e.printStackTrace();
             e.printStackTrace(System.out);
             return;
@@ -284,7 +284,7 @@ class ClientThread extends Thread {
 
                 while (((_opcount == 0) || (_opsdone < _opcount)) && !_workload.isStopRequested()) {
 
-                    if (!_workload.doTransaction(_db, _workloadstate)) {
+                    if (!_workload.doTransaction(__client, _workloadstate)) {
                         break;
                     }
 
@@ -297,7 +297,7 @@ class ClientThread extends Thread {
 
                 while (((_opcount == 0) || (_opsdone < _opcount)) && !_workload.isStopRequested()) {
 
-                    if (!_workload.doInsert(_db, _workloadstate)) {
+                    if (!_workload.doInsert(__client, _workloadstate)) {
                         break;
                     }
 
@@ -314,8 +314,8 @@ class ClientThread extends Thread {
 
         try {
             _measurements.setIntendedStartTimeNs(0);
-            _db.cleanup();
-        } catch (DBException e) {
+            __client.cleanup();
+        } catch (ClientException e) {
             e.printStackTrace();
             e.printStackTrace(System.out);
             return;
@@ -358,7 +358,7 @@ public class Client {
     public static final String WORKLOAD_PROPERTY = "workload";
 
     // The database class to be used.
-    public static final String DB_PROPERTY = "db";
+    public static final String CLIENT_PROPERTY = "client";
 
     // The exporter class to be used. The default is com.yahoo.ycsb.measurements.exporter.TextMeasurementsExporter.
     public static final String EXPORTER_PROPERTY = "exporter";
@@ -392,7 +392,7 @@ public class Client {
         System.out.println("-target n: attempt to do n operations per second (default: unlimited) - \"-p target\"");
         System.out.println("-load:  run the loading phase of the workload");
         System.out.println("-t:  run the transactions phase of the workload (default)");
-        System.out.println("-db dbname: specify the name of the DB to use (default: com.yahoo.ycsb.dual.BackendClient) - \"-p db\"");
+        System.out.println("-client clientname: specify the name of the Client to use (default: com.yahoo.ycsb.dual.BackendClient) - \"-p client\"");
         System.out.println("-P propertyfile: load properties from the given file");
         System.out.println("-s:  show status during run (default: no status)");
         System.out.println("-l label:  use label for status (e.g. to label one experiment out of a whole batch)");
@@ -458,7 +458,7 @@ public class Client {
 
     @SuppressWarnings("unchecked")
     public static void main(String[] args) {
-        String dbname;
+        String clientName;
         Properties props = new Properties();
         Properties fileprops = new Properties();
         boolean dotransactions = true;
@@ -503,13 +503,13 @@ public class Client {
             } else if (args[argindex].compareTo("-s") == 0) {
                 status = true;
                 argindex++;
-            } else if (args[argindex].compareTo("-db") == 0) {
+            } else if (args[argindex].compareTo("-client") == 0) {
                 argindex++;
                 if (argindex >= args.length) {
                     usageMessage();
                     System.exit(0);
                 }
-                props.setProperty(DB_PROPERTY, args[argindex]);
+                props.setProperty(CLIENT_PROPERTY, args[argindex]);
                 argindex++;
             } else if (args[argindex].compareTo("-l") == 0) {
                 argindex++;
@@ -595,9 +595,9 @@ public class Client {
 
         long maxExecutionTime = Integer.parseInt(props.getProperty(MAX_EXECUTION_TIME, "0"));
 
-        //get number of threads, target and db
+        //get number of threads, target and client
         threadcount = Integer.parseInt(props.getProperty(THREAD_COUNT_PROPERTY, "1"));
-        dbname = props.getProperty(DB_PROPERTY, "com.yahoo.ycsb.dual.BackendClient");
+        clientName = props.getProperty(CLIENT_PROPERTY, "com.yahoo.ycsb.dual.BackendClient");
         target = Integer.parseInt(props.getProperty(TARGET_PROPERTY, "0"));
 
         //compute the target throughput
@@ -678,11 +678,11 @@ public class Client {
         CountDownLatch completeLatch = new CountDownLatch(threadcount);
         final List<ClientThread> clients = new ArrayList<ClientThread>(threadcount);
         for (int threadid = 0; threadid < threadcount; threadid++) {
-            DB db = null;
+            ClientBlueprint client = null;
             try {
-                db = DBFactory.newDB(dbname, props);
+                client = ClientFactory.newDB(clientName, props);
             } catch (UnknownDBException e) {
-                System.out.println("Unknown DB " + dbname);
+                System.out.println("Unknown Client " + clientName);
                 System.exit(0);
             }
 
@@ -694,7 +694,7 @@ public class Client {
                 ++threadopcount;
             }
 
-            ClientThread t = new ClientThread(db, dotransactions, workload, props, threadopcount, targetperthreadperms, completeLatch);
+            ClientThread t = new ClientThread(client, dotransactions, workload, props, threadopcount, targetperthreadperms, completeLatch);
 
             clients.add(t);
         }

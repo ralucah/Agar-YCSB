@@ -209,7 +209,7 @@ public class CoreWorkload extends Workload {
      * for each other, and it will be difficult to reach the target throughput. Ideally, this function would
      * have no side effects other than DB operations.
      */
-    public boolean doInsert(DB db, Object threadstate) {
+    public boolean doInsert(ClientBlueprint clientBlueprint, Object threadstate) {
         int keynum = keysequence.nextInt();
         String dbkey = buildKeyName(keynum);
         //System.out.println(keynum + " " + dbkey);
@@ -218,7 +218,7 @@ public class CoreWorkload extends Workload {
         Status status;
         int numOfRetries = 0;
         do {
-            status = db.insert(dbkey, value);
+            status = clientBlueprint.insert(dbkey, value);
             if (status == Status.OK) {
                 break;
             }
@@ -252,15 +252,15 @@ public class CoreWorkload extends Workload {
      * for each other, and it will be difficult to reach the target throughput. Ideally, this function would
      * have no side effects other than DB operations.
      */
-    public boolean doTransaction(DB db, Object threadstate) {
+    public boolean doTransaction(ClientBlueprint clientBlueprint, Object threadstate) {
         String op = operationchooser.nextString();
 
         if (op.compareTo("READ") == 0) {
-            doTransactionRead(db);
+            doTransactionRead(clientBlueprint);
         } else if (op.compareTo("UPDATE") == 0) {
-            doTransactionUpdate(db);
+            doTransactionUpdate(clientBlueprint);
         } else if (op.compareTo("INSERT") == 0) {
-            doTransactionInsert(db);
+            doTransactionInsert(clientBlueprint);
         }
 
         return true;
@@ -280,30 +280,30 @@ public class CoreWorkload extends Workload {
         return keynum;
     }
 
-    public void doTransactionRead(DB db) {
+    public void doTransactionRead(ClientBlueprint clientBlueprint) {
         // choose a random key
         int keynum = keychooser.nextInt();
         String keyname = buildKeyName(keynum);
         //System.out.println(keynum + " " + keyname);
-        byte[] result = db.read(keyname);
+        byte[] result = clientBlueprint.read(keyname);
     }
 
-    public void doTransactionUpdate(DB db) {
+    public void doTransactionUpdate(ClientBlueprint clientBlueprint) {
         // choose a random key
         int keynum = nextKeynum();
         String keyname = buildKeyName(keynum);
         byte[] value = buildDeterministicValue(keyname);
-        db.update(keyname, value);
+        clientBlueprint.update(keyname, value);
     }
 
-    public void doTransactionInsert(DB db) {
+    public void doTransactionInsert(ClientBlueprint clientBlueprint) {
         // choose the next key
         int keynum = transactioninsertkeysequence.nextInt();
 
         try {
             String dbkey = buildKeyName(keynum);
             byte[] value = buildDeterministicValue(dbkey);
-            db.insert(dbkey, value);
+            clientBlueprint.insert(dbkey, value);
         } finally {
             transactioninsertkeysequence.acknowledge(keynum);
         }

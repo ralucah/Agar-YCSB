@@ -22,22 +22,22 @@ import java.util.Properties;
 /**
  * Creates a DB layer by dynamically classloading the specified DB class.
  */
-public class DBFactory
+public class ClientFactory
 {
       @SuppressWarnings("unchecked")
-	public static DB newDB(String dbname, Properties properties) throws UnknownDBException
+      public static ClientBlueprint newDB(String dbname, Properties properties) throws UnknownDBException
       {
-	 ClassLoader classLoader = DBFactory.class.getClassLoader();
+          ClassLoader classLoader = ClientFactory.class.getClassLoader();
 
-	 DB ret=null;
+          ClientBlueprint ret = null;
 
 	 try 
 	 {
 	    Class dbclass = classLoader.loadClass(dbname);
 	    //System.out.println("dbclass.getName() = " + dbclass.getName());
-	    
-	    ret=(DB)dbclass.newInstance();
-	 }
+
+         ret = (ClientBlueprint) dbclass.newInstance();
+     }
 	 catch (Exception e) 
 	 {  
 	    e.printStackTrace();
@@ -46,7 +46,7 @@ public class DBFactory
 	 
 	 ret.setProperties(properties);
 
-	 return new DBWrapper(ret);
+          return new ClientWrapper(ret);
       }
       
 }

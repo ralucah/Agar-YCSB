@@ -1,4 +1,4 @@
-recordcount=500
+recordcount=1
 operationcount=10
 workload=com.yahoo.ycsb.workloads.CoreWorkload
 
@@ -15,7 +15,8 @@ s3.endpoints=s3-eu-west-1.amazonaws.com,s3-eu-central-1.amazonaws.com,s3-externa
 s3.regions=eu-west-1,eu-central-1,us-east-1
 s3.buckets=patrick101,frank101,virginia101
 
-memcached=127.0.0.1:11211
+memcached.server=127.0.0.1:11211
+memcached.servers=127.0.0.1:11211,127.0.0.1:11212,127.0.0.1:11213
 
 longhair.k=2
 longhair.m=1
