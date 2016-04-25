@@ -1,6 +1,6 @@
 package com.yahoo.ycsb.dual.tests;
 
-import com.yahoo.ycsb.dual.utils.LonghairLib;
+import com.yahoo.ycsb.common.liberasure.LonghairLib;
 import org.apache.log4j.Logger;
 
 import java.io.UnsupportedEncodingException;

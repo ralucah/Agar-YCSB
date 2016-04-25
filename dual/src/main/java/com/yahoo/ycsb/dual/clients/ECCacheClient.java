@@ -1,4 +1,4 @@
-package com.yahoo.ycsb.dual;
+package com.yahoo.ycsb.dual.clients;
 
 // -db com.yahoo.ycsb.dual.DualClient -p fieldlength=100 -s -P workloads/myworkload -load
 // -db com.yahoo.ycsb.dual.DualClient -p fieldlength=100 -s -P workloads/myworkload
@@ -6,8 +6,10 @@ package com.yahoo.ycsb.dual;
 import com.yahoo.ycsb.ClientBlueprint;
 import com.yahoo.ycsb.ClientException;
 import com.yahoo.ycsb.Status;
+import com.yahoo.ycsb.common.liberasure.LonghairLib;
+import com.yahoo.ycsb.common.memcached.MemcachedConnection;
+import com.yahoo.ycsb.dual.connections.S3Connection;
 import com.yahoo.ycsb.dual.utils.ECBlock;
-import com.yahoo.ycsb.dual.utils.LonghairLib;
 import org.apache.log4j.Logger;
 
 import java.util.*;
@@ -21,7 +23,6 @@ import java.util.concurrent.*;
  */
 
 public class ECCacheClient extends ClientBlueprint {
-    public static String S3_ZONES = "s3.zones";
     public static String S3_REGIONS_PROPERTIES = "s3.regions";
     public static String S3_ENDPOINTS_PROPERTIES = "s3.endpoints";
     public static String S3_BUCKETS_PROPERTIES = "s3.buckets";
@@ -32,7 +33,7 @@ public class ECCacheClient extends ClientBlueprint {
     public static String LONGHAIR_M_DEFAULT = "2";
     public static String EXECUTOR_THREADS_PROPERTY = "executor.threads";
     public static String EXECUTOR_THREADS_DEFAULT = "5";
-    protected static Logger logger = Logger.getLogger(AllCachesClient.class);
+    protected static Logger logger = Logger.getLogger(ECCacheClient.class);
     private Properties properties;
 
     // S3 bucket names mapped to connections to AWS S3 buckets
@@ -192,7 +193,7 @@ public class ECCacheClient extends ClientBlueprint {
 
     private ECBlock readBlockBackend(String key, int blockId) {
         String blockKey = key + blockId;
-        S3Connection s3Connection = s3Connections.get(blockId);
+        S3Connection s3Connection = s3Connections.get(blockId); //TODO
         byte[] bytes = s3Connection.read(blockKey);
 
         ECBlock ecblock = null;

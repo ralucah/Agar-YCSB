@@ -45,11 +45,11 @@ public class SlashdotGenerator extends IntegerGenerator {
     }
 
     public static void main(String[] args) {
-        SlashdotGenerator slashgen = new SlashdotGenerator(10, 1.75, 10000);
+        SlashdotGenerator slashgen = new SlashdotGenerator(100, 1.0, 10000);
         //slashgen.printBuckets();
 
-        System.out.println("nextInt(): ");
-        for (int i = 0; i < 10000; i++)
+        //System.out.println("nextInt(): ");
+        for (int i = 0; i < 20000; i++)
             System.out.println(slashgen.nextInt());
     }
 

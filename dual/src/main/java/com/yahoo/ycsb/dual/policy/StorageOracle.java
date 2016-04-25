@@ -1,6 +1,6 @@
 package com.yahoo.ycsb.dual.policy;
 
-import com.yahoo.ycsb.dual.utils.LonghairLib;
+import com.yahoo.ycsb.common.liberasure.LonghairLib;
 import org.apache.log4j.Logger;
 
 import java.util.ArrayList;

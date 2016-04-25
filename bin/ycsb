@@ -46,15 +46,22 @@ COMMANDS = {
         "command"     : "-t",
         "description" : "Execute the transaction phase",
         "main"        : "com.yahoo.ycsb.Client",
-    }
+    },
+    "proxy" : {
+        "command"     : "proxy",
+        "description" : "Start the SmartCache proxy",
+        "main"        : "com.yahoo.ycsb.proxy.UDPServer"
+    },
 }
 
 CLIENTS = {
-    "backend" : "com.yahoo.ycsb.dual.BackendClient",
-    "allcache" : "com.yahoo.ycsb.dual.AllCachesClient",
-    "fixcache" : "com.yahoo.ycsb.dual.FixCacheClient",
-    "eccache" : "com.yahoo.ycsb.dual.ECCacheClient"
+    "backend" : "com.yahoo.ycsb.dual.clients.BackendClient",
+    "allcache" : "com.yahoo.ycsb.dual.clients.AllCachesClient",
+    "fixcache" : "com.yahoo.ycsb.dual.clients.FixCacheClient",
+    "eccache" : "com.yahoo.ycsb.dual.clients.ECCacheClient",
+    "smart" : "com.yahoo.ycsb.dual.clients.SmartCacheClient"
 }
+
 BINDING = "dual"
 
 OPTIONS = {
@@ -160,8 +167,7 @@ def main():
                    help="""Additional arguments to pass to 'java', e.g. '-Xmx4g'""")
     p.add_argument("command", choices=sorted(COMMANDS),
                    help="""Command to run.""")
-    p.add_argument("client", choices=sorted(CLIENTS),
-                   help="""Client to test.""")
+    p.add_argument("client",nargs="?",choices=sorted(CLIENTS),help="""Client to test.""")
 
     # get home dir
     ycsb_home = get_ycsb_home()
@@ -176,18 +182,20 @@ def main():
 
     # get args
     args, remaining = p.parse_known_args()
-    #print(args)
-    #print(remaining)
-    #sys.exit(1)
     command = COMMANDS[args.command]["command"]
     main_classname = COMMANDS[args.command]["main"]
-    client_classname = CLIENTS[args.client]
+    
     #print("command: " + command)
     #print("main_classname: " + main_classname)
 
-    client_location = BINDING
-    project = BINDING + "-binding"
-    client_dir = os.path.join(ycsb_home, client_location)
+    if command == "proxy":
+        client_location = "proxy"
+        project = "proxy"
+        client_dir = os.path.join(ycsb_home, client_location)
+    else:
+        client_location = BINDING
+        project = BINDING + "-binding"
+        client_dir = os.path.join(ycsb_home, client_location)
 
     #print("client_location: " + client_location)
     #print("project: " + project)
@@ -205,7 +213,13 @@ def main():
     if args.classpath:
         classpath = os.pathsep.join([args.classpath, classpath])
 
-    ycsb_command = ([java] + args.jvm_args +
+    if command == "proxy":
+        ycsb_command = ([java] + args.jvm_args +
+                    ["-cp", classpath,
+                     main_classname] + remaining)
+    else:
+        client_classname = CLIENTS[args.client]
+        ycsb_command = ([java] + args.jvm_args +
                     ["-cp", classpath,
                      main_classname, "-client", client_classname] + remaining)
     #print(ycsb_command)

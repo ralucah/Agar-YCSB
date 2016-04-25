@@ -1,11 +1,12 @@
-recordcount=1
-operationcount=10
+recordcount=100
+operationcount=5
 workload=com.yahoo.ycsb.workloads.CoreWorkload
 
 readproportion=1
 updateproportion=0
 scanproportion=0
 insertproportion=0
+#maxexecutiontime=300
 
 requestdistribution=slashdot
 #skew=1.23
@@ -17,6 +18,13 @@ s3.buckets=patrick101,frank101,virginia101
 
 memcached.server=127.0.0.1:11211
 memcached.servers=127.0.0.1:11211,127.0.0.1:11212,127.0.0.1:11213
+
+proxy.server=127.0.0.1:11000
+proxy.retries=3
+# timeout in ms
+proxy.timeout=20000
+# packet size in bytes
+proxy.packetsize=1024
 
 longhair.k=2
 longhair.m=1

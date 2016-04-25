@@ -1,12 +1,8 @@
 package com.yahoo.ycsb.proxy;
 
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
-
 /* Manages the cache address registry, i.e., <key, cache-host> pairs */
 public class CacheAddressManager {
-    public static Map<String, String> cacheAddressRegistry;
+    /*public static Map<String, String> cacheAddressRegistry;
 
     public CacheAddressManager() {
         cacheAddressRegistry = new HashMap<String, String>();
@@ -26,5 +22,5 @@ public class CacheAddressManager {
             Map.Entry<String, String> pair = (Map.Entry<String, String>) it.next();
             cacheAddressRegistry.put(pair.getKey(), pair.getValue());
         }
-    }
+    }*/
 }

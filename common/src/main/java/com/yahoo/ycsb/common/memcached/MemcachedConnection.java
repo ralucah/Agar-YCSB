@@ -15,7 +15,7 @@
  * LICENSE file.
  */
 
-package com.yahoo.ycsb.dual;
+package com.yahoo.ycsb.common.memcached;
 
 import com.yahoo.ycsb.ClientException;
 import com.yahoo.ycsb.Status;
@@ -26,44 +26,27 @@ import net.spy.memcached.internal.GetFuture;
 import net.spy.memcached.internal.OperationFuture;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.codehaus.jackson.map.ObjectMapper;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Properties;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 // TODO assumption: one connection to one memcached host
 // TODO table does not matter, only key does
 public class MemcachedConnection {
-    public static final String SHUTDOWN_TIMEOUT_MILLIS_PROPERTY = "memcached.shutdownTimeoutMillis";
-    public static final String DEFAULT_SHUTDOWN_TIMEOUT_MILLIS = "30000";
-    public static final String OBJECT_EXPIRATION_TIME_PROPERTY = "memcached.objectExpirationTime";
-    public static final String DEFAULT_OBJECT_EXPIRATION_TIME = String.valueOf(Integer.MAX_VALUE);
-    public static final String CHECK_OPERATION_STATUS_PROPERTY = "memcached.checkOperationStatus";
-    public static final String CHECK_OPERATION_STATUS_DEFAULT = "true";
-    public static final String READ_BUFFER_SIZE_PROPERTY = "memcached.readBufferSize";
-    public static final String DEFAULT_READ_BUFFER_SIZE = "3000000";
-    public static final String OP_TIMEOUT_PROPERTY = "memcached.opTimeoutMillis";
-    public static final String DEFAULT_OP_TIMEOUT = "60000";
-    public static final String FAILURE_MODE_PROPERTY = "memcached.failureMode";
     public static final FailureMode FAILURE_MODE_PROPERTY_DEFAULT = FailureMode.Redistribute;
-    protected static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String TEMPORARY_FAILURE_MSG = "Temporary failure";
     private static final String CANCELLED_MSG = "cancelled";
     private static Logger logger = Logger.getLogger(MemcachedConnection.class);
 
-    private static boolean checkOperationStatus;
-    private static long shutdownTimeoutMillis;
-    private static int objectExpirationTime;
-    private static int bufferSize;
-    private static int opTimeout;
-    private static String failureString;
-    private static boolean init = true;
+    private static boolean checkOperationStatus = true;
+    private static long shutdownTimeoutMillis = 30000;
+    private static int objectExpirationTime = 2147483647;
+    private static int bufferSize = 3000000;
+    private static int opTimeout = 60000;
+    private static String failureString = "Redistribute"; //  `Redistribute`, `Retry`, or `Cancel`.
 
     private MemcachedClient client;
     private String host;
@@ -74,41 +57,11 @@ public class MemcachedConnection {
         System.setProperty("net.spy.log.LoggerImpl", "net.spy.memcached.compat.log.Log4JLogger");
         org.apache.log4j.Logger.getLogger("net.spy.memcached").setLevel(Level.OFF);
 
-        if (MemcachedConnection.init == true) {
-            init();
-            MemcachedConnection.init = false;
-        }
-
         try {
             client = createMemcachedClient();
         } catch (Exception e) {
             throw new ClientException(e);
         }
-    }
-
-    private void init() {
-        InputStream propFile = MemcachedConnection.class.getClassLoader().getResourceAsStream("memcached.properties");
-        Properties props = new Properties();
-        try {
-            props.load(propFile);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        checkOperationStatus = Boolean.parseBoolean(
-            props.getProperty(CHECK_OPERATION_STATUS_PROPERTY, CHECK_OPERATION_STATUS_DEFAULT));
-        objectExpirationTime = Integer.parseInt(
-            props.getProperty(OBJECT_EXPIRATION_TIME_PROPERTY, DEFAULT_OBJECT_EXPIRATION_TIME));
-        shutdownTimeoutMillis = Integer.parseInt(
-            props.getProperty(SHUTDOWN_TIMEOUT_MILLIS_PROPERTY, DEFAULT_SHUTDOWN_TIMEOUT_MILLIS));
-
-        bufferSize = Integer.parseInt(
-            props.getProperty(READ_BUFFER_SIZE_PROPERTY, DEFAULT_READ_BUFFER_SIZE));
-
-        opTimeout = Integer.parseInt(
-            props.getProperty(OP_TIMEOUT_PROPERTY, DEFAULT_OP_TIMEOUT));
-
-        failureString = props.getProperty(FAILURE_MODE_PROPERTY);
     }
 
     public String getHost() {
@@ -167,6 +120,16 @@ public class MemcachedConnection {
             return getReturnCode(future);
         } catch (Exception e) {
             logger.error("Error inserting value", e);
+            return Status.ERROR;
+        }
+    }
+
+    public Status delete(String key) {
+        try {
+            OperationFuture<Boolean> future = memcachedClient().delete(key);
+            return getReturnCode(future);
+        } catch (Exception e) {
+            logger.error("Error deleting value", e);
             return Status.ERROR;
         }
     }

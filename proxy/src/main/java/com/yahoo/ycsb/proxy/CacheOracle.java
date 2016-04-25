@@ -1,27 +1,21 @@
 package com.yahoo.ycsb.proxy;
 
-import org.apache.log4j.Logger;
-
-import java.util.ArrayList;
-import java.util.List;
-
 /**
  * Created by Raluca on 26.03.16.
  */
 public class CacheOracle {
-    public static Logger logger = Logger.getLogger(CacheOracle.class);
+    /*public static Logger logger = Logger.getLogger(CacheOracle.class);
 
     private List<String> memcachedHosts;
     private boolean memEncode;
 
-    /* in case the data is encoded in the cache */
     private int numBlocks;
 
     public CacheOracle(List<String> memcachedHosts, boolean memEncode) {
         this.memcachedHosts = memcachedHosts;
         this.memEncode = memEncode;
-        if (memEncode == true)
-            numBlocks = ProxyConstants.MEMCACHED_NUM_BLOCKS_DEFAULT;
+        //if (memEncode == true)
+        //    numBlocks = ProxyConstants.MEMCACHED_NUM_BLOCKS_DEFAULT;
     }
 
     public void setNumBlocks(int numBlocks) {
@@ -49,5 +43,5 @@ public class CacheOracle {
         address = memcachedHosts.get(hostNum);
 
         return address;
-    }
+    }*/
 }

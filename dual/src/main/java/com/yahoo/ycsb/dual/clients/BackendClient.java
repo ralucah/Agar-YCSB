@@ -1,13 +1,14 @@
-package com.yahoo.ycsb.dual;
+package com.yahoo.ycsb.dual.clients;
 
-// -client com.yahoo.ycsb.dual.BackendClient -p fieldlength=100 -s -P workloads/myworkload -load
-// -client com.yahoo.ycsb.dual.BackendClient -p skew=1.5 -p delay=1000 -p fieldlength=100 -s -P workloads/myworkload
+// -client com.yahoo.ycsb.dual.clients.BackendClient -p fieldlength=100 -s -P workloads/myworkload -load
+// -client com.yahoo.ycsb.dual.clients.BackendClient -p skew=1.5 -p delay=1000 -p fieldlength=100 -s -P workloads/myworkload
 
 import com.yahoo.ycsb.ClientBlueprint;
 import com.yahoo.ycsb.ClientException;
 import com.yahoo.ycsb.Status;
+import com.yahoo.ycsb.common.liberasure.LonghairLib;
+import com.yahoo.ycsb.dual.connections.S3Connection;
 import com.yahoo.ycsb.dual.utils.ClientUtils;
-import com.yahoo.ycsb.dual.utils.LonghairLib;
 import org.apache.log4j.Logger;
 
 import java.util.*;
@@ -89,7 +90,7 @@ public class BackendClient extends ClientBlueprint {
 
     @Override
     public void init() throws ClientException {
-        logger.debug("DualClient.init() start");
+        logger.debug("BackendClient.init() start");
         properties = getProperties();
 
         initS3();
@@ -100,7 +101,7 @@ public class BackendClient extends ClientBlueprint {
         logger.debug("threads num: " + threadsNum);
         executor = Executors.newFixedThreadPool(threadsNum);
 
-        logger.debug("DualClient.init() end");
+        logger.debug("BackendClient.init() end");
     }
 
     @Override

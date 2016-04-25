@@ -1,15 +1,10 @@
 package com.yahoo.ycsb.proxy;
 
-import org.apache.log4j.Logger;
-
-import java.net.InetAddress;
-import java.net.UnknownHostException;
-
 /**
  * Created by Raluca on 29.03.16.
  */
 public class ProxyHost {
-    public static Logger logger = Logger.getLogger(ProxyHost.class);
+    /*public static Logger logger = Logger.getLogger(ProxyHost.class);
 
     private InetAddress address;
     private int port;
@@ -44,5 +39,5 @@ public class ProxyHost {
         if (otherAddress.equals(address) && otherPort == port)
             return true;
         return false;
-    }
+    }*/
 }

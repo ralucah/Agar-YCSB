@@ -1,4 +1,4 @@
-package com.yahoo.ycsb.dual.utils;
+package com.yahoo.ycsb.common.liberasure;
 
 import com.sun.jna.*;
 import org.apache.log4j.Logger;
