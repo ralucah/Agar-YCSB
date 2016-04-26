@@ -1,73 +1,89 @@
 package com.yahoo.ycsb.proxy;
 
-import com.yahoo.ycsb.common.communication.ProxyReply;
+import com.yahoo.ycsb.ClientException;
+import com.yahoo.ycsb.common.memcached.MemcachedConnection;
 import org.apache.log4j.Logger;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
 
 public class CacheAdmin {
     protected static Logger logger = Logger.getLogger(CacheAdmin.class);
-    // max cache size
+
+    // full data size, in bytes
+    private final long FIELDLENGTH;
     private final long CACHE_SIZE_MAX;
-    // data size, in bytes
-    private final long fieldlength;
-    // map keys to cache servers
-    private NavigableMap<String, String> cacheRegistry;
-    // cache size accessed from multiple threads
-    private List<Cache> caches;
 
-    public CacheAdmin(List<String> memHosts, long cachesizeMax, long fieldlength) {
-        this.CACHE_SIZE_MAX = cachesizeMax;
-        this.fieldlength = fieldlength;
+    // <key, cache>
+    private Map<String, String> registry;
 
-        caches = new ArrayList<Cache>();
-        for (String memHost : memHosts) {
-            caches.add(new Cache(memHost));
+    private MemcachedConnection memConnection;
+
+    public CacheAdmin(String memHost, long cachesizeMax, long fieldlength) {
+        try {
+            memConnection = new MemcachedConnection(memHost);
+        } catch (ClientException e) {
+            logger.error("Error establishing connection to Memcached.");
         }
 
-        cacheRegistry = new TreeMap<String, String>();
+        CACHE_SIZE_MAX = cachesizeMax;
+        FIELDLENGTH = fieldlength;
+
+        registry = new HashMap<String, String>();
     }
 
-    public String printCacheRegistry() {
-        String str = "CacheRegistry: [\n";
-        for (Map.Entry<String, String> entry : cacheRegistry.entrySet()) {
-            str += entry.getKey() + " " + entry.getValue() + "\n";
+    /*public String printCacheRegistry() {
+        // TODO
+        return "";
+    }*/
+
+    /*private Cache mapToCache(String key) {
+        int cacheId = Math.abs(key.hashCode()) % caches.size();
+        return caches.get(cacheId);
+    }
+
+    // TODO periodically
+    private void adjutPopularities() {
+        for (Map.Entry<String, Stats> entry : registry.entrySet()) {
+            Stats info = entry.getValue();
+            double newPopularity = (info.getAccesses() * 100) / totalAccesses;
+            info.setPopularity(newPopularity);
         }
-        str += "]";
-        return str;
+    }
+
+    // TODO monitor cache and do this when cache is full
+    private void degrade() {
+        // keys should be sorted by popularity
+        // get the least popular item
     }
 
     public ProxyReply computeReply(String key) {
         ProxyReply reply = new ProxyReply();
 
-        // get set of keys starting with prefix key
-        SortedMap<String, String> keyMatch = cacheRegistry.subMap(key, key + Character.MAX_VALUE);
-
+        Stats info = registry.get(key);
+        totalAccesses++;
         // if key not yet in cache registry
-        if (keyMatch.size() == 0) {
+        if (info == null) {
 
             // map key to cache
-            int cacheId = Math.abs(key.hashCode()) % caches.size();
-            Cache cache = caches.get(cacheId);
+            Cache cache = mapToCache(key);
 
             // if the cache has room for a new item
-            long newSize = cache.getSize() + fieldlength;
-            if (newSize <= CACHE_SIZE_MAX) {
+            if (cache.isFull() == false) {
                 // prepare for new cache entry!
-                String name = cache.getName();
-                cacheRegistry.put(key, name);
-                reply.addPair(key, name);
-                cache.setSize(newSize);
+                cache.increment();
+                info = new Stats(key, cache.getName());
+                registry.put(key, info);
+                reply.setKeyToCache(info.getKeyToCache());
             } else
                 // no room for new item, instruct client to not cache
                 reply.setCacheFull();
         } else {
             // data already in cache registry, just copy it to reply
-            for (Map.Entry<String, String> entry : keyMatch.entrySet()) {
-                reply.addPair(entry.getKey(), entry.getValue());
-            }
+            reply.setKeyToCache(info.getKeyToCache());
+            info.incrementAccesses();
         }
 
         return reply;
-    }
+    }*/
 }

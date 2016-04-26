@@ -19,12 +19,12 @@ public class ProxyReply implements Serializable {
         cacheStatus = CacheStatus.CACHE_OK;
     }
 
-    public void addPair(String key, String cache) {
-        keyToCache.put(key, cache);
-    }
-
     public Map<String, String> getKeyToCache() {
         return keyToCache;
+    }
+
+    public void setKeyToCache(Map<String, String> keyToCache) {
+        this.keyToCache = keyToCache;
     }
 
     public CacheStatus getCacheStatus() {

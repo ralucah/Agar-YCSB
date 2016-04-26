@@ -1,6 +1,5 @@
 package com.yahoo.ycsb.proxy;
 
-import com.yahoo.ycsb.common.communication.ProxyReply;
 import com.yahoo.ycsb.common.communication.ProxyRequest;
 import com.yahoo.ycsb.common.communication.Serializer;
 import org.apache.log4j.Logger;
@@ -8,8 +7,6 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.*;
-import java.util.Arrays;
-import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -35,6 +32,7 @@ public class UDPServer implements Runnable {
     private CacheAdmin cacheAdmin;
 
     public UDPServer() {
+        // proxy properties
         ClassLoader loader = Thread.currentThread().getContextClassLoader();
         Properties properties = new Properties();
         try {
@@ -62,8 +60,8 @@ public class UDPServer implements Runnable {
         logger.debug("cachesize: " + cachesize);
 
         // memcached servers
-        List<String> memHosts = Arrays.asList(properties.getProperty(MEMCACHED).split("\\s*,\\s*"));
-        cacheAdmin = new CacheAdmin(memHosts, cachesize, fieldlength);
+        String memHost = properties.getProperty(MEMCACHED);
+        //cacheAdmin = new CacheAdmin(memHosts, cachesize, fieldlength);
 
         // address of current server
         String proxyHost = properties.getProperty(PROXY);
@@ -101,18 +99,18 @@ public class UDPServer implements Runnable {
         logger.info(request.prettyPrint() + " from " + clientAddress + ":" + clientPort);
 
         // compute reply
-        ProxyReply reply = cacheAdmin.computeReply(request.getKey());
-        logger.info(reply.prettyPrint() + " to " + clientAddress + ":" + clientPort);
-        logger.debug(cacheAdmin.printCacheRegistry());
+        //ProxyReply reply = cacheAdmin.computeReply(request.getKey());
+        //logger.info(reply.prettyPrint() + " to " + clientAddress + ":" + clientPort);
+        //logger.debug(cacheAdmin.printCacheRegistry());
 
         // send reply to client
-        byte[] sendData = Serializer.serializeReply(reply);
-        DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, clientAddress, clientPort);
-        try {
+        //byte[] sendData = Serializer.serializeReply(reply);
+        //DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, clientAddress, clientPort);
+        /*try {
             socket.send(sendPacket);
         } catch (IOException e) {
             logger.error("Exception sending packet to " + clientAddress + ":" + clientPort);
-        }
+        }*/
     }
 
     protected void handleAsync(final DatagramPacket packet) {
