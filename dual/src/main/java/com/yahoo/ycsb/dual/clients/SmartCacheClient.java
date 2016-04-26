@@ -151,7 +151,7 @@ public class SmartCacheClient extends ClientBlueprint {
     }
 
     @Override
-    public byte[] read(final String key) {
+    public byte[] read(final String key, final int keyNum) {
         ProxyReply reply = proxyConnection.sendRequest(key);
         logger.info(reply.prettyPrint());
         final Map<String, String> keyToCache = reply.getKeyToCache();

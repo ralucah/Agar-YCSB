@@ -180,7 +180,7 @@ public class AllCachesClient extends ClientBlueprint {
     }
 
     @Override
-    public byte[] read(final String key) {
+    public byte[] read(final String key, final int keyNum) {
         byte[] data = readFromCache(key);
         if (data == null) {
             data = readFromBackend(key);

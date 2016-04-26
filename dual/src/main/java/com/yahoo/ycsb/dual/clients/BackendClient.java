@@ -121,7 +121,7 @@ public class BackendClient extends ClientBlueprint {
     }
 
     @Override
-    public byte[] read(final String key) {
+    public byte[] read(final String key, final int keyNum) {
         // read blocks in parallel
         CompletionService<byte[]> completionService = new ExecutorCompletionService<byte[]>(executor);
         for (int i = 0; i < LonghairLib.k + LonghairLib.m; i++) {

@@ -72,7 +72,7 @@ public abstract class ClientBlueprint {
     public void cleanup() throws ClientException {
     }
 
-    public abstract byte[] read(String key);
+    public abstract byte[] read(String key, int keyNum);
 
     public abstract Status update(String key, byte[] value);
 

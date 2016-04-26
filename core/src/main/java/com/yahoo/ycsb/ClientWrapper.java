@@ -102,10 +102,10 @@ public class ClientWrapper extends ClientBlueprint {
      * @param key The record key of the record to read.
      * @return The result of the operation.
      */
-    public byte[] read(String key) {
+    public byte[] read(String key, int keyNum) {
         long ist = _measurements.getIntendedtartTimeNs();
         long st = System.nanoTime();
-        byte[] res = _clientBlueprint.read(key);
+        byte[] res = _clientBlueprint.read(key, keyNum);
         long en = System.nanoTime();
         Status status = Status.OK;
         if (res == null)

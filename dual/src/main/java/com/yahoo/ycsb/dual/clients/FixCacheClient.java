@@ -1,7 +1,8 @@
 package com.yahoo.ycsb.dual.clients;
 
-// -db com.yahoo.ycsb.dual.DualClient -p fieldlength=100 -s -P workloads/myworkload -load
-// -db com.yahoo.ycsb.dual.DualClient -p fieldlength=100 -s -P workloads/myworkload
+// Cmd line: bin/ycsb run fixcache -p fieldlength=4194304 -P workloads/myworkload
+// IntelliJ: -db com.yahoo.ycsb.dual.clients.FixCacheClient -p fieldlength=4194304 -P workloads/myworkload
+// Tip: add -s for status monitoring
 
 import com.yahoo.ycsb.ClientBlueprint;
 import com.yahoo.ycsb.ClientException;
@@ -22,33 +23,28 @@ import java.util.concurrent.*;
  */
 
 public class FixCacheClient extends ClientBlueprint {
-    public static String S3_ZONES = "s3.zones";
     public static String S3_REGIONS_PROPERTIES = "s3.regions";
-    public static String S3_ENDPOINTS_PROPERTIES = "s3.endpoints";
-    public static String S3_BUCKETS_PROPERTIES = "s3.buckets";
-    public static String MEMCACHED_SERVER_PROPERTY = "memcached.servers";
+    public static String S3_ENDPOINTS_PROPERTY = "s3.endpoints";
+    public static String S3_BUCKETS_PROPERTY = "s3.buckets";
+    public static String MEMCACHED_PROPERTY = "memcached.servers";
     public static String LONGHAIR_K_PROPERTY = "longhair.k";
-    public static String LONGHAIR_K_DEFAULT = "3";
+    public static String LONGHAIR_K_PROPERTY_DEFAULT = "2";
     public static String LONGHAIR_M_PROPERTY = "longhair.m";
-    public static String LONGHAIR_M_DEFAULT = "2";
+    public static String LONGHAIR_M_PROPERTY_DEFAULT = "1";
     public static String EXECUTOR_THREADS_PROPERTY = "executor.threads";
-    public static String EXECUTOR_THREADS_DEFAULT = "5";
+    public static String EXECUTOR_THREADS_PROPERTY_DEFAULT = "5";
     protected static Logger logger = Logger.getLogger(FixCacheClient.class);
     private Properties properties;
 
-    // S3 bucket names mapped to connections to AWS S3 buckets
     private List<S3Connection> s3Connections;
-
-    // for concurrent processing
-    private ExecutorService executor;
-
     private List<MemcachedConnection> memConnections;
+    private ExecutorService executor;
 
     // TODO Assumption: one bucket per region (num regions = num endpoints = num buckets)
     private void initS3() {
         List<String> regions = Arrays.asList(properties.getProperty(S3_REGIONS_PROPERTIES).split("\\s*,\\s*"));
-        List<String> endpoints = Arrays.asList(properties.getProperty(S3_ENDPOINTS_PROPERTIES).split("\\s*,\\s*"));
-        List<String> s3Buckets = Arrays.asList(properties.getProperty(S3_BUCKETS_PROPERTIES).split("\\s*,\\s*"));
+        List<String> endpoints = Arrays.asList(properties.getProperty(S3_ENDPOINTS_PROPERTY).split("\\s*,\\s*"));
+        List<String> s3Buckets = Arrays.asList(properties.getProperty(S3_BUCKETS_PROPERTY).split("\\s*,\\s*"));
         if (s3Buckets.size() != endpoints.size() || endpoints.size() != regions.size())
             logger.error("Configuration error: #buckets = #regions = #endpoints");
 
@@ -69,9 +65,8 @@ public class FixCacheClient extends ClientBlueprint {
     }
 
     private void initLonghair() {
-        // erasure coding-related configuration
-        LonghairLib.k = Integer.valueOf(properties.getProperty(LONGHAIR_K_PROPERTY, LONGHAIR_K_DEFAULT));
-        LonghairLib.m = Integer.valueOf(properties.getProperty(LONGHAIR_M_PROPERTY, LONGHAIR_M_DEFAULT));
+        LonghairLib.k = Integer.valueOf(properties.getProperty(LONGHAIR_K_PROPERTY, LONGHAIR_K_PROPERTY_DEFAULT));
+        LonghairLib.m = Integer.valueOf(properties.getProperty(LONGHAIR_M_PROPERTY, LONGHAIR_M_PROPERTY_DEFAULT));
         logger.debug("k: " + LonghairLib.k + " m: " + LonghairLib.m);
 
         // check k >= 0 and k < 256
@@ -91,7 +86,7 @@ public class FixCacheClient extends ClientBlueprint {
 
     private void initCache() throws ClientException {
         memConnections = new ArrayList<MemcachedConnection>();
-        List<String> memHosts = Arrays.asList(properties.getProperty(MEMCACHED_SERVER_PROPERTY).split("\\s*,\\s*"));
+        List<String> memHosts = Arrays.asList(properties.getProperty(MEMCACHED_PROPERTY).split("\\s*,\\s*"));
         for (String memHost : memHosts) {
             MemcachedConnection memConnection = new MemcachedConnection(memHost);
             memConnections.add(memConnection);
@@ -108,8 +103,8 @@ public class FixCacheClient extends ClientBlueprint {
         initLonghair();
         initCache();
 
-        // init executor service
-        final int threadsNum = Integer.valueOf(properties.getProperty(EXECUTOR_THREADS_PROPERTY, EXECUTOR_THREADS_DEFAULT));
+        // executor service
+        final int threadsNum = Integer.valueOf(properties.getProperty(EXECUTOR_THREADS_PROPERTY, EXECUTOR_THREADS_PROPERTY_DEFAULT));
         logger.debug("threads num: " + threadsNum);
         executor = Executors.newFixedThreadPool(threadsNum);
 
@@ -171,43 +166,42 @@ public class FixCacheClient extends ClientBlueprint {
         return data;
     }
 
-    private byte[] readFromCache(String key) {
-        int memConnectionId = Math.abs(key.hashCode()) % memConnections.size();
+    private byte[] readFromCache(String key, int keyNum) {
+        int memConnectionId = keyNum % memConnections.size();
         MemcachedConnection memConnection = memConnections.get(memConnectionId);
         byte[] data = memConnection.read(key);
         if (data != null)
-            logger.info("Read CACHE " + key + " " + data.length + " bytes from " + memConnection.getHost());
+            logger.info("Read CACHE " + key + " " + data.length + " bytes " + memConnection.getHost());
         return data;
     }
 
-    private void cacheData(String key, byte[] data) {
-        int memConnectionId = Math.abs(key.hashCode()) % memConnections.size();
+    private void cacheData(String key, int keyNum, byte[] data) {
+        int memConnectionId = keyNum % memConnections.size();
         MemcachedConnection memConnection = memConnections.get(memConnectionId);
         logger.debug("Cache " + key + " at " + memConnection.getHost());
         Status status = memConnection.insert(key, data);
-        /*if (status.equals(Status.OK) == false)
-            logger.debug("Error caching data " + key);
-        else
+        //if (status.equals(Status.OK) == false)
+        //    logger.warn("Error caching data " + key);
+        /*else
             logger.debug("Cached data " + key);*/
     }
 
     @Override
-    public byte[] read(final String key) {
-        byte[] data = readFromCache(key);
+    public byte[] read(final String key, final int keyNum) {
+        byte[] data = readFromCache(key, keyNum);
         if (data == null) {
             data = readFromBackend(key);
             if (data != null) {
-                logger.info("Read BACKEND " + key + " " + data.length + " bytes " + ClientUtils.bytesToHash(data));
+                logger.info("Read BACKEND " + key + " " + data.length + " bytes "); // + ClientUtils.bytesToHash(data));
                 final byte[] dataFin = data;
                 executor.submit(new Runnable() {
                     @Override
                     public void run() {
-                        cacheData(key, dataFin);
+                        cacheData(key, keyNum, dataFin);
                     }
                 });
             }
-        } //else
-        //logger.info("Read CACHE " + key + " " + data.length + " bytes " + ClientUtils.bytesToHash(data));
+        }
         return data;
     }
 
@@ -216,65 +210,10 @@ public class FixCacheClient extends ClientBlueprint {
         return null;
     }
 
-    private Status insertBlock(String baseKey, int blockNum, byte[] block) {
-        String blockKey = baseKey + blockNum;
-        S3Connection s3Connection = s3Connections.get(blockNum);
-        Status status = s3Connection.insert(blockKey, block);
-        logger.debug("InsertBlock " + blockNum + " " + blockKey + " " + ClientUtils.bytesToHash(block));
-        return status;
-    }
-
     /* insert data (encoded or full) in S3 buckets */
     @Override
     public Status insert(String key, byte[] value) {
-        Status status = Status.OK;
-
-        // generate bytes array based on values
-        //byte[] data = ClientUtils.valuesToBytes(values);
-
-        // encode data
-        Set<byte[]> encodedBlocks = LonghairLib.encode(value);
-
-        // insert encoded blocks in parallel
-        final String keyFin = key;
-        CompletionService<Status> completionService = new ExecutorCompletionService<Status>(executor);
-        int counter = 0;
-        for (final byte[] block : encodedBlocks) {
-            final int blockNumFin = counter;
-            counter++;
-            completionService.submit(new Callable<Status>() {
-                @Override
-                public Status call() throws Exception {
-                    return insertBlock(keyFin, blockNumFin, block);
-                }
-            });
-        }
-
-        int success = 0;
-        int errors = 0;
-        while (success < encodedBlocks.size()) {
-            Future<Status> statusFuture = null;
-            try {
-                statusFuture = completionService.take();
-                Status insertStatus = statusFuture.get();
-                if (insertStatus == Status.OK)
-                    success++;
-                else
-                    errors++;
-            } catch (Exception e) {
-                errors++;
-                logger.error("Exception for block insert operation.");
-            }
-            if (errors > LonghairLib.m)
-                break;
-        }
-
-        // set status
-        if (success < LonghairLib.k)
-            status = Status.ERROR;
-
-        logger.info("Insert " + key + " " + value.length + " bytes " + ClientUtils.bytesToHash(value));
-        return status;
+        return null;
     }
 
     @Override

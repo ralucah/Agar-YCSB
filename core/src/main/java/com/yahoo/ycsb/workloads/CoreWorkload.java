@@ -123,7 +123,9 @@ public class CoreWorkload extends Workload {
         double updateproportion = Double.parseDouble(p.getProperty(UPDATE_PROPORTION_PROPERTY, UPDATE_PROPORTION_PROPERTY_DEFAULT));
         double insertproportion = Double.parseDouble(p.getProperty(INSERT_PROPORTION_PROPERTY, INSERT_PROPORTION_PROPERTY_DEFAULT));
         String requestdistrib = p.getProperty(REQUEST_DISTRIBUTION_PROPERTY, REQUEST_DISTRIBUTION_PROPERTY_DEFAULT);
+        int recordcount = Integer.parseInt(p.getProperty(Client.RECORD_COUNT_PROPERTY, Client.DEFAULT_RECORD_COUNT));
         int insertstart = Integer.parseInt(p.getProperty(INSERT_START_PROPERTY, INSERT_START_PROPERTY_DEFAULT));
+        int insertcount = Integer.parseInt(p.getProperty(INSERT_COUNT_PROPERTY, String.valueOf(recordcount - insertstart)));
 
         if (p.getProperty(INSERT_ORDER_PROPERTY, INSERT_ORDER_PROPERTY_DEFAULT).compareTo("hashed") == 0) {
             orderedinserts = false;
@@ -149,12 +151,11 @@ public class CoreWorkload extends Workload {
 
         transactioninsertkeysequence = new AcknowledgedCounterGenerator(1);
         if (requestdistrib.equals("slashdot")) {
-            int recordCount = Integer.parseInt(p.getProperty(Client.RECORD_COUNT_PROPERTY, Client.DEFAULT_RECORD_COUNT));
             double skew = Double.parseDouble(p.getProperty(SLASHDOT_SKEW_PROPERTY, SLASHDOT_SKEW_DEFAULT));
             int delay = Integer.parseInt(p.getProperty(SLASHDOT_DELAY_PROPERTY, SLASHDOT_DELAY_DEFAULT));
-            keychooser = new SlashdotGenerator(recordCount, skew, delay);
+            keychooser = new SlashdotGenerator(recordcount, skew, delay);
         } else if (requestdistrib.compareTo("uniform") == 0) {
-            keychooser = new UniformIntegerGenerator(0, 1);
+            keychooser = new UniformIntegerGenerator(insertstart, insertstart + insertcount - 1);
         } else if (requestdistrib.compareTo("zipfian") == 0) {
             // it does this by generating a random "next key" in part by taking the modulus over the number of keys.
             // If the number of keys changes, this would shift the modulus, and we don't want that to
@@ -285,7 +286,7 @@ public class CoreWorkload extends Workload {
         int keynum = keychooser.nextInt();
         String keyname = buildKeyName(keynum);
         //System.out.println(keynum + " " + keyname);
-        byte[] result = clientBlueprint.read(keyname);
+        byte[] result = clientBlueprint.read(keyname, keynum);
     }
 
     public void doTransactionUpdate(ClientBlueprint clientBlueprint) {

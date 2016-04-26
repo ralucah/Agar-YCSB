@@ -242,7 +242,7 @@ public class ECCacheClient extends ClientBlueprint {
     }
 
     @Override
-    public byte[] read(final String key) {
+    public byte[] read(final String key, final int keyNum) {
         byte[] data = null;
         // read from cache
         List<ECBlock> ecblocksCached = readCache(key);
