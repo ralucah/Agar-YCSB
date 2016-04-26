@@ -14,6 +14,7 @@ import org.apache.log4j.Logger;
 
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /*
  Assumptions:
@@ -22,6 +23,8 @@ import java.util.concurrent.*;
  */
 
 public class AllCachesClient extends ClientBlueprint {
+    protected static final AtomicInteger cacheHits = new AtomicInteger(0);
+    protected static final AtomicInteger cacheMisses = new AtomicInteger(0);
     public static String S3_ZONES = "s3.zones";
     public static String S3_REGIONS_PROPERTIES = "s3.regions";
     public static String S3_ENDPOINTS_PROPERTIES = "s3.endpoints";
@@ -35,13 +38,10 @@ public class AllCachesClient extends ClientBlueprint {
     public static String EXECUTOR_THREADS_DEFAULT = "5";
     protected static Logger logger = Logger.getLogger(AllCachesClient.class);
     private Properties properties;
-
     // S3 bucket names mapped to connections to AWS S3 buckets
     private List<S3Connection> s3Connections;
-
     // for concurrent processing
     private ExecutorService executor;
-
     private MemcachedConnection memConnection;
 
     // TODO Assumption: one bucket per region (num regions = num endpoints = num buckets)
@@ -114,8 +114,8 @@ public class AllCachesClient extends ClientBlueprint {
 
     @Override
     public void cleanup() throws ClientException {
-        logger.debug("Cleaning up.");
         executor.shutdown();
+        logger.error(memConnection.getHost() + " Hits: " + cacheHits + " Misses: " + cacheMisses);
     }
 
 
@@ -186,6 +186,7 @@ public class AllCachesClient extends ClientBlueprint {
             data = readFromBackend(key);
             if (data != null) {
                 logger.info("Read BACKEND " + key + " " + data.length + "B " + ClientUtils.bytesToHash(data));
+                cacheMisses.incrementAndGet();
                 final byte[] dataFin = data;
                 executor.submit(new Runnable() {
                     @Override
@@ -194,8 +195,10 @@ public class AllCachesClient extends ClientBlueprint {
                     }
                 });
             }
-        } else
+        } else {
             logger.info("Read CACHE " + key + " " + data.length + "B  " + ClientUtils.bytesToHash(data) + " " + memConnection.getHost());
+            cacheHits.incrementAndGet();
+        }
 
         return data;
     }

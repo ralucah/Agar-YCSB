@@ -6,7 +6,7 @@ readproportion=1
 updateproportion=0
 scanproportion=0
 insertproportion=0
-maxexecutiontime=120
+maxexecutiontime=30
 
 #insertstart=0
 #insertcount=100

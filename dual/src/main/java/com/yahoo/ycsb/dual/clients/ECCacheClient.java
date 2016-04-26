@@ -14,6 +14,7 @@ import org.apache.log4j.Logger;
 
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /*
  Assumptions:
@@ -34,15 +35,16 @@ public class ECCacheClient extends ClientBlueprint {
     public static String EXECUTOR_THREADS_PROPERTY = "executor.threads";
     public static String EXECUTOR_THREADS_DEFAULT = "5";
     protected static Logger logger = Logger.getLogger(ECCacheClient.class);
+    protected static AtomicInteger cacheHits = new AtomicInteger(0);
+    protected static AtomicInteger cachePartialHits = new AtomicInteger(0);
+    protected static AtomicInteger cacheMisses = new AtomicInteger(0);
     private Properties properties;
-
     // S3 bucket names mapped to connections to AWS S3 buckets
     private List<S3Connection> s3Connections;
-
     // for concurrent processing
     private ExecutorService executor;
-
     private List<MemcachedConnection> memConnections;
+    ;
 
     // TODO Assumption: one bucket per region (num regions = num endpoints = num buckets)
     private void initS3() {
@@ -89,7 +91,7 @@ public class ECCacheClient extends ClientBlueprint {
         }
     }
 
-    private void initMemcached() throws ClientException {
+    private void initCache() throws ClientException {
         memConnections = new ArrayList<MemcachedConnection>();
         List<String> memHosts = Arrays.asList(properties.getProperty(MEMCACHED_SERVERS_PROPERTY).split("\\s*,\\s*"));
         for (String memHost : memHosts) {
@@ -105,7 +107,7 @@ public class ECCacheClient extends ClientBlueprint {
 
         initS3();
         initLonghair();
-        initMemcached();
+        initCache();
 
         // init executor service
         final int threadsNum = Integer.valueOf(properties.getProperty(EXECUTOR_THREADS_PROPERTY, EXECUTOR_THREADS_DEFAULT));
@@ -117,8 +119,8 @@ public class ECCacheClient extends ClientBlueprint {
 
     @Override
     public void cleanup() throws ClientException {
-        logger.debug("Cleaning up.");
-        //executor.shutdown();
+        executor.shutdown();
+        logger.error("Hits: " + cacheHits + " Misses: " + cacheMisses + " PartialHists: " + cachePartialHits);
     }
 
     private ECBlock readBlockCache(String key, int blockId) {
@@ -221,7 +223,8 @@ public class ECCacheClient extends ClientBlueprint {
         int errors = 0;
         int errorsMax = missingIds.size() - numMissing;
         List<ECBlock> ecblocks = new ArrayList<ECBlock>();
-        while (success < numMissing) {
+        while (success < numMissing - LonghairLib.m) {
+            //while (success < numMissing) {
             try {
                 Future<ECBlock> resultFuture = completionService.take();
                 ECBlock ecblock = resultFuture.get();
@@ -269,10 +272,13 @@ public class ECCacheClient extends ClientBlueprint {
                 for (ECBlock ecblock : ecblocksBackend)
                     blockBytes.add(ecblock.getBytes());
                 data = LonghairLib.decode(blockBytes);
-                if (ecblocksCached.size() > 0)
+                if (ecblocksCached.size() > 0) {
                     logger.info("Read " + key + " " + data.length + " bytes Cache: " + ecblocksCached.size() + " Backend: " + ecblocksBackend.size());
-                else
+                    cachePartialHits.incrementAndGet();
+                } else {
                     logger.info("Read " + key + " " + data.length + " bytes Backend: " + ecblocksBackend.size());
+                    cacheMisses.incrementAndGet();
+                }
             } else
                 logger.error("[Error] Read " + key);
         } else {
@@ -281,6 +287,7 @@ public class ECCacheClient extends ClientBlueprint {
                 blockBytes.add(ecblock.getBytes());
             data = LonghairLib.decode(blockBytes);
             logger.info("Read " + key + " " + data.length + " bytes Cache: " + ecblocksCached.size());
+            cacheHits.incrementAndGet();
         }
 
         return data;

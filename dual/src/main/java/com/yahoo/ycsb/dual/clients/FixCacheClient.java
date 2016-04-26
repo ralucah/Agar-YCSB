@@ -15,6 +15,7 @@ import org.apache.log4j.Logger;
 
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /*
  Assumptions:
@@ -34,8 +35,9 @@ public class FixCacheClient extends ClientBlueprint {
     public static String EXECUTOR_THREADS_PROPERTY = "executor.threads";
     public static String EXECUTOR_THREADS_PROPERTY_DEFAULT = "5";
     protected static Logger logger = Logger.getLogger(FixCacheClient.class);
+    protected static Map<String, AtomicInteger> cacheHits;
+    protected static Map<String, AtomicInteger> cacheMisses;
     private Properties properties;
-
     private List<S3Connection> s3Connections;
     private List<MemcachedConnection> memConnections;
     private ExecutorService executor;
@@ -87,10 +89,22 @@ public class FixCacheClient extends ClientBlueprint {
     private void initCache() throws ClientException {
         memConnections = new ArrayList<MemcachedConnection>();
         List<String> memHosts = Arrays.asList(properties.getProperty(MEMCACHED_PROPERTY).split("\\s*,\\s*"));
+
         for (String memHost : memHosts) {
             MemcachedConnection memConnection = new MemcachedConnection(memHost);
             memConnections.add(memConnection);
             logger.debug("Memcached connection " + memHost);
+        }
+
+        if (cacheHits == null) {
+            cacheHits = new HashMap<String, AtomicInteger>();
+            for (String memHost : memHosts)
+                cacheHits.put(memHost, new AtomicInteger(0));
+        }
+        if (cacheMisses == null) {
+            cacheMisses = new HashMap<String, AtomicInteger>();
+            for (String memHost : memHosts)
+                cacheMisses.put(memHost, new AtomicInteger(0));
         }
     }
 
@@ -113,8 +127,11 @@ public class FixCacheClient extends ClientBlueprint {
 
     @Override
     public void cleanup() throws ClientException {
-        logger.debug("Cleaning up.");
         executor.shutdown();
+        for (MemcachedConnection memConnection : memConnections) {
+            String host = memConnection.getHost();
+            logger.error(host + " Hits: " + cacheHits.get(host) + " Misses: " + cacheMisses.get(host));
+        }
     }
 
 
@@ -170,8 +187,12 @@ public class FixCacheClient extends ClientBlueprint {
         int memConnectionId = keyNum % memConnections.size();
         MemcachedConnection memConnection = memConnections.get(memConnectionId);
         byte[] data = memConnection.read(key);
-        if (data != null)
+        if (data != null) {
             logger.info("Read CACHE " + key + " " + data.length + " bytes " + memConnection.getHost());
+            cacheHits.get(memConnection.getHost()).incrementAndGet();
+        } else {
+            cacheMisses.get(memConnection.getHost()).incrementAndGet();
+        }
         return data;
     }
 
