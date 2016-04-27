@@ -6,6 +6,7 @@ import com.yahoo.ycsb.measurements.Measurements;
 
 import java.io.IOException;
 import java.util.Properties;
+import java.util.Random;
 
 /**
  * The core benchmark scenario. Represents a set of clients doing simple CRUD operations. The
@@ -201,7 +202,9 @@ public class CoreWorkload extends Workload {
         sb.setLength(size);
         byte[] value = sb.toString().getBytes();
         return value;*/
-        return new byte[size];
+        byte[] data = new byte[size];
+        new Random().nextBytes(data);
+        return data;
     }
 
     /**
