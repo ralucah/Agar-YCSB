@@ -174,7 +174,6 @@ public class AllCachesClient extends ClientBlueprint {
     }
 
     private void cacheData(String key, byte[] data) {
-        logger.info(data.length);
         Status status = memConnection.insert(key, data);
         logger.debug("Cache " + key + " " + memConnection.getHost());
     }
