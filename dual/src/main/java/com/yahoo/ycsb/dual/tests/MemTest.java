@@ -65,7 +65,7 @@ public class MemTest {
     }
 
     public static void main(String args[]) throws ClientException, InterruptedException {
-        MemcachedConnection memcachedConnection = new MemcachedConnection("127.0.0.1:11211");
+        MemcachedConnection memcachedConnection = new MemcachedConnection("localhost:11211");
 
         // store
         store(memcachedConnection);

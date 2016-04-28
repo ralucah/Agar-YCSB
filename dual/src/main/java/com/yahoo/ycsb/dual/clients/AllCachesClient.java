@@ -25,7 +25,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class AllCachesClient extends ClientBlueprint {
     protected static final AtomicInteger cacheHits = new AtomicInteger(0);
     protected static final AtomicInteger cacheMisses = new AtomicInteger(0);
-    public static String S3_ZONES = "s3.zones";
     public static String S3_REGIONS_PROPERTIES = "s3.regions";
     public static String S3_ENDPOINTS_PROPERTIES = "s3.endpoints";
     public static String S3_BUCKETS_PROPERTIES = "s3.buckets";
@@ -175,6 +174,7 @@ public class AllCachesClient extends ClientBlueprint {
     }
 
     private void cacheData(String key, byte[] data) {
+        logger.info(data.length);
         Status status = memConnection.insert(key, data);
         logger.debug("Cache " + key + " " + memConnection.getHost());
     }
@@ -187,6 +187,7 @@ public class AllCachesClient extends ClientBlueprint {
             if (data != null) {
                 logger.info("Read BACKEND " + key + " " + data.length + "B " + ClientUtils.bytesToHash(data));
                 cacheMisses.incrementAndGet();
+
                 final byte[] dataFin = data;
                 executor.submit(new Runnable() {
                     @Override

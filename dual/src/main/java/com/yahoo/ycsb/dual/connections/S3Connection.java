@@ -238,7 +238,12 @@ public class S3Connection {
             // writing the stream to bytes and to results
             int sizeOfFile = (int) objectMetadata.getContentLength();
             bytes = new byte[sizeOfFile];
-            objectData.read(bytes, 0, sizeOfFile);
+            int offset = 0;
+            while (offset < sizeOfFile) {
+                int nr_bytes_read = objectData.read(bytes, offset, sizeOfFile - offset);
+                offset = offset + nr_bytes_read;
+            }
+            //int nr_bytes_read = objectData.read(bytes, 0, sizeOfFile);
             objectData.close();
         } catch (Exception e) {
             logger.warn("Not possible to get the object " + key);

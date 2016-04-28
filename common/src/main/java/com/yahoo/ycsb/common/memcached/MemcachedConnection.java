@@ -44,7 +44,7 @@ public class MemcachedConnection {
     private static boolean checkOperationStatus = true;
     private static long shutdownTimeoutMillis = 30000;
     private static int objectExpirationTime = 2147483647;
-    private static int bufferSize = 3000000;
+    private static int bufferSize = 50000000;
     private static int opTimeout = 60000;
     private static String failureString = "Redistribute"; //  `Redistribute`, `Retry`, or `Cancel`.
 

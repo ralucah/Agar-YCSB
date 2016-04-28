@@ -28,5 +28,14 @@
     <orderEntry type="module" module-name="common" />
     <orderEntry type="library" name="Maven: net.java.dev.jna:jna:4.2.1" level="project" />
     <orderEntry type="library" name="Maven: net.spy:spymemcached:2.11.4" level="project" />
+    <orderEntry type="module-library">
+      <library>
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/conf" />
+        </CLASSES>
+        <JAVADOC />
+        <SOURCES />
+      </library>
+    </orderEntry>
   </component>
 </module>
