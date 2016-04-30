@@ -56,7 +56,7 @@ COMMANDS = {
 
 CLIENTS = {
     "backend" : "com.yahoo.ycsb.dual.clients.BackendClient",
-    "allcache" : "com.yahoo.ycsb.dual.clients.AllCachesClient",
+    "localcache" : "com.yahoo.ycsb.dual.clients.LocalCacheClient",
     "fixcache" : "com.yahoo.ycsb.dual.clients.FixCacheClient",
     "eccache" : "com.yahoo.ycsb.dual.clients.ECCacheClient",
     "smart" : "com.yahoo.ycsb.dual.clients.SmartCacheClient"
@@ -163,7 +163,7 @@ def main():
             formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('-cp', dest='classpath', help="""Additional classpath
                    entries will be prepended to the YCSB classpath.""")
-    p.add_argument("-jvm-args", default=[], type=shlex.split,
+    p.add_argument("-jvm-args", default=['-XX:-HeapDumpOnOutOfMemoryError'], type=shlex.split,
                    help="""Additional arguments to pass to 'java', e.g. '-Xmx4g'""")
     p.add_argument("command", choices=sorted(COMMANDS),
                    help="""Command to run.""")

@@ -16,7 +16,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class ECCacheClient extends ClientBlueprint {
+public class ECCacheClient2 extends ClientBlueprint {
     public static String S3_REGIONS_PROPERTIES = "s3.regions";
     public static String S3_ENDPOINTS_PROPERTIES = "s3.endpoints";
     public static String S3_BUCKETS_PROPERTIES = "s3.buckets";
@@ -27,7 +27,7 @@ public class ECCacheClient extends ClientBlueprint {
     public static String LONGHAIR_M_DEFAULT = "2";
     public static String EXECUTOR_THREADS_PROPERTY = "executor.threads";
     public static String EXECUTOR_THREADS_DEFAULT = "5";
-    protected static Logger logger = Logger.getLogger(ECCacheClient.class);
+    protected static Logger logger = Logger.getLogger(ECCacheClient2.class);
     protected static AtomicInteger cacheHits = new AtomicInteger(0);
     protected static AtomicInteger cachePartialHits = new AtomicInteger(0);
     protected static AtomicInteger cacheMisses = new AtomicInteger(0);
@@ -216,7 +216,8 @@ public class ECCacheClient extends ClientBlueprint {
         int errors = 0;
         int errorsMax = missingIds.size() - numMissing;
         List<ECBlock> ecblocks = new ArrayList<ECBlock>();
-        while (success < numMissing) {
+        while (success < numMissing - LonghairLib.m) {
+            //while (success < numMissing) {
             try {
                 Future<ECBlock> resultFuture = completionService.take();
                 ECBlock ecblock = resultFuture.get();

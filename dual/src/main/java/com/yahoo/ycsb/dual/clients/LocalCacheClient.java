@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  - there is one S3 bucket per Amazon region
  */
 
-public class AllCachesClient extends ClientBlueprint {
+public class LocalCacheClient extends ClientBlueprint {
     protected static final AtomicInteger cacheHits = new AtomicInteger(0);
     protected static final AtomicInteger cacheMisses = new AtomicInteger(0);
     public static String S3_REGIONS_PROPERTIES = "s3.regions";
@@ -35,7 +35,7 @@ public class AllCachesClient extends ClientBlueprint {
     public static String LONGHAIR_M_DEFAULT = "2";
     public static String EXECUTOR_THREADS_PROPERTY = "executor.threads";
     public static String EXECUTOR_THREADS_DEFAULT = "5";
-    protected static Logger logger = Logger.getLogger(AllCachesClient.class);
+    protected static Logger logger = Logger.getLogger(LocalCacheClient.class);
     private Properties properties;
     // S3 bucket names mapped to connections to AWS S3 buckets
     private List<S3Connection> s3Connections;
