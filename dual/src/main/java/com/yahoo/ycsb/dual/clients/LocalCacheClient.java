@@ -200,6 +200,9 @@ public class LocalCacheClient extends ClientBlueprint {
             cacheHits.incrementAndGet();
         }
 
+        if (data == null)
+            logger.error("Error reading " + key);
+
         return data;
     }
 

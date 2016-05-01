@@ -168,7 +168,7 @@ public class CoreWorkload extends Workload {
             // the keyspace doesn't change from the perspective of the scrambled zipfian generator
             int opcount = Integer.parseInt(p.getProperty(Client.OPERATION_COUNT_PROPERTY));
             int expectednewkeys = (int) ((opcount) * insertproportion * 2.0); // 2 is fudge factor
-            keychooser = new ScrambledZipfianGenerator(expectednewkeys);
+            keychooser = new ScrambledZipfianGenerator(insertstart, insertstart + insertcount + expectednewkeys);
         } else if (requestdistrib.compareTo("latest") == 0) {
             keychooser = new SkewedLatestGenerator(transactioninsertkeysequence);
         } else if (requestdistrib.equals("hotspot")) {

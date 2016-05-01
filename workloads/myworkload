@@ -8,10 +8,11 @@ scanproportion=0
 insertproportion=0
 maxexecutiontime=300
 
-#insertstart=0
-#insertcount=100
+insertstart=0
+insertcount=99
 
-requestdistribution=uniform
+requestdistribution=zipfian
+#requestdistribution=uniform
 #requestdistribution=slashdot
 #skew=1.23
 #delay=1234
