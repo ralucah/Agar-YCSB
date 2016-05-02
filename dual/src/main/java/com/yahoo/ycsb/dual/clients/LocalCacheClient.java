@@ -113,8 +113,8 @@ public class LocalCacheClient extends ClientBlueprint {
 
     @Override
     public void cleanup() throws ClientException {
-        executor.shutdown();
         logger.error(memConnection.getHost() + " Hits: " + cacheHits + " Misses: " + cacheMisses);
+        executor.shutdown();
     }
 
 

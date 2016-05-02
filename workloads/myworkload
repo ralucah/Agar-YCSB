@@ -11,8 +11,8 @@ maxexecutiontime=300
 insertstart=0
 insertcount=99
 
-requestdistribution=zipfian
-#requestdistribution=uniform
+#requestdistribution=zipfian
+requestdistribution=uniform
 #requestdistribution=slashdot
 #skew=1.23
 #delay=1234
@@ -24,6 +24,7 @@ s3.buckets=patrick101,frank101,virginia101
 memcached.server=127.0.0.1:11211
 memcached.servers=127.0.0.1:11211,127.0.0.1:11212,127.0.0.1:11213
 
-longhair.k=2
-longhair.m=1
-executor.threads=5
+longhair.k=6
+longhair.m=3
+executor.threads=10
+blocksincache=5

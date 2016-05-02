@@ -172,9 +172,10 @@ public class BackendClient extends ClientBlueprint {
 
     private Status insertBlock(String baseKey, int blockNum, byte[] block) {
         String blockKey = baseKey + blockNum;
-        S3Connection s3Connection = s3Connections.get(blockNum);
+        int s3ConnNum = blockNum % s3Connections.size();
+        S3Connection s3Connection = s3Connections.get(s3ConnNum);
         Status status = s3Connection.insert(blockKey, block);
-        logger.debug("Insert " + baseKey + " block" + blockNum + " " + block.length + "Bss bucket" + blockNum);
+        logger.info("Insert " + baseKey + " block" + blockNum + " " + block.length + " bucket" + s3ConnNum);
         return status;
     }
 

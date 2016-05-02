@@ -20,13 +20,14 @@ public class ECCacheClient extends ClientBlueprint {
     public static String S3_REGIONS_PROPERTIES = "s3.regions";
     public static String S3_ENDPOINTS_PROPERTIES = "s3.endpoints";
     public static String S3_BUCKETS_PROPERTIES = "s3.buckets";
-    public static String MEMCACHED_SERVERS_PROPERTY = "memcached.servers";
+    public static String MEMCACHED_PROPERTY = "memcached.server";
     public static String LONGHAIR_K_PROPERTY = "longhair.k";
-    public static String LONGHAIR_K_DEFAULT = "3";
+    public static String LONGHAIR_K_DEFAULT = "6";
     public static String LONGHAIR_M_PROPERTY = "longhair.m";
-    public static String LONGHAIR_M_DEFAULT = "2";
+    public static String LONGHAIR_M_DEFAULT = "3";
     public static String EXECUTOR_THREADS_PROPERTY = "executor.threads";
-    public static String EXECUTOR_THREADS_DEFAULT = "5";
+    public static String EXECUTOR_THREADS_DEFAULT = "10";
+    public static String BLOCKS_TO_CACHE = "blocksincache";
     protected static Logger logger = Logger.getLogger(ECCacheClient.class);
     protected static AtomicInteger cacheHits = new AtomicInteger(0);
     protected static AtomicInteger cachePartialHits = new AtomicInteger(0);
@@ -36,8 +37,8 @@ public class ECCacheClient extends ClientBlueprint {
     private List<S3Connection> s3Connections;
     // for concurrent processing
     private ExecutorService executor;
-    private List<MemcachedConnection> memConnections;
-    ;
+    private MemcachedConnection memConnection;
+    private int blocksincache;
 
     // TODO Assumption: one bucket per region (num regions = num endpoints = num buckets)
     private void initS3() {
@@ -85,12 +86,11 @@ public class ECCacheClient extends ClientBlueprint {
     }
 
     private void initCache() throws ClientException {
-        memConnections = new ArrayList<MemcachedConnection>();
-        List<String> memHosts = Arrays.asList(properties.getProperty(MEMCACHED_SERVERS_PROPERTY).split("\\s*,\\s*"));
-        for (String memHost : memHosts) {
-            memConnections.add(new MemcachedConnection(memHost));
-            logger.debug("Memcached connection " + memHost);
-        }
+        String memHost = properties.getProperty(MEMCACHED_PROPERTY);
+        memConnection = new MemcachedConnection(memHost);
+        logger.debug("Memcached connection " + memHost);
+        blocksincache = Integer.valueOf(properties.getProperty(BLOCKS_TO_CACHE, new Integer(LonghairLib.k).toString()));
+        logger.debug("blocksincache: " + blocksincache);
     }
 
     @Override
@@ -118,16 +118,14 @@ public class ECCacheClient extends ClientBlueprint {
 
     private ECBlock readBlockCache(String key, int blockId) {
         String blockKey = key + blockId;
-        int memConnId = (blockId + 1) % memConnections.size();
-        MemcachedConnection memConnection = memConnections.get(memConnId);
         byte[] bytes = memConnection.read(blockKey);
 
         ECBlock ecblock = null;
         if (bytes != null) {
             ecblock = new ECBlock(blockId, blockKey, bytes);
-            logger.debug("CacheHit " + key + " block " + blockId + " from " + memConnection.getHost());
+            logger.debug("CacheHit " + key + " block " + blockId);
         } else
-            logger.debug("CacheMiss " + key + " block " + blockId + " from " + memConnection.getHost());
+            logger.debug("CacheMiss " + key + " block " + blockId);
 
         return ecblock;
     }
@@ -150,7 +148,7 @@ public class ECCacheClient extends ClientBlueprint {
         int success = 0;
         int errors = 0;
         Set<byte[]> blocks = new HashSet<byte[]>();
-        while (success < LonghairLib.k) {
+        while (success < blocksincache) {
             try {
                 Future<ECBlock> resultFuture = completionService.take();
                 ECBlock ecblock = resultFuture.get();
@@ -163,7 +161,7 @@ public class ECCacheClient extends ClientBlueprint {
                 errors++;
                 logger.debug("Exception reading block.");
             }
-            if (errors > LonghairLib.m)
+            if (errors > (LonghairLib.m + LonghairLib.k - blocksincache))
                 break;
         }
 
@@ -188,15 +186,16 @@ public class ECCacheClient extends ClientBlueprint {
 
     private ECBlock readBlockBackend(String key, int blockId) {
         String blockKey = key + blockId;
-        S3Connection s3Connection = s3Connections.get(blockId); //TODO
+        int s3ConnNum = blockId % s3Connections.size();
+        S3Connection s3Connection = s3Connections.get(s3ConnNum);
         byte[] bytes = s3Connection.read(blockKey);
 
         ECBlock ecblock = null;
         if (bytes != null) {
             ecblock = new ECBlock(blockId, blockKey, bytes);
-            logger.debug("ReadBlockBackend " + key + " block" + blockId + " from bucket" + blockId);
+            logger.debug("ReadBlockBackend " + key + " block" + blockId + " from bucket" + s3ConnNum);
         } else
-            logger.error("[Error] ReadBlockBackend " + key + " block" + blockId + " from bucket" + blockId);
+            logger.error("[Error] ReadBlockBackend " + key + " block" + blockId + " from bucket" + s3ConnNum);
 
         return ecblock;
     }
@@ -243,16 +242,22 @@ public class ECCacheClient extends ClientBlueprint {
         List<ECBlock> ecblocksCached = readCache(key);
         if (ecblocksCached.size() < LonghairLib.k) {
             Set<Integer> missingIds = getMissingIds(ecblocksCached);
-            int numMissing = LonghairLib.k + LonghairLib.m - ecblocksCached.size();
+            int numMissing = LonghairLib.k - ecblocksCached.size();
             final List<ECBlock> ecblocksBackend = readBackend(key, numMissing, missingIds);
 
             // cache in background
-            if (ecblocksBackend.size() > 0) {
+            if (ecblocksCached.size() == 0 && ecblocksBackend.size() > 0) {
                 executor.submit(new Runnable() {
                     @Override
                     public void run() {
-                        for (ECBlock ecblock : ecblocksBackend)
+                        int counter = 0;
+                        for (int i = ecblocksBackend.size() - 1; i >= 0; i--) {
+                            ECBlock ecblock = ecblocksBackend.get(i);
                             cacheBlock(key, ecblock);
+                            counter++;
+                            if (counter == blocksincache)
+                                break;
+                        }
                     }
                 });
             }
@@ -282,12 +287,16 @@ public class ECCacheClient extends ClientBlueprint {
             cacheHits.incrementAndGet();
         }
 
+        /*try {
+            Thread.sleep(5000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }*/
+
         return data;
     }
 
     private void cacheBlock(String key, ECBlock ecblock) {
-        int memConnId = (ecblock.getId() + 1) % memConnections.size();
-        MemcachedConnection memConnection = memConnections.get(memConnId);
         Status status = memConnection.insert(ecblock.getKey(), ecblock.getBytes());
         if (status == Status.OK)
             logger.debug("Cache  " + key + " block " + ecblock.getId() + " at " + memConnection.getHost());
