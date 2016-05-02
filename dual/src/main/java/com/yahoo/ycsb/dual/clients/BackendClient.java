@@ -113,7 +113,8 @@ public class BackendClient extends ClientBlueprint {
 
     private byte[] readBlock(String baseKey, int blockNum) {
         String blockKey = baseKey + blockNum;
-        S3Connection s3Connection = s3Connections.get(blockNum);
+        int s3ConnNum = blockNum % s3Connections.size();
+        S3Connection s3Connection = s3Connections.get(s3ConnNum);
         byte[] block = s3Connection.read(blockKey);
         //logger.debug("ReadBlock " + blockNum + " " + blockKey + " " + ClientUtils.bytesToHash(block));
         logger.debug("Read " + baseKey + " block" + blockNum + " " + block.length + "B bucket" + blockNum);
