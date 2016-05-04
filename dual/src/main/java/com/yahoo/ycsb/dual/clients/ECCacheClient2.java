@@ -10,6 +10,7 @@ import com.yahoo.ycsb.common.liberasure.LonghairLib;
 import com.yahoo.ycsb.common.memcached.MemcachedConnection;
 import com.yahoo.ycsb.dual.connections.S3Connection;
 import com.yahoo.ycsb.dual.utils.ECBlock;
+import com.yahoo.ycsb.dual.utils.Storage;
 import org.apache.log4j.Logger;
 
 import java.util.*;
@@ -124,7 +125,7 @@ public class ECCacheClient2 extends ClientBlueprint {
 
         ECBlock ecblock = null;
         if (bytes != null) {
-            ecblock = new ECBlock(blockId, blockKey, bytes);
+            ecblock = new ECBlock(blockId, blockKey, bytes, Storage.CACHE);
             logger.debug("CacheHit " + key + " block " + blockId + " from " + memConnection.getHost());
         } else
             logger.debug("CacheMiss " + key + " block " + blockId + " from " + memConnection.getHost());
@@ -193,7 +194,7 @@ public class ECCacheClient2 extends ClientBlueprint {
 
         ECBlock ecblock = null;
         if (bytes != null) {
-            ecblock = new ECBlock(blockId, blockKey, bytes);
+            ecblock = new ECBlock(blockId, blockKey, bytes, Storage.BACKEND);
             logger.debug("ReadBlockBackend " + key + " block" + blockId + " from bucket" + blockId);
         } else
             logger.error("[Error] ReadBlockBackend " + key + " block" + blockId + " from bucket" + blockId);

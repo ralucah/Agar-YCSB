@@ -27,4 +27,4 @@ memcached.servers=127.0.0.1:11211,127.0.0.1:11212,127.0.0.1:11213
 longhair.k=6
 longhair.m=3
 executor.threads=10
-blocksincache=5
+blocksincache=3

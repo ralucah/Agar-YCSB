@@ -10,6 +10,7 @@ import com.yahoo.ycsb.common.liberasure.LonghairLib;
 import com.yahoo.ycsb.common.memcached.MemcachedConnection;
 import com.yahoo.ycsb.dual.connections.S3Connection;
 import com.yahoo.ycsb.dual.utils.ECBlock;
+import com.yahoo.ycsb.dual.utils.Storage;
 import org.apache.log4j.Logger;
 
 import java.util.*;
@@ -112,76 +113,24 @@ public class ECCacheClient extends ClientBlueprint {
 
     @Override
     public void cleanup() throws ClientException {
-        executor.shutdown();
         logger.error("Hits: " + cacheHits + " Misses: " + cacheMisses + " PartialHits: " + cachePartialHits);
+        executor.shutdown();
     }
 
-    private ECBlock readBlockCache(String key, int blockId) {
+    private ECBlock readBlockParallel(String key, int blockId) {
         String blockKey = key + blockId;
         byte[] bytes = memConnection.read(blockKey);
 
         ECBlock ecblock = null;
         if (bytes != null) {
-            ecblock = new ECBlock(blockId, blockKey, bytes);
             logger.debug("CacheHit " + key + " block " + blockId);
-        } else
+            ecblock = new ECBlock(blockId, blockKey, bytes, Storage.CACHE);
+        } else {
             logger.debug("CacheMiss " + key + " block " + blockId);
+            ecblock = readBlockBackend(key, blockId);
+        }
 
         return ecblock;
-    }
-
-    private List<ECBlock> readCache(final String key) {
-        List<ECBlock> ecblocks = new ArrayList<ECBlock>();
-
-        // read blocks in parallel
-        CompletionService<ECBlock> completionService = new ExecutorCompletionService<ECBlock>(executor);
-        for (int i = 0; i < LonghairLib.k + LonghairLib.m; i++) {
-            final int blockNumFin = i;
-            completionService.submit(new Callable<ECBlock>() {
-                @Override
-                public ECBlock call() throws Exception {
-                    return readBlockCache(key, blockNumFin);
-                }
-            });
-        }
-
-        int success = 0;
-        int errors = 0;
-        Set<byte[]> blocks = new HashSet<byte[]>();
-        while (success < blocksincache) {
-            try {
-                Future<ECBlock> resultFuture = completionService.take();
-                ECBlock ecblock = resultFuture.get();
-                if (ecblock != null) {
-                    ecblocks.add(ecblock);
-                    success++;
-                } else
-                    errors++;
-            } catch (Exception e) {
-                errors++;
-                logger.debug("Exception reading block.");
-            }
-            if (errors > (LonghairLib.m + LonghairLib.k - blocksincache))
-                break;
-        }
-
-        return ecblocks;
-    }
-
-    private Set<Integer> getMissingIds(List<ECBlock> ecblocksCached) {
-        Set<Integer> cached = new HashSet<Integer>();
-        for (ECBlock ecblock : ecblocksCached) {
-            cached.add(ecblock.getId());
-        }
-
-        Set<Integer> missing = new HashSet<Integer>();
-        int id = 0;
-        while (id < LonghairLib.k + LonghairLib.m) {
-            if (cached.contains(id) == false)
-                missing.add(id);
-            id++;
-        }
-        return missing;
     }
 
     private ECBlock readBlockBackend(String key, int blockId) {
@@ -191,31 +140,33 @@ public class ECCacheClient extends ClientBlueprint {
         byte[] bytes = s3Connection.read(blockKey);
 
         ECBlock ecblock = null;
-        if (bytes != null) {
-            ecblock = new ECBlock(blockId, blockKey, bytes);
-            logger.debug("ReadBlockBackend " + key + " block" + blockId + " from bucket" + s3ConnNum);
-        } else
+        if (bytes != null)
+            ecblock = new ECBlock(blockId, blockKey, bytes, Storage.BACKEND);
+        else
             logger.error("[Error] ReadBlockBackend " + key + " block" + blockId + " from bucket" + s3ConnNum);
 
         return ecblock;
     }
 
-    private List<ECBlock> readBackend(final String key, final int numMissing, Set<Integer> missingIds) {
+    private List<ECBlock> readParallel(final String key) {
+        List<ECBlock> ecblocks = new ArrayList<ECBlock>();
+
+        // read blocks in parallel from cache and backend
         CompletionService<ECBlock> completionService = new ExecutorCompletionService<ECBlock>(executor);
-        for (final int missingId : missingIds) {
+        for (int i = 0; i < LonghairLib.k + LonghairLib.m; i++) {
+            final int blockNumFin = i;
             completionService.submit(new Callable<ECBlock>() {
                 @Override
                 public ECBlock call() throws Exception {
-                    return readBlockBackend(key, missingId);
+                    return readBlockParallel(key, blockNumFin);
                 }
             });
         }
 
         int success = 0;
         int errors = 0;
-        int errorsMax = missingIds.size() - numMissing;
-        List<ECBlock> ecblocks = new ArrayList<ECBlock>();
-        while (success < numMissing) {
+        Set<byte[]> blocks = new HashSet<byte[]>();
+        while (success < LonghairLib.k) {
             try {
                 Future<ECBlock> resultFuture = completionService.take();
                 ECBlock ecblock = resultFuture.get();
@@ -228,7 +179,7 @@ public class ECCacheClient extends ClientBlueprint {
                 errors++;
                 logger.debug("Exception reading block.");
             }
-            if (errors > errorsMax)
+            if (errors > LonghairLib.m)
                 break;
         }
 
@@ -239,59 +190,44 @@ public class ECCacheClient extends ClientBlueprint {
     public byte[] read(final String key, final int keyNum) {
         byte[] data = null;
         // read from cache
-        List<ECBlock> ecblocksCached = readCache(key);
-        if (ecblocksCached.size() < LonghairLib.k) {
-            Set<Integer> missingIds = getMissingIds(ecblocksCached);
-            int numMissing = LonghairLib.k - ecblocksCached.size();
-            final List<ECBlock> ecblocksBackend = readBackend(key, numMissing, missingIds);
+        List<ECBlock> ecblocks = readParallel(key);
+        Set<byte[]> blockBytes = new HashSet<byte[]>();
 
-            // cache in background
-            if (ecblocksCached.size() == 0 && ecblocksBackend.size() > 0) {
-                executor.submit(new Runnable() {
-                    @Override
-                    public void run() {
-                        int counter = 0;
-                        for (int i = ecblocksBackend.size() - 1; i >= 0; i--) {
-                            ECBlock ecblock = ecblocksBackend.get(i);
-                            cacheBlock(key, ecblock);
-                            counter++;
-                            if (counter == blocksincache)
-                                break;
-                        }
-                    }
-                });
-            }
-
-            if (ecblocksCached.size() + ecblocksBackend.size() >= LonghairLib.k) {
-                Set<byte[]> blockBytes = new HashSet<byte[]>();
-                for (ECBlock ecblock : ecblocksCached)
-                    blockBytes.add(ecblock.getBytes());
-                for (ECBlock ecblock : ecblocksBackend)
-                    blockBytes.add(ecblock.getBytes());
-                data = LonghairLib.decode(blockBytes);
-                if (ecblocksCached.size() > 0) {
-                    logger.info("Read " + key + " " + data.length + " bytes Cache: " + ecblocksCached.size() + " Backend: " + ecblocksBackend.size());
-                    cachePartialHits.incrementAndGet();
-                } else {
-                    logger.info("Read " + key + " " + data.length + " bytes Backend: " + ecblocksBackend.size());
-                    cacheMisses.incrementAndGet();
-                }
-            } else
-                logger.error("[Error] Read " + key);
-        } else {
-            Set<byte[]> blockBytes = new HashSet<byte[]>();
-            for (ECBlock ecblock : ecblocksCached)
-                blockBytes.add(ecblock.getBytes());
-            data = LonghairLib.decode(blockBytes);
-            logger.info("Read " + key + " " + data.length + " bytes Cache: " + ecblocksCached.size());
-            cacheHits.incrementAndGet();
+        int fromCache = 0;
+        int fromBackend = 0;
+        for (ECBlock ecblock : ecblocks) {
+            blockBytes.add(ecblock.getBytes());
+            if (ecblock.getStorage() == Storage.CACHE)
+                fromCache++;
+            else if (ecblock.getStorage() == Storage.BACKEND)
+                fromBackend++;
         }
 
-        /*try {
-            Thread.sleep(5000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }*/
+        // cache in background
+        if (fromCache == 0 && fromBackend > 0) {
+            executor.submit(new Runnable() {
+                @Override
+                public void run() {
+                    int counter = 0;
+                    for (int i = ecblocks.size() - 1; i >= 0; i--) {
+                        ECBlock ecblock = ecblocks.get(i);
+                        cacheBlock(key, ecblock);
+                        counter++;
+                        if (counter == blocksincache)
+                            break;
+                    }
+                }
+            });
+
+            cacheMisses.incrementAndGet();
+        }
+        if (fromBackend == 0 && fromCache > 0)
+            cacheHits.incrementAndGet();
+        if (fromCache > 0 && fromBackend > 0)
+            cachePartialHits.incrementAndGet();
+
+        data = LonghairLib.decode(blockBytes);
+        logger.info("Read " + key + " " + data.length + " bytes Cache: " + fromCache + " Backend: " + fromBackend);
 
         return data;
     }

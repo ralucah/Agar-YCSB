@@ -162,6 +162,8 @@ public class BackendClient extends ClientBlueprint {
 
         if (data != null)
             logger.info("Read " + key + " " + data.length + "B " + ClientUtils.bytesToHash(data));
+        else
+            logger.error("Error reading " + key);
 
         return data;
     }
