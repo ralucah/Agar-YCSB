@@ -190,7 +190,7 @@ public class ECCacheClient extends ClientBlueprint {
     public byte[] read(final String key, final int keyNum) {
         byte[] data = null;
         // read from cache
-        List<ECBlock> ecblocks = readParallel(key);
+        final List<ECBlock> ecblocks = readParallel(key);
         Set<byte[]> blockBytes = new HashSet<byte[]>();
 
         int fromCache = 0;
