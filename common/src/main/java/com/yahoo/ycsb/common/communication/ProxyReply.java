@@ -1,9 +1,6 @@
 package com.yahoo.ycsb.common.communication;
 
 import java.io.Serializable;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
 
 /**
  * Created by Raluca on 24.04.16.
@@ -11,38 +8,17 @@ import java.util.Map;
 public class ProxyReply implements Serializable {
     private static final long serialVersionUID = 7526472295622776148L;
 
-    private Map<String, String> keyToCache;
-    private CacheStatus cacheStatus;
+    private int numBlocks;
 
-    public ProxyReply() {
-        keyToCache = new HashMap<>();
-        cacheStatus = CacheStatus.CACHE_OK;
+    public ProxyReply(int numBlocks) {
+        this.numBlocks = numBlocks;
     }
 
-    public Map<String, String> getKeyToCache() {
-        return keyToCache;
-    }
-
-    public void setKeyToCache(Map<String, String> keyToCache) {
-        this.keyToCache = keyToCache;
-    }
-
-    public CacheStatus getCacheStatus() {
-        return cacheStatus;
-    }
-
-    public void setCacheFull() {
-        this.cacheStatus = CacheStatus.CACHE_FULL;
+    public int getNumBlocks() {
+        return numBlocks;
     }
 
     public String prettyPrint() {
-        Iterator it = keyToCache.entrySet().iterator();
-        String str = "ProxyReply: ";
-        while (it.hasNext()) {
-            Map.Entry pair = (Map.Entry) it.next();
-            str += " (" + pair.getKey() + ", " + pair.getValue() + ") ";
-        }
-        str += cacheStatus;
-        return str;
+        return "ProxyReply: " + numBlocks + " blocks";
     }
 }

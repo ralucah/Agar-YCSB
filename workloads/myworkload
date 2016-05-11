@@ -1,5 +1,5 @@
-recordcount=100
-operationcount=1000000
+recordcount=1
+operationcount=10
 workload=com.yahoo.ycsb.workloads.CoreWorkload
 
 readproportion=1
@@ -9,7 +9,7 @@ insertproportion=0
 maxexecutiontime=300
 
 insertstart=0
-insertcount=99
+insertcount=9
 
 #requestdistribution=zipfian
 requestdistribution=uniform
@@ -27,4 +27,11 @@ memcached.servers=127.0.0.1:11211,127.0.0.1:11212,127.0.0.1:11213
 longhair.k=6
 longhair.m=3
 executor.threads=10
+
+#eccache
 blocksincache=3
+
+#proxy
+proxy=127.0.0.1:11000
+packetsize=1024
+cachesize=64

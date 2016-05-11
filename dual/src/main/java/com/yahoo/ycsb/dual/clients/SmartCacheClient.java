@@ -3,7 +3,6 @@ package com.yahoo.ycsb.dual.clients;
 import com.yahoo.ycsb.ClientBlueprint;
 import com.yahoo.ycsb.ClientException;
 import com.yahoo.ycsb.Status;
-import com.yahoo.ycsb.common.communication.CacheStatus;
 import com.yahoo.ycsb.common.communication.ProxyReply;
 import com.yahoo.ycsb.common.liberasure.LonghairLib;
 import com.yahoo.ycsb.common.memcached.MemcachedConnection;
@@ -21,18 +20,18 @@ public class SmartCacheClient extends ClientBlueprint {
     public static String S3_REGIONS_PROPERTIES = "s3.regions";
     public static String S3_ENDPOINTS_PROPERTIES = "s3.endpoints";
     public static String S3_BUCKETS_PROPERTIES = "s3.buckets";
-    public static String MEMCACHED_SERVERS_PROPERTY = "memcached.servers";
+    public static String MEMCACHED_SERVER_PROPERTY = "memcached.server";
     public static String LONGHAIR_K_PROPERTY = "longhair.k";
     public static String LONGHAIR_K_DEFAULT = "3";
     public static String LONGHAIR_M_PROPERTY = "longhair.m";
     public static String LONGHAIR_M_DEFAULT = "2";
     public static String EXECUTOR_THREADS_PROPERTY = "executor.threads";
-    public static String EXECUTOR_THREADS_DEFAULT = "5";
+    public static String EXECUTOR_THREADS_DEFAULT = "10";
     protected static Logger logger = Logger.getLogger(SmartCacheClient.class);
     private Properties properties;
 
     private List<S3Connection> s3Connections;
-    private Map<String, MemcachedConnection> memConnections; // (ip:port, connection) pairs
+    private MemcachedConnection memConnection;
     private ProxyConnection proxyConnection;
     private ExecutorService executor;
 
@@ -77,14 +76,9 @@ public class SmartCacheClient extends ClientBlueprint {
     private void initCache() throws ClientException {
         proxyConnection = new ProxyConnection(properties);
 
-        // memcached connections are eagerly established
-        memConnections = new HashMap<String, MemcachedConnection>();
-        List<String> memHosts = Arrays.asList(properties.getProperty(MEMCACHED_SERVERS_PROPERTY).split("\\s*,\\s*"));
-        for (String memHost : memHosts) {
-            MemcachedConnection memConnection = new MemcachedConnection(memHost);
-            memConnections.put(memHost, memConnection);
-            logger.debug("Memcached connection " + memHost);
-        }
+        String memHost = properties.getProperty(MEMCACHED_SERVER_PROPERTY);
+        memConnection = new MemcachedConnection(memHost);
+        logger.debug("Memcached connection " + memHost);
     }
 
     public void init() throws ClientException {
@@ -100,12 +94,13 @@ public class SmartCacheClient extends ClientBlueprint {
         logger.debug("SmartCacheClient.init() end");
     }
 
-    // read encoded block blockNum of item with given key
-    private byte[] readBlock(String key, int blockNum) {
-        String blockKey = key + blockNum;
-        S3Connection s3Connection = s3Connections.get(blockNum);
+    private byte[] readBlock(String baseKey, int blockNum) {
+        String blockKey = baseKey + blockNum;
+        int s3ConnNum = blockNum % s3Connections.size();
+        S3Connection s3Connection = s3Connections.get(s3ConnNum);
         byte[] block = s3Connection.read(blockKey);
-        logger.debug("Read " + key + " block" + blockNum + " " + block.length + "B bucket" + blockNum);
+        //logger.debug("ReadBlock " + blockNum + " " + blockKey + " " + ClientUtils.bytesToHash(block));
+        logger.debug("Read " + baseKey + " block" + blockNum + " " + block.length + "B bucket" + blockNum);
         return block;
     }
 
@@ -150,44 +145,30 @@ public class SmartCacheClient extends ClientBlueprint {
         return data;
     }
 
+
     @Override
     public byte[] read(final String key, final int keyNum) {
         ProxyReply reply = proxyConnection.sendRequest(key);
         logger.info(reply.prettyPrint());
-        final Map<String, String> keyToCache = reply.getKeyToCache();
 
-        // read from cache (full data)
-        byte[] data = null;
-        for (Map.Entry<String, String> entry : keyToCache.entrySet()) {
-            String entryKey = entry.getKey();
-            String entryCache = entry.getValue();
-            MemcachedConnection memConn = memConnections.get(entryCache);
-            data = memConn.read(entryKey);
+        // get data from backend
+        /*byte[] data = readBackend(key);
+
+        // cache data
+        Status insertst = memConnection.insert(key, data);
+        logger.info("insert: " + insertst);
+
+        // remove data
+        Status delst = memConnection.delete(key);
+        logger.info("delete: " + delst);*/
+
+        try {
+            Thread.sleep(2000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
         }
 
-        // if miss, get from backend and decode
-        if (data == null) {
-            data = readBackend(key);
-
-            if (data != null)
-                logger.info("Read BACKEND " + key + " " + data.length + "B");
-
-            // cache, if necessary
-            if (reply.getCacheStatus().equals(CacheStatus.CACHE_OK)) {
-                final byte[] dataFin = data;
-                executor.submit(new Runnable() {
-                    @Override
-                    public void run() {
-                        String memHost = keyToCache.get(key);
-                        MemcachedConnection memConn = memConnections.get(memHost);
-                        Status status = memConn.insert(key, dataFin);
-                        logger.debug("Cache " + key + " " + memConn.getHost());
-                    }
-                });
-            }
-        } else
-            logger.info("Read CACHE " + key + " " + data.length + "B");
-
+        byte[] data = null;
         return data;
     }
 

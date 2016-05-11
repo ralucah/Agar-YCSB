@@ -1,70 +1,41 @@
 package com.yahoo.ycsb.proxy;
 
+import com.yahoo.ycsb.common.communication.ProxyReply;
 import com.yahoo.ycsb.common.communication.ProxyRequest;
 import com.yahoo.ycsb.common.communication.Serializer;
 import org.apache.log4j.Logger;
 
+import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.*;
+import java.util.Enumeration;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+// http://stackoverflow.com/questions/28051060/java-properties-best-practices
+
 public class UDPServer implements Runnable {
-    public static String PROXY_PROPERTIES = "proxy.properties";
-    public static String PROXY = "proxy";
-    public static String THREADS_NUM = "threads";
-    public static String THREADS_NUM_DEFAULT = "5";
-    public static String PACKET_SIZE = "packetsize";
-    public static String PACKET_SIZE_DEFAULT = "1024";
-    public static String CACHE_SIZE = "cachesize";
-    public static String CACHE_SIZE_DEFAULT = "64"; // in mb
-    public static String FIELD_LENGTH = "fieldlength";
-    public static String FIELD_LENGTH_DEFAULT = "4194304"; // in bytes
-    public static String MEMCACHED = "memcached";
-    public static String LONGHAIR_K = "longhair.k";
-    public static String LONGHAIR_M = "longhair.m";
     protected static Logger logger = Logger.getLogger(UDPServer.class);
+
     protected static ExecutorService executor;
     protected static int packetSize;
+    private static GreedyCacheManager greedy;
     private DatagramSocket socket;
-    private CacheAdmin cacheAdmin;
+    private int k = 6;
 
     public UDPServer() {
-        // proxy properties
-        ClassLoader loader = Thread.currentThread().getContextClassLoader();
-        Properties properties = new Properties();
-        try {
-            try (InputStream resourceStream = loader.getResourceAsStream(PROXY_PROPERTIES)) {
-                properties.load(resourceStream);
-            }
-        } catch (IOException e) {
-            logger.error("Error reading properties.");
-        }
 
         // threads
-        int threadsNum = Integer.valueOf(properties.getProperty(THREADS_NUM, THREADS_NUM_DEFAULT));
-        logger.debug("Threads number: " + threadsNum);
+        int executorThreads = Integer.valueOf(PropertyFactory.propertiesMap.get(PropertyFactory.EXECUTOR_THREADS_PROPERTY));
+        logger.debug("Executor threads: " + executorThreads);
 
         // packet size for UDP communication
-        packetSize = Integer.valueOf(properties.getProperty(PACKET_SIZE, PACKET_SIZE_DEFAULT));
+        packetSize = Integer.valueOf(PropertyFactory.propertiesMap.get(PropertyFactory.PACKET_SIZE_PROPERTY));
         logger.trace("Packet size: " + packetSize);
 
-        // data size
-        long fieldlength = Long.valueOf(properties.getProperty(FIELD_LENGTH, FIELD_LENGTH_DEFAULT));
-        logger.debug("fieldlength: " + fieldlength);
-
-        // max cache size
-        long cachesize = Long.valueOf(properties.getProperty(CACHE_SIZE, CACHE_SIZE_DEFAULT)) * 1024 * 1024;
-        logger.debug("cachesize: " + cachesize);
-
-        // memcached servers
-        String memHost = properties.getProperty(MEMCACHED);
-        //cacheAdmin = new CacheAdmin(memHosts, cachesize, fieldlength);
-
         // address of current server
-        String proxyHost = properties.getProperty(PROXY);
+        String proxyHost = PropertyFactory.propertiesMap.get(PropertyFactory.PROXY_PROPERTY);
         logger.debug("Proxy: " + proxyHost);
 
         // datagram socket
@@ -83,10 +54,98 @@ public class UDPServer implements Runnable {
         }
 
         // executor service
-        executor = Executors.newFixedThreadPool(threadsNum);
+        executor = Executors.newFixedThreadPool(executorThreads);
+
+        // greedy cache manager
+        greedy = new GreedyCacheManager();
+
     }
 
-    public static void main(String args[]) throws UnknownHostException {
+    public static void usageMessage() {
+        System.out.println("Usage: java com.yahoo.ycsb.proxy.UDPServer [options]");
+        System.out.println("Options:");
+        System.out.println("-threads n: execute using n threads (default: 1) - \"-p threadcount\"");
+        System.out.println("-P propertyfile: load properties from the given file");
+    }
+
+    public static void main(String args[]) {
+        Properties props = new Properties();
+        Properties fileprops = new Properties();
+
+        int i = 0;
+        while (i < args.length) {
+            System.out.println(i + " " + args[i]);
+            i++;
+        }
+
+        //parse arguments
+        int argindex = 0;
+
+        if (args.length <= 1) {
+            usageMessage();
+            System.exit(0);
+        }
+
+        while (args[argindex].startsWith("-")) {
+            if (args[argindex].compareTo("-P") == 0) {
+                argindex++;
+                if (argindex >= args.length) {
+                    usageMessage();
+                    System.exit(0);
+                }
+                String propfile = args[argindex];
+                argindex++;
+
+                //Properties myfileprops = new Properties();
+                try {
+                    fileprops.load(new FileInputStream(propfile));
+                } catch (IOException e) {
+                    System.out.println(e.getMessage());
+                    System.exit(0);
+                }
+
+                for (Enumeration e = fileprops.propertyNames(); e.hasMoreElements(); ) {
+                    String prop = (String) e.nextElement();
+
+                    fileprops.setProperty(prop, fileprops.getProperty(prop));
+                }
+
+            } else if (args[argindex].compareTo("-p") == 0) {
+                argindex++;
+                if (argindex >= args.length) {
+                    usageMessage();
+                    System.exit(0);
+                }
+                int eq = args[argindex].indexOf('=');
+                if (eq < 0) {
+                    usageMessage();
+                    System.exit(0);
+                }
+
+                String name = args[argindex].substring(0, eq);
+                String value = args[argindex].substring(eq + 1);
+                props.put(name, value);
+                //System.out.println("["+name+"]=["+value+"]");
+                argindex++;
+            } else {
+                System.out.println("Unknown option " + args[argindex]);
+                usageMessage();
+                System.exit(0);
+            }
+            if (argindex >= args.length) {
+                break;
+            }
+        }
+
+        for (Enumeration e = props.propertyNames(); e.hasMoreElements(); ) {
+            String prop = (String) e.nextElement();
+
+            fileprops.setProperty(prop, props.getProperty(prop));
+        }
+
+        props = fileprops;
+        PropertyFactory propertyFactory = new PropertyFactory(props);
+
         UDPServer server = new UDPServer();
         server.run();
     }
@@ -96,21 +155,21 @@ public class UDPServer implements Runnable {
         ProxyRequest request = Serializer.deserializeRequest(packet.getData());
         InetAddress clientAddress = packet.getAddress();
         int clientPort = packet.getPort();
-        logger.info(request.prettyPrint() + " from " + clientAddress + ":" + clientPort);
+        logger.info(request.prettyPrint()); // + " from " + clientAddress + ":" + clientPort);
 
         // compute reply
-        //ProxyReply reply = cacheAdmin.computeReply(request.getKey());
-        //logger.info(reply.prettyPrint() + " to " + clientAddress + ":" + clientPort);
-        //logger.debug(cacheAdmin.printCacheRegistry());
+        int blocks = greedy.getCachedBlocks(request.getKey());
+        ProxyReply reply = new ProxyReply(blocks);
+        logger.info(reply.prettyPrint());// + " to " + clientAddress + ":" + clientPort);
 
         // send reply to client
-        //byte[] sendData = Serializer.serializeReply(reply);
-        //DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, clientAddress, clientPort);
-        /*try {
+        byte[] sendData = Serializer.serializeReply(reply);
+        DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, clientAddress, clientPort);
+        try {
             socket.send(sendPacket);
         } catch (IOException e) {
             logger.error("Exception sending packet to " + clientAddress + ":" + clientPort);
-        }*/
+        }
     }
 
     protected void handleAsync(final DatagramPacket packet) {
@@ -123,7 +182,6 @@ public class UDPServer implements Runnable {
 
     @Override
     public void run() {
-        // listen for client requests
         byte[] receiveData = new byte[packetSize];
         while (true) {
             DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);

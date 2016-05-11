@@ -11,7 +11,7 @@ import java.util.Properties;
 
 /* Establish connection to proxy */
 public class ProxyConnection {
-    public static String PROXY_PROPERTY = "proxy.server";
+    public static String PROXY_PROPERTY = "proxy";
     public static String RETRIES = "proxy.retries";
     public static String RETRIES_DEFAULT = "3";
     public static String TIMEOUT = "proxy.timeout";
@@ -55,6 +55,7 @@ public class ProxyConnection {
     // request info about key from proxy
     public ProxyReply sendRequest(String key) {
         ProxyRequest request = new ProxyRequest(key);
+        logger.debug(request.prettyPrint());
         byte[] sendData = Serializer.serializeRequest(request);
         DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, udpServerAddress, udpServerPort);
 
