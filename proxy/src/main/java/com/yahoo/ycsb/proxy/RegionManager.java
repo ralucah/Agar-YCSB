@@ -25,12 +25,14 @@ public class RegionManager {
         List<String> regionNames = Arrays.asList(PropertyFactory.propertiesMap.get(PropertyFactory.S3_REGIONS_PROPERTY).split("\\s*,\\s*"));
         List<String> endpointNames = Arrays.asList(PropertyFactory.propertiesMap.get(PropertyFactory.S3_ENDPOINTS_PROPERTY).split("\\s*,\\s*"));
 
+        latencyMax = 0;
         for (int i = 0; i < regionNames.size(); i++) {
             String regionName = regionNames.get(i);
             String endpointName = endpointNames.get(i);
             Region region = new Region(regionName, endpointName);
             double pingTime = ping(endpointName);
             region.setLatency(pingTime);
+            latencyMax += pingTime;
             regions.add(region);
         }
 
@@ -41,10 +43,6 @@ public class RegionManager {
         }
 
         Collections.sort(regions);
-
-        // latency max
-        Region farthest = regions.get(regionsSize - 1);
-        latencyMax = farthest.getLatency();
 
         for (Region region : regions)
             System.out.println(region.prettyPrint());

@@ -155,12 +155,13 @@ public class UDPServer implements Runnable {
         ProxyRequest request = Serializer.deserializeRequest(packet.getData());
         InetAddress clientAddress = packet.getAddress();
         int clientPort = packet.getPort();
-        logger.info(request.prettyPrint()); // + " from " + clientAddress + ":" + clientPort);
+        //logger.info(request.prettyPrint()); // + " from " + clientAddress + ":" + clientPort);
 
         // compute reply
-        int blocks = greedy.getCachedBlocks(request.getKey());
+        greedy.process(request.getKey());
+        int blocks = k; //greedy.getCachedBlocks(request.getKey());
         ProxyReply reply = new ProxyReply(blocks);
-        logger.info(reply.prettyPrint());// + " to " + clientAddress + ":" + clientPort);
+        //logger.info(reply.prettyPrint());// + " to " + clientAddress + ":" + clientPort);
 
         // send reply to client
         byte[] sendData = Serializer.serializeReply(reply);

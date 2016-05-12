@@ -15,6 +15,8 @@ public class PropertyFactory {
     public static String LONGHAIR_M_PROPERTY = "longhair.m";
     public static String S3_REGIONS_PROPERTY = "s3.regions";
     public static String S3_ENDPOINTS_PROPERTY = "s3.endpoints";
+    public static String PERIOD_PROPERTY = "period";
+    public static String ALPHA_PROPERTY = "alpha";
 
     public static Map<String, String> propertiesMap;
 
@@ -32,6 +34,8 @@ public class PropertyFactory {
             propertiesMap.put(LONGHAIR_M_PROPERTY, properties.getProperty(LONGHAIR_M_PROPERTY));
             propertiesMap.put(S3_REGIONS_PROPERTY, properties.getProperty(S3_REGIONS_PROPERTY));
             propertiesMap.put(S3_ENDPOINTS_PROPERTY, properties.getProperty(S3_ENDPOINTS_PROPERTY));
+            propertiesMap.put(PERIOD_PROPERTY, properties.getProperty(PERIOD_PROPERTY));
+            propertiesMap.put(ALPHA_PROPERTY, properties.getProperty(ALPHA_PROPERTY));
         }
     }
 }

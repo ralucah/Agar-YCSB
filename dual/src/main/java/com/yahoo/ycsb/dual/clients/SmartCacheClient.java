@@ -147,6 +147,11 @@ public class SmartCacheClient extends ClientBlueprint {
 
 
     @Override
+    public void cleanup() throws ClientException {
+        super.cleanup();
+    }
+
+    @Override
     public byte[] read(final String key, final int keyNum) {
         ProxyReply reply = proxyConnection.sendRequest(key);
         logger.info(reply.prettyPrint());
@@ -162,11 +167,11 @@ public class SmartCacheClient extends ClientBlueprint {
         Status delst = memConnection.delete(key);
         logger.info("delete: " + delst);*/
 
-        try {
-            Thread.sleep(2000);
+        /*try {
+            Thread.sleep(500);
         } catch (InterruptedException e) {
             e.printStackTrace();
-        }
+        }*/
 
         byte[] data = null;
         return data;

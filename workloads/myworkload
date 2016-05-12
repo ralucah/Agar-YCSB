@@ -1,5 +1,5 @@
-recordcount=1
-operationcount=10
+recordcount=3
+operationcount=100000
 workload=com.yahoo.ycsb.workloads.CoreWorkload
 
 readproportion=1
@@ -8,8 +8,8 @@ scanproportion=0
 insertproportion=0
 maxexecutiontime=300
 
-insertstart=0
-insertcount=9
+#insertstart=0
+#insertcount=9
 
 #requestdistribution=zipfian
 requestdistribution=uniform
@@ -35,3 +35,6 @@ blocksincache=3
 proxy=127.0.0.1:11000
 packetsize=1024
 cachesize=64
+period=10000
+# how much the new popularity counts in the weighted moving avg
+alpha=0.8
