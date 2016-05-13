@@ -6,6 +6,7 @@ import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class GreedyCacheManager {
     protected static Logger logger = Logger.getLogger(GreedyCacheManager.class);
@@ -16,8 +17,8 @@ public class GreedyCacheManager {
     // gouverns when to recompute cache options
     private static int period;
     private static double alpha;
-    private static int cachesizeMax; // in block numbers
-    private static int cachesize; // in block numbers
+    private static AtomicInteger cachesizeMax; // in block numbers
+    private static AtomicInteger cachesize; // in block numbers
     private static int k;
     private static RegionManager regionManager;
 
@@ -27,17 +28,18 @@ public class GreedyCacheManager {
         int cachesizeMB = Integer.valueOf(PropertyFactory.propertiesMap.get(PropertyFactory.CACHE_SIZE_PROPERTY));
         int fieldlength = Integer.valueOf(PropertyFactory.propertiesMap.get(PropertyFactory.FIELD_LENGTH_PROPERTY));
         int blocksize = fieldlength / k;
-        cachesizeMax = (cachesizeMB * 1024 * 1024) / blocksize;
+        cachesizeMax.set((cachesizeMB * 1024 * 1024) / blocksize);
+        //cachesizeMax = (cachesizeMB * 1024 * 1024) / blocksize;
 
         // current cache size
-        cachesize = 0;
-        cache = new ArrayList<CacheOption>();
-        cacheOptions = new ArrayList<CacheOption>();
+        cachesize.set(0);
+        cache = Collections.synchronizedList(new ArrayList<CacheOption>());
+        cacheOptions = Collections.synchronizedList(new ArrayList<CacheOption>());
 
         regionManager = new RegionManager();
 
-        frequency = new HashMap<String, Integer>();
-        weightedPopularity = new HashMap<String, Double>();
+        frequency = Collections.synchronizedMap(new HashMap<String, Integer>());
+        weightedPopularity = Collections.synchronizedMap(new HashMap<String, Double>());
 
         period = Integer.parseInt(PropertyFactory.propertiesMap.get(PropertyFactory.PERIOD_PROPERTY));
         alpha = Double.parseDouble(PropertyFactory.propertiesMap.get(PropertyFactory.ALPHA_PROPERTY));
@@ -80,7 +82,7 @@ public class GreedyCacheManager {
         printWeightedPopularity();
 
         // reset frequency
-        frequency = new HashMap<String, Integer>();
+        frequency.clear();
 
         computeGreedyCache();
 
@@ -116,15 +118,15 @@ public class GreedyCacheManager {
         //printCacheOptions(cache);
 
         // populate the cache!
-        cachesize = 0;
-        cache = new ArrayList<CacheOption>();
+        cachesize.set(0);
+        cache.clear();
         int index = 0;
-        while (cachesize < cachesizeMax && index < cacheOptions.size()) {
+        while (cachesize.intValue() < cachesizeMax.intValue() && index < cacheOptions.size()) {
             // get cache option with highest ratio
             CacheOption best = cacheOptions.get(index);
-            if (cachesize + best.getWeight() <= cachesizeMax && cacheContains(best.getKey()) == -1) {
+            if (cachesize.intValue() + best.getWeight() <= cachesizeMax.intValue() && cacheContains(best.getKey()) == -1) {
                 cache.add(best);
-                cachesize += best.getWeight();
+                cachesize.getAndSet(best.getWeight());
             }
             index++;
         }
