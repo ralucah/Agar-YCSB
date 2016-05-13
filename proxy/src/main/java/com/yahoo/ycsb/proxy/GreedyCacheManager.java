@@ -126,7 +126,7 @@ public class GreedyCacheManager {
             CacheOption best = cacheOptions.get(index);
             if (cachesize.intValue() + best.getWeight() <= cachesizeMax.intValue() && cacheContains(best.getKey()) == -1) {
                 cache.add(best);
-                cachesize.getAndSet(best.getWeight());
+                cachesize.addAndGet(best.getWeight());
             }
             index++;
         }
