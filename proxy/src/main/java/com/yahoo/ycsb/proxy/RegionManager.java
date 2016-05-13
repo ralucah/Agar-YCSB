@@ -2,8 +2,6 @@ package com.yahoo.ycsb.proxy;
 
 import org.apache.log4j.Logger;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -25,14 +23,12 @@ public class RegionManager {
         List<String> regionNames = Arrays.asList(PropertyFactory.propertiesMap.get(PropertyFactory.S3_REGIONS_PROPERTY).split("\\s*,\\s*"));
         List<String> endpointNames = Arrays.asList(PropertyFactory.propertiesMap.get(PropertyFactory.S3_ENDPOINTS_PROPERTY).split("\\s*,\\s*"));
 
-        latencyMax = 0;
         for (int i = 0; i < regionNames.size(); i++) {
             String regionName = regionNames.get(i);
             String endpointName = endpointNames.get(i);
             Region region = new Region(regionName, endpointName);
             double pingTime = ping(endpointName);
             region.setLatency(pingTime);
-            latencyMax += pingTime;
             regions.add(region);
         }
 
@@ -43,13 +39,16 @@ public class RegionManager {
         }
 
         Collections.sort(regions);
+        Collections.reverse(regions);
+
+        latencyMax = regions.get(0).getLatency();
 
         for (Region region : regions)
             System.out.println(region.prettyPrint());
     }
 
     private double ping(String host) {
-        double avgTime = Double.MIN_VALUE;
+        /*double avgTime = Double.MIN_VALUE;
 
         try {
             String command = "ping -c 5 " + host;
@@ -70,7 +69,15 @@ public class RegionManager {
             logger.warn("Could not ping " + host);
         }
 
-        return avgTime;
+        return avgTime;*/
+
+        if (host.contains("eu-west-1"))
+            return 38.392;
+        else if (host.contains("eu-central-1"))
+            return 17.978;
+        else if (host.contains("external-1"))
+            return 97.114;
+        return Double.MIN_VALUE;
     }
 
     public List<Region> getRegions() {

@@ -1,5 +1,5 @@
-recordcount=3
-operationcount=100000
+recordcount=30
+operationcount=1000000
 workload=com.yahoo.ycsb.workloads.CoreWorkload
 
 readproportion=1
@@ -35,6 +35,6 @@ blocksincache=3
 proxy=127.0.0.1:11000
 packetsize=1024
 cachesize=64
-period=10000
+period=20000
 # how much the new popularity counts in the weighted moving avg
 alpha=0.8

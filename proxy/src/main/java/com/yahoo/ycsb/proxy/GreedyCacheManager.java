@@ -16,10 +16,10 @@ public class GreedyCacheManager {
     // gouverns when to recompute cache options
     private static int period;
     private static double alpha;
-    private final int cachesizeMax; // in block numbers
-    private int cachesize; // in block numbers
-    private int k;
-    private RegionManager regionManager;
+    private static int cachesizeMax; // in block numbers
+    private static int cachesize; // in block numbers
+    private static int k;
+    private static RegionManager regionManager;
 
     public GreedyCacheManager() {
         // max cache size in blocks
@@ -82,11 +82,9 @@ public class GreedyCacheManager {
         // reset frequency
         frequency = new HashMap<String, Integer>();
 
-        System.out.println("-----------------------------------");
-        //printFrequency();
-        //printWeightedPopularity();
+        computeGreedyCache();
 
-        // generate cache options based on this new info!!!
+        System.out.println("-----------------------------------");
     }
 
     // dummy
@@ -107,39 +105,46 @@ public class GreedyCacheManager {
         System.out.println("}");
     }
 
-    private void incrementFrequency(String key) {
-        if (frequency.get(key) == null) {
-            frequency.put(key, 1);
-        } else {
-            int freq = frequency.get(key);
-            frequency.put(key, freq + 1);
-        }
-    }
-
-    private void updateGreedyCache() {
+    private static void computeGreedyCache() {
         // compute cache options
-        cacheOptions = updateCacheOptions();
-
-        // sort by value (in decreasing order)
-        //System.out.println("Before sort:");
-        //printCacheOptions(cacheOptions);
-        cacheOptions.sort(CacheOption::compareTo);
-        Collections.reverse(cacheOptions);
-        //System.out.println("After sort:");
-        //printCacheOptions(cacheOptions);
+        updateCacheOptions();
 
         // update current cache according to new options
-        
+        //System.out.println("Current options, sorted:");
+        //printCacheOptions(cacheOptions);
+        //System.out.println("Current cache:");
+        //printCacheOptions(cache);
+
+        // populate the cache!
+        cachesize = 0;
+        cache = new ArrayList<CacheOption>();
+        int index = 0;
+        while (cachesize < cachesizeMax && index < cacheOptions.size()) {
+            // get cache option with highest ratio
+            CacheOption best = cacheOptions.get(index);
+            if (cachesize + best.getWeight() <= cachesizeMax && cacheContains(best.getKey()) == -1) {
+                cache.add(best);
+                cachesize += best.getWeight();
+            }
+            index++;
+        }
+
+        System.out.println("Cache:");
+        printCacheOptions(cache);
+        System.out.println("cachesize:" + cachesize + " cachesizemax:" + cachesizeMax);
     }
 
-    /*public void process(String key) {
-        incrementFrequency(key);
+    private static int cacheContains(String key) {
+        int index = 0;
+        for (CacheOption cacheOption : cache) {
+            if (cacheOption.getKey().equals(key))
+                return index;
+            index++;
+        }
+        return -1;
+    }
 
-
-        // if this key has a current cache option -> stick to it or update it?
-    }*/
-
-    private boolean isKeyInCacheOptions(String key) {
+    private static boolean isKeyInCacheOptions(String key) {
         for (CacheOption cacheOption : cacheOptions) {
             if (cacheOption.getKey().equals(key))
                 return true;
@@ -147,7 +152,7 @@ public class GreedyCacheManager {
         return false;
     }
 
-    private List<CacheOption> updateCacheOptions() {
+    private static void updateCacheOptions() {
         for (Map.Entry<String, Double> entry : weightedPopularity.entrySet()) {
             String key = entry.getKey();
             if (isKeyInCacheOptions(key) == false) {
@@ -155,25 +160,33 @@ public class GreedyCacheManager {
                 cacheOptions.addAll(cacheOptionsKey);
             }
         }
+
+        cacheOptions.sort(CacheOption::compareTo);
+        Collections.reverse(cacheOptions);
+
         System.out.println("All cache options:");
         printCacheOptions(cacheOptions);
-        return cacheOptions;
     }
 
-    private List<CacheOption> generateCacheOptions(String key) {
+    private static List<CacheOption> generateCacheOptions(String key) {
         List<CacheOption> cacheOptionsKey = new ArrayList<CacheOption>();
         int blocks = 0;
         double latency = 0;
 
-        for (Region region : regionManager.getRegions()) {
-            latency += region.getLatency();
+        for (int i = 0; i < regionManager.getRegions().size(); i++) {
+            Region region = regionManager.getRegions().get(i);
+            latency = region.getLatency();
             blocks += region.getBlocks();
 
             // value should be latency save * weighted popularity
-            double value = regionManager.getLatencyMax() - latency;
+            double value = 0;
+            if (i < regionManager.getRegions().size() - 1)
+                value = regionManager.getLatencyMax() - regionManager.getRegions().get(i + 1).getLatency();
+            else
+                value = regionManager.getLatencyMax();
             if (weightedPopularity.containsKey(key) == true)
                 value *= weightedPopularity.get(key);
-            if (blocks > k) {
+            if (blocks >= k) {
                 CacheOption option = new CacheOption(key, k, value);
                 cacheOptionsKey.add(option);
                 break;
@@ -187,80 +200,28 @@ public class GreedyCacheManager {
         return cacheOptionsKey;
     }
 
-    /*public void generateCacheOptions(String key) {
-        int blocks = 0;
-        double latency = 0;
-
-        for (Region region : regionManager.getRegions()) {
-            latency += region.getLatency();
-            blocks += region.getBlocks();
-
-            // value should be latency save * weighted popularity
-            double value =  regionManager.getLatencyMax() - latency;
-            if (weightedPopularity.containsKey(key) == true)
-                value *= weightedPopularity.get(key);
-            if (blocks > k) {
-                CacheOption copt = new CacheOption(key, k, value);
-                if (allCacheOptions.contains(copt) == false)
-                    allCacheOptions.add(copt);
-                break;
-            } else {
-                CacheOption copt = new CacheOption(key, blocks, value);
-                if (allCacheOptions.contains(copt) == false)
-                    allCacheOptions.add(copt);
-            }
-        }
-        /*for(CacheOption cacheOption : allCacheOptions)
-            System.out.println(cacheOption.prettyPrint());*/
-    //}
-
-    public void printCacheOptions(List<CacheOption> options) {
+    private static void printCacheOptions(List<CacheOption> options) {
         for (CacheOption cacheOption : options)
             System.out.println(cacheOption.prettyPrint());
     }
 
-    public void removeAlternatives(CacheOption selectedCacheOption) {
-        System.out.println("Before removeAlternatives:");
-        printCacheOptions(allCacheOptions);
-        for (int i = 0; i < allCacheOptions.size(); i++) {
-            CacheOption cacheOption = allCacheOptions.get(i);
-            if (cacheOption.getKey().equals(selectedCacheOption.getKey()) &&
-                cacheOption.equals(selectedCacheOption) == false)
-                allCacheOptions.remove(i);
+    private void incrementFrequency(String key) {
+        if (frequency.get(key) == null) {
+            frequency.put(key, 1);
+        } else {
+            int freq = frequency.get(key);
+            frequency.put(key, freq + 1);
         }
-        System.out.println("After removeAlternatives:");
-        printCacheOptions(allCacheOptions);
     }
-
-    /*private void computeIdealCache(List<CacheOption> cacheOptions) {
-        List<CacheOption> idealCache = new ArrayList<CacheOption>();
-
-        // while still have space in cache
-        int index = 0;
-        while (cachesize < cachesizeMax && index < cacheOptions.size()) {
-            // get cache option with highest ratio
-            CacheOption best = cacheOptions.get(index);
-            if (cachesize + best.getWeight() <= cachesizeMax) {
-                selectedCacheOptions.add(bestOption);
-                cachesize += bestOption.getWeight();
-            }
-            // remove other cache options for that key
-            removeAlternatives(bestOption);
-            index++;
-        }
-        System.out.println("Selected cache options:");
-        printCacheOptions(selectedCacheOptions);
-        System.out.println("cachesize:" + cachesize);
-    }*/
 
     public int getCachedBlocks(String key) {
         incrementFrequency(key);
+        int blocks = 0;
 
-        for (CacheOption copt : selectedCacheOptions) {
-            if (copt.getKey().equals(key)) {
-                blocks = copt.getWeight(); // weight is num blocks atm
-                break;
-            }
+        synchronized (cache) {
+            int index = cacheContains(key);
+            if (index != -1)
+                blocks = cache.get(index).getBlocks();
         }
         return blocks;
     }
