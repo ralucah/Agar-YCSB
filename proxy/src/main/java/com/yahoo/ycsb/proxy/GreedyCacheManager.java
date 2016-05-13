@@ -78,8 +78,8 @@ public class GreedyCacheManager {
         }
 
         // print stats
-        printFrequency();
-        printWeightedPopularity();
+        //printFrequency();
+        //printWeightedPopularity();
 
         // reset frequency
         frequency.clear();
@@ -155,6 +155,7 @@ public class GreedyCacheManager {
     }
 
     private static void updateCacheOptions() {
+        cacheOptions.clear();
         for (Map.Entry<String, Double> entry : weightedPopularity.entrySet()) {
             String key = entry.getKey();
             if (isKeyInCacheOptions(key) == false) {
@@ -166,8 +167,8 @@ public class GreedyCacheManager {
         cacheOptions.sort(CacheOption::compareTo);
         Collections.reverse(cacheOptions);
 
-        System.out.println("All cache options:");
-        printCacheOptions(cacheOptions);
+        //System.out.println("All cache options:");
+        //printCacheOptions(cacheOptions);
     }
 
     private static List<CacheOption> generateCacheOptions(String key) {
@@ -197,8 +198,8 @@ public class GreedyCacheManager {
                 cacheOptionsKey.add(option);
             }
         }
-        System.out.println("CacheOptions for " + key);
-        printCacheOptions(cacheOptionsKey);
+        //System.out.println("CacheOptions for " + key);
+        //printCacheOptions(cacheOptionsKey);
         return cacheOptionsKey;
     }
 
