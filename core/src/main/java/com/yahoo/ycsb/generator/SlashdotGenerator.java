@@ -2,10 +2,6 @@ package com.yahoo.ycsb.generator;
 
 import com.yahoo.ycsb.Utils;
 
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-
 /**
  * Created by Raluca on 07.04.16.
  */
@@ -33,14 +29,14 @@ public class SlashdotGenerator extends IntegerGenerator {
         for (int i = 0; i < recordCount; i++)
             area += buckets[i];
 
-        ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
+        /*ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
         exec.scheduleAtFixedRate(new Runnable() {
             @Override
             public void run() {
                 //System.err.println("offset!");
                 offset = (offset + 1) % recordCount;
             }
-        }, delay, delay, TimeUnit.MILLISECONDS);
+        }, delay, delay, TimeUnit.MILLISECONDS);*/
 
     }
 

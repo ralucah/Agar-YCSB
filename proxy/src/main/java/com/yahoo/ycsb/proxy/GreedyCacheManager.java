@@ -78,7 +78,7 @@ public class GreedyCacheManager {
         }
 
         // print stats
-        //printFrequency();
+        printFrequency();
         //printWeightedPopularity();
 
         // reset frequency
@@ -167,8 +167,8 @@ public class GreedyCacheManager {
         cacheOptions.sort(CacheOption::compareTo);
         Collections.reverse(cacheOptions);
 
-        //System.out.println("All cache options:");
-        //printCacheOptions(cacheOptions);
+        System.out.println("All cache options:");
+        printCacheOptions(cacheOptions);
     }
 
     private static List<CacheOption> generateCacheOptions(String key) {
