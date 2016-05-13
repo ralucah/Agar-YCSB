@@ -28,11 +28,11 @@ public class GreedyCacheManager {
         int cachesizeMB = Integer.valueOf(PropertyFactory.propertiesMap.get(PropertyFactory.CACHE_SIZE_PROPERTY));
         int fieldlength = Integer.valueOf(PropertyFactory.propertiesMap.get(PropertyFactory.FIELD_LENGTH_PROPERTY));
         int blocksize = fieldlength / k;
-        cachesizeMax.set((cachesizeMB * 1024 * 1024) / blocksize);
+        cachesizeMax = new AtomicInteger((cachesizeMB * 1024 * 1024) / blocksize);
         //cachesizeMax = (cachesizeMB * 1024 * 1024) / blocksize;
 
         // current cache size
-        cachesize.set(0);
+        cachesize = new AtomicInteger(0);
         cache = Collections.synchronizedList(new ArrayList<CacheOption>());
         cacheOptions = Collections.synchronizedList(new ArrayList<CacheOption>());
 
