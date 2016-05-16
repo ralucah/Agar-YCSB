@@ -15,7 +15,7 @@ insertcount=4
 #requestdistribution=uniform
 requestdistribution=slashdot
 skew=0.7
-#delay=1234
+delay=-1
 
 s3.endpoints=s3-eu-west-1.amazonaws.com,s3-eu-central-1.amazonaws.com,s3-external-1.amazonaws.com
 s3.regions=eu-west-1,eu-central-1,us-east-1

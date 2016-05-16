@@ -109,7 +109,7 @@ public class GreedyCacheManager {
 
     private static void computeGreedyCache() {
         // compute cache options
-        updateCacheOptions();
+        computeCacheOptions();
 
         // update current cache according to new options
         //System.out.println("Current options, sorted:");
@@ -154,14 +154,14 @@ public class GreedyCacheManager {
         return false;
     }
 
-    private static void updateCacheOptions() {
+    private static void computeCacheOptions() {
         cacheOptions.clear();
         for (Map.Entry<String, Double> entry : weightedPopularity.entrySet()) {
             String key = entry.getKey();
-            if (isKeyInCacheOptions(key) == false) {
-                List<CacheOption> cacheOptionsKey = generateCacheOptions(key);
-                cacheOptions.addAll(cacheOptionsKey);
-            }
+            //if (isKeyInCacheOptions(key) == false) {
+            List<CacheOption> cacheOptionsKey = generateCacheOptions(key);
+            cacheOptions.addAll(cacheOptionsKey);
+            //}
         }
 
         cacheOptions.sort(CacheOption::compareTo);
