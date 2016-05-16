@@ -158,8 +158,9 @@ public class UDPServer implements Runnable {
         //logger.info(request.prettyPrint()); // + " from " + clientAddress + ":" + clientPort);
 
         // compute reply
-        int blocks = greedy.getCachedBlocks(request.getKey());
-        ProxyReply reply = new ProxyReply(blocks);
+        //int blocks = greedy.getCachedBlocks(request.getKey());
+        //ProxyReply reply = new ProxyReply(blocks);
+        ProxyReply reply = greedy.buildReply(request.getKey());
         //logger.info(reply.prettyPrint());// + " to " + clientAddress + ":" + clientPort);
 
         // send reply to client

@@ -8,9 +8,14 @@ import com.yahoo.ycsb.common.liberasure.LonghairLib;
 import com.yahoo.ycsb.common.memcached.MemcachedConnection;
 import com.yahoo.ycsb.dual.connections.ProxyConnection;
 import com.yahoo.ycsb.dual.connections.S3Connection;
+import com.yahoo.ycsb.dual.utils.ECBlock;
+import com.yahoo.ycsb.dual.utils.Storage;
 import org.apache.log4j.Logger;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Properties;
 import java.util.concurrent.*;
 
 /**
@@ -34,6 +39,7 @@ public class SmartCacheClient extends ClientBlueprint {
     private MemcachedConnection memConnection;
     private ProxyConnection proxyConnection;
     private ExecutorService executor;
+    private int blocksPerRegion;
 
     private void initS3() {
         List<String> regions = Arrays.asList(properties.getProperty(S3_REGIONS_PROPERTIES).split("\\s*,\\s*"));
@@ -87,62 +93,11 @@ public class SmartCacheClient extends ClientBlueprint {
         initS3();
         initLonghair();
         initCache();
-        // executor service
+        blocksPerRegion = (LonghairLib.k + LonghairLib.m) / s3Connections.size();
         final int threadsNum = Integer.valueOf(properties.getProperty(EXECUTOR_THREADS_PROPERTY, EXECUTOR_THREADS_DEFAULT));
         logger.debug("threads num: " + threadsNum);
         executor = Executors.newFixedThreadPool(threadsNum);
         logger.debug("SmartCacheClient.init() end");
-    }
-
-    private byte[] readBlock(String baseKey, int blockNum) {
-        String blockKey = baseKey + blockNum;
-        int s3ConnNum = blockNum % s3Connections.size();
-        S3Connection s3Connection = s3Connections.get(s3ConnNum);
-        byte[] block = s3Connection.read(blockKey);
-        //logger.debug("ReadBlock " + blockNum + " " + blockKey + " " + ClientUtils.bytesToHash(block));
-        logger.debug("Read " + baseKey + " block" + blockNum + " " + block.length + "B bucket" + blockNum);
-        return block;
-    }
-
-    // read encoded blocks from the backend, in parallel
-    private byte[] readBackend(final String key) {
-        CompletionService<byte[]> completionService = new ExecutorCompletionService<byte[]>(executor);
-        for (int i = 0; i < LonghairLib.k + LonghairLib.m; i++) {
-            final int blockNumFin = i;
-            completionService.submit(new Callable<byte[]>() {
-                @Override
-                public byte[] call() throws Exception {
-                    return readBlock(key, blockNumFin);
-                }
-            });
-        }
-
-        int success = 0;
-        int errors = 0;
-        Set<byte[]> blocks = new HashSet<byte[]>();
-        while (success < LonghairLib.k) {
-            try {
-                Future<byte[]> resultFuture = completionService.take();
-                byte[] block = resultFuture.get();
-                if (block != null) {
-                    blocks.add(block);
-                    success++;
-                } else
-                    errors++;
-            } catch (Exception e) {
-                errors++;
-                logger.debug("Exception reading block.");
-            }
-            if (errors > LonghairLib.m)
-                break;
-        }
-
-        byte[] data = null;
-        if (success >= LonghairLib.k) {
-            data = LonghairLib.decode(blocks);
-        }
-
-        return data;
     }
 
 
@@ -151,13 +106,103 @@ public class SmartCacheClient extends ClientBlueprint {
         super.cleanup();
     }
 
+    private ECBlock readS3Block(String key, int blockId, int s3ConnId) {
+        String blockKey = key + blockId;
+        S3Connection s3Connection = s3Connections.get(s3ConnId);
+        byte[] bytes = s3Connection.read(blockKey);
+
+        ECBlock ecblock = null;
+        if (bytes != null)
+            ecblock = new ECBlock(blockId, blockKey, bytes, Storage.BACKEND);
+        else
+            logger.error("[Error] ReadBlockBackend " + key + " block" + blockId + " from bucket" + s3ConnId);
+
+        return ecblock;
+    }
+
+
+    private List<ECBlock> readS3(final String key, String region, int blocks) {
+        // get s3 connection id
+        int s3connId = Integer.MIN_VALUE;
+        for (int i = 0; i < s3Connections.size(); i++) {
+            String name = s3Connections.get(i).getRegion();
+            if (name.equals(region)) {
+                s3connId = i;
+                break;
+            }
+        }
+        if (s3connId == Integer.MIN_VALUE)
+            logger.error("Invalid s3 connection id!");
+
+        // request blocks in parallel
+        final int s3ConnIdFin = s3connId;
+        CompletionService<ECBlock> completionService = new ExecutorCompletionService<ECBlock>(executor);
+        int s3ConnNum = s3Connections.size();
+        int blocksPerRegion = (LonghairLib.k + LonghairLib.m) / s3ConnNum;
+        for (int i = 0; i < s3ConnNum; i++) {
+            final int blockId = i * blocksPerRegion + s3connId;
+            completionService.submit(new Callable<ECBlock>() {
+                @Override
+                public ECBlock call() throws Exception {
+                    return readS3Block(key, blockId, s3ConnIdFin);
+                }
+            });
+        }
+
+        int success = 0;
+        int errors = 0;
+        List<ECBlock> ecblocks = new ArrayList<ECBlock>();
+        while (success < blocks) {
+            try {
+                Future<ECBlock> resultFuture = completionService.take();
+                ECBlock ecblock = resultFuture.get();
+                if (ecblock != null) {
+                    ecblocks.add(ecblock);
+                    success++;
+                } else
+                    errors++;
+            } catch (Exception e) {
+                errors++;
+                logger.debug("Exception reading block.");
+            }
+            if (errors > 0)
+                break;
+        }
+
+        return ecblocks;
+    }
+
     @Override
     public byte[] read(final String key, final int keyNum) {
         ProxyReply reply = proxyConnection.sendRequest(key);
         logger.info(reply.prettyPrint());
 
+        /*for (Map.Entry<String, Integer> entry : reply.getReadRecipe().entrySet()) {
+            String location = entry.getKey();
+            String blocks = entry.getKey();
+            if (location.equals("cache")) {
+                System.out.println("Read from memcached");
+            } else {
+                //System.out.println("Read from s3 client " + getS3ConnId(location));
+            }
+        }*/
+        /*int blocks = reply.getBlocksToCache();
+        byte[] data = null;
+        if (blocks == 0) {
+            // read from backend, nothing to cache
+            //data = readFromS3(key);
+        } else {
+            if (blocks < LonghairLib.k) {
+                // read from backend + cache
+                // if cache miss => read from backend and then cache blocks in the background
+            } else {
+                // read from cache
+                // if cache miss => read from backend and cache in the background
+            }
+        }*/
+
         // get data from backend
-        /*byte[] data = readBackend(key);
+        /*byte[] data = readS3(key);
 
         // cache data
         Status insertst = memConnection.insert(key, data);
@@ -173,8 +218,7 @@ public class SmartCacheClient extends ClientBlueprint {
             e.printStackTrace();
         }*/
 
-        byte[] data = null;
-        return data;
+        return null;
     }
 
     @Override

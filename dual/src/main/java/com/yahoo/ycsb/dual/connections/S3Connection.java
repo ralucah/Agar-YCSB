@@ -70,6 +70,7 @@ public class S3Connection {
 
     private AmazonS3Client awsClient;
     private String bucket;
+    private String region;
 
     public S3Connection(String bucket, String region, String endPoint) throws ClientException {
         logger.debug("S3Client.establishConnection(" + region + "," + endPoint + ") bucket: " + bucket);
@@ -81,6 +82,7 @@ public class S3Connection {
         }
 
         this.bucket = bucket;
+        this.region = region;
 
         try {
             BasicAWSCredentials s3Credentials = new BasicAWSCredentials(accessKeyId, secretKey);
@@ -105,6 +107,10 @@ public class S3Connection {
             e.printStackTrace();
             throw new ClientException(e);
         }
+    }
+
+    public String getRegion() {
+        return region;
     }
 
     public void init() {

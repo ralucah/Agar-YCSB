@@ -1,5 +1,6 @@
 package com.yahoo.ycsb.proxy;
 
+import com.yahoo.ycsb.common.communication.ProxyReply;
 import org.apache.log4j.Logger;
 
 import java.util.*;
@@ -174,32 +175,42 @@ public class GreedyCacheManager {
     private static List<CacheOption> generateCacheOptions(String key) {
         List<CacheOption> cacheOptionsKey = new ArrayList<CacheOption>();
         int blocks = 0;
+        List<String> regionNames = new ArrayList<String>();
         double latency = 0;
 
-        for (int i = 0; i < regionManager.getRegions().size(); i++) {
-            Region region = regionManager.getRegions().get(i);
+        // regions are in decreasing order of latency
+        // regions[0] is the most distant
+        // regions[size() - 1] is my region
+        List<Region> regions = regionManager.getRegions();
+        int myRegionId = regions.size() - 1;
+        int numBlocksInMyRegion = regions.get(myRegionId).getBlocks();
+        int crtRegionId = myRegionId - 1;
+
+        while (crtRegionId >= 0 && numBlocksInMyRegion + blocks < k) {
+            Region region = regions.get(crtRegionId);
             latency = region.getLatency();
             blocks += region.getBlocks();
+            regionNames.add(region.getName());
 
             // value should be latency save * weighted popularity
             double value = 0;
-            if (i < regionManager.getRegions().size() - 1)
-                value = regionManager.getLatencyMax() - regionManager.getRegions().get(i + 1).getLatency();
-            else
-                value = regionManager.getLatencyMax();
+            value = regionManager.getLatencyMax() - regions.get(crtRegionId + 1).getLatency();
             if (weightedPopularity.containsKey(key) == true)
                 value *= weightedPopularity.get(key);
-            if (blocks >= k) {
-                CacheOption option = new CacheOption(key, k, value);
-                cacheOptionsKey.add(option);
-                break;
-            } else {
-                CacheOption option = new CacheOption(key, blocks, value);
-                cacheOptionsKey.add(option);
-            }
+            CacheOption option = new CacheOption(key, blocks, value, new ArrayList<String>(regionNames));
+            cacheOptionsKey.add(option);
+            crtRegionId--;
         }
-        //System.out.println("CacheOptions for " + key);
-        //printCacheOptions(cacheOptionsKey);
+        // add my region to cache
+        regionNames.add(regions.get(myRegionId).getName());
+        double value = regionManager.getLatencyMax() - regions.get(crtRegionId + 1).getLatency();
+        if (weightedPopularity.containsKey(key) == true)
+            value *= weightedPopularity.get(key);
+        CacheOption option = new CacheOption(key, k, value, new ArrayList<String>(regionNames));
+        cacheOptionsKey.add(option);
+
+        System.out.println("CacheOptions for " + key);
+        printCacheOptions(cacheOptionsKey);
         return cacheOptionsKey;
     }
 
@@ -215,6 +226,30 @@ public class GreedyCacheManager {
             int freq = frequency.get(key);
             frequency.put(key, freq + 1);
         }
+    }
+
+    public ProxyReply buildReply(String key) {
+        incrementFrequency(key);
+        int blocksCache = 0;
+
+        ProxyReply reply = new ProxyReply();
+        synchronized (cache) {
+            int index = cacheContains(key);
+            if (index != -1) {
+                blocksCache = cache.get(index).getBlocks();
+                reply.setCacheRecipe(cache.get(index).getRegionNames());
+            }
+        }
+        int blocksBackend = k - blocksCache;
+        int regionId = regionManager.getRegions().size() - 1;
+        while (blocksBackend > 0 && regionId >= 0) {
+            Region region = regionManager.getRegions().get(regionId);
+            reply.addToS3Recipe(region.getName());
+            blocksBackend -= region.getBlocks();
+            regionId--;
+        }
+
+        return reply;
     }
 
     public int getCachedBlocks(String key) {

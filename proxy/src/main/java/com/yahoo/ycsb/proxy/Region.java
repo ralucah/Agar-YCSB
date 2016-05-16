@@ -48,4 +48,8 @@ public class Region implements Comparable<Region> {
             return -1;
         return 0;
     }
+
+    public String getName() {
+        return name;
+    }
 }

@@ -1,5 +1,7 @@
 package com.yahoo.ycsb.proxy;
 
+import java.util.List;
+
 public class CacheOption implements Comparable<CacheOption> {
     private String key;
     // say which blocks to cache or only how many blocks to cache?
@@ -9,19 +11,27 @@ public class CacheOption implements Comparable<CacheOption> {
     private int blocks;
     private int weight; // = space in cache (in num blocks)
     private double value; // = num of requests over last X minutes * latency improvement
-    // estimated latency improvement computed based on known distances between regions
+    private List<String> regionNames;
 
-    // how to set value and weight?
-
-    public CacheOption(String key, int blocks, double value) {
+    public CacheOption(String key, int blocks, double value, List<String> regionNames) {
         this.key = key;
         this.blocks = blocks;
         weight = blocks;
         this.value = value;
+        this.regionNames = regionNames;
+    }
+    // estimated latency improvement computed based on known distances between regions
+
+    // how to set value and weight?
+
+    public List<String> getRegionNames() {
+        return regionNames;
     }
 
     public String prettyPrint() {
-        String str = key + " blocks:" + blocks + " weight:" + weight + " value:" + value + " value/weight:" + value / weight;
+        String str = key + " blocks:" + blocks + " weight:" + weight + " value:" + value + " value/weight:" + value / weight + " regions:";
+        for (String regionName : regionNames)
+            str += regionName + " ";
         return str;
     }
 

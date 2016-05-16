@@ -72,14 +72,14 @@ public class RegionManager {
         return avgTime;*/
 
         if (host.contains("eu-west-1"))
-            //return 38.392;
-            return 100;
+            return 38.392;
+            //return 100;
         else if (host.contains("eu-central-1"))
-            //return 17.978;
-            return 150;
+            return 17.978;
+            //return 150;
         else if (host.contains("external-1"))
-            //return 97.114;
-            return 10;
+            return 97.114;
+        //return 10;
         return Double.MIN_VALUE;
     }
 
