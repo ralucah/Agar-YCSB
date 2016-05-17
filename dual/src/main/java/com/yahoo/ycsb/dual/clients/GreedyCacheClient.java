@@ -209,7 +209,7 @@ public class GreedyCacheClient extends ClientBlueprint {
         return ecblock;
     }
 
-    public List<ECBlock> readBackend(String key, List<String> backendRecipe) {
+    public List<ECBlock> readBackend(final String key, List<String> backendRecipe) {
         List<ECBlock> ecblocks = new ArrayList<ECBlock>();
 
         int blocksNum = 0;
@@ -262,7 +262,7 @@ public class GreedyCacheClient extends ClientBlueprint {
             logger.debug("[Error] Cache  " + key + " block " + ecblock.getId() + " at " + memConnection.getHost());
     }
 
-    private ECBlock readCacheBlock(String key, int blockId) {
+    private ECBlock readCacheBlock(final String key, int blockId) {
         String blockKey = key + blockId;
         byte[] bytes = memConnection.read(blockKey);
 
@@ -286,7 +286,7 @@ public class GreedyCacheClient extends ClientBlueprint {
         return ecblock;
     }
 
-    private List<ECBlock> readCache(String key, List<String> cacheRecipe) {
+    private List<ECBlock> readCache(final String key, List<String> cacheRecipe) {
         List<ECBlock> ecblocks = new ArrayList<ECBlock>();
 
         int blocksNum = 0;
