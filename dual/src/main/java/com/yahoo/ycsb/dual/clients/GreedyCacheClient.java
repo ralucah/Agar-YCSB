@@ -18,7 +18,7 @@ import java.util.concurrent.*;
 /**
  * Created by Raluca on 23.04.16.
  */
-public class SmartCacheClient extends ClientBlueprint {
+public class GreedyCacheClient extends ClientBlueprint {
     public static String S3_REGIONS_PROPERTIES = "s3.regions";
     public static String S3_ENDPOINTS_PROPERTIES = "s3.endpoints";
     public static String S3_BUCKETS_PROPERTIES = "s3.buckets";
@@ -29,7 +29,7 @@ public class SmartCacheClient extends ClientBlueprint {
     public static String LONGHAIR_M_DEFAULT = "2";
     public static String EXECUTOR_THREADS_PROPERTY = "executor.threads";
     public static String EXECUTOR_THREADS_DEFAULT = "10";
-    protected static Logger logger = Logger.getLogger(SmartCacheClient.class);
+    protected static Logger logger = Logger.getLogger(GreedyCacheClient.class);
     private Properties properties;
 
     private List<S3Connection> s3Connections;
