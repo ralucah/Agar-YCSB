@@ -1,5 +1,5 @@
 recordcount=5
-operationcount=10
+operationcount=100
 workload=com.yahoo.ycsb.workloads.CoreWorkload
 
 readproportion=1

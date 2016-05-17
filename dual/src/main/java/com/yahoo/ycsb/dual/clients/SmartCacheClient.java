@@ -12,10 +12,7 @@ import com.yahoo.ycsb.dual.utils.ECBlock;
 import com.yahoo.ycsb.dual.utils.Storage;
 import org.apache.log4j.Logger;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Properties;
+import java.util.*;
 import java.util.concurrent.*;
 
 /**
@@ -172,34 +169,230 @@ public class SmartCacheClient extends ClientBlueprint {
         return ecblocks;
     }
 
+    private List<Integer> getBlockIdsByRegion(String region) {
+        List<Integer> blockIds = new ArrayList<Integer>();
+
+        // identify connection id
+        int s3connId = Integer.MIN_VALUE;
+        for (int i = 0; i < s3Connections.size(); i++) {
+            String name = s3Connections.get(i).getRegion();
+            if (name.equals(region)) {
+                s3connId = i;
+                break;
+            }
+        }
+        if (s3connId == Integer.MIN_VALUE)
+            logger.error("Invalid s3 connection id!");
+
+        // compute block ids
+        int s3ConnNum = s3Connections.size();
+        int blocksPerRegion = (LonghairLib.k + LonghairLib.m) / s3ConnNum;
+        for (int i = 0; i < s3ConnNum; i++) {
+            int blockId = i * blocksPerRegion + s3connId;
+            blockIds.add(blockId);
+        }
+        return blockIds;
+    }
+
+    private ECBlock readBackendBlock(String key, int blockId) {
+        String blockKey = key + blockId;
+        int s3ConnNum = blockId % s3Connections.size();
+        S3Connection s3Connection = s3Connections.get(s3ConnNum);
+        byte[] bytes = s3Connection.read(blockKey);
+
+        ECBlock ecblock = null;
+        if (bytes != null)
+            ecblock = new ECBlock(blockId, blockKey, bytes, Storage.BACKEND);
+        else
+            logger.error("[Error] ReadBlockBackend " + key + " block" + blockId + " from bucket" + s3ConnNum);
+
+        return ecblock;
+    }
+
+    public List<ECBlock> readBackend(String key, List<String> backendRecipe) {
+        logger.debug("readBackend " + key);
+        List<ECBlock> ecblocks = new ArrayList<ECBlock>();
+
+        int blocksNum = 0;
+        CompletionService<ECBlock> completionService = new ExecutorCompletionService<ECBlock>(executor);
+
+        // for each region
+        for (final String region : backendRecipe) {
+            List<Integer> blockIds = getBlockIdsByRegion(region);
+            blocksNum += blockIds.size();
+
+            // read each block
+            for (Integer blockId : blockIds) {
+                final int blockIdFin = blockId;
+                completionService.submit(new Callable<ECBlock>() {
+                    @Override
+                    public ECBlock call() throws Exception {
+                        return readBackendBlock(key, blockIdFin);
+                    }
+                });
+            }
+        }
+
+        int success = 0;
+        int errors = 0;
+        while (success < blocksNum) {
+            try {
+                Future<ECBlock> resultFuture = completionService.take();
+                ECBlock ecblock = resultFuture.get();
+                if (ecblock != null) {
+                    ecblocks.add(ecblock);
+                    success++;
+                } else
+                    errors++;
+            } catch (Exception e) {
+                errors++;
+                logger.debug("Exception reading block.");
+            }
+            if (errors == blocksNum)
+                break;
+        }
+
+        return ecblocks;
+    }
+
+    private void cacheBlock(String key, ECBlock ecblock) {
+        Status status = memConnection.insert(ecblock.getKey(), ecblock.getBytes());
+        if (status == Status.OK)
+            logger.debug("Cache  " + key + " block " + ecblock.getId() + " at " + memConnection.getHost());
+        else
+            logger.debug("[Error] Cache  " + key + " block " + ecblock.getId() + " at " + memConnection.getHost());
+    }
+
+    private ECBlock readCacheBlock(String key, int blockId) {
+        String blockKey = key + blockId;
+        byte[] bytes = memConnection.read(blockKey);
+
+        ECBlock ecblock = null;
+        if (bytes != null) {
+            logger.debug("CacheHit " + key + " block " + blockId);
+            ecblock = new ECBlock(blockId, blockKey, bytes, Storage.CACHE);
+        } else {
+            logger.debug("CacheMiss " + key + " block " + blockId);
+            ecblock = readBackendBlock(key, blockId);
+            if (ecblock != null) {
+                final ECBlock ecblockFin = ecblock;
+                executor.submit(new Runnable() {
+                    @Override
+                    public void run() {
+                        cacheBlock(key, ecblockFin);
+                    }
+                });
+            }
+        }
+        return ecblock;
+    }
+
+    private List<ECBlock> readCache(String key, List<String> cacheRecipe) {
+        logger.debug("readCache " + key);
+        List<ECBlock> ecblocks = new ArrayList<ECBlock>();
+
+        int blocksNum = 0;
+        CompletionService<ECBlock> completionService = new ExecutorCompletionService<ECBlock>(executor);
+
+        // for each region
+        for (final String region : cacheRecipe) {
+            List<Integer> blockIds = getBlockIdsByRegion(region);
+            blocksNum += blockIds.size();
+
+            // read each block
+            for (Integer blockId : blockIds) {
+                final int blockIdFin = blockId;
+                completionService.submit(new Callable<ECBlock>() {
+                    @Override
+                    public ECBlock call() throws Exception {
+                        return readCacheBlock(key, blockIdFin);
+                    }
+                });
+            }
+        }
+
+        int success = 0;
+        int errors = 0;
+        while (success < blocksNum) {
+            try {
+                Future<ECBlock> resultFuture = completionService.take();
+                ECBlock ecblock = resultFuture.get();
+                if (ecblock != null) {
+                    ecblocks.add(ecblock);
+                    success++;
+                } else
+                    errors++;
+            } catch (Exception e) {
+                errors++;
+                logger.debug("Exception reading block.");
+            }
+            if (errors == blocksNum)
+                break;
+        }
+
+        return ecblocks;
+    }
+
     @Override
     public byte[] read(final String key, final int keyNum) {
-        ProxyReply reply = proxyConnection.sendRequest(key);
+        final ProxyReply reply = proxyConnection.sendRequest(key);
         logger.info(reply.prettyPrint());
 
-        /*for (Map.Entry<String, Integer> entry : reply.getReadRecipe().entrySet()) {
-            String location = entry.getKey();
-            String blocks = entry.getKey();
-            if (location.equals("cache")) {
-                System.out.println("Read from memcached");
-            } else {
-                //System.out.println("Read from s3 client " + getS3ConnId(location));
+        // read from cache and backend in parallel
+        List<ECBlock> ecblocks = new ArrayList<ECBlock>();
+        CompletionService<List<ECBlock>> completionService = new ExecutorCompletionService<List<ECBlock>>(executor);
+        if (reply.getCacheRecipe().size() > 0) {
+            completionService.submit(new Callable<List<ECBlock>>() {
+                @Override
+                public List<ECBlock> call() throws Exception {
+                    return readCache(key, reply.getCacheRecipe());
+                }
+            });
+        }
+        if (reply.getS3Recipe().size() > 0) {
+            completionService.submit(new Callable<List<ECBlock>>() {
+                @Override
+                public List<ECBlock> call() throws Exception {
+                    return readBackend(key, reply.getS3Recipe());
+                }
+            });
+        }
+
+        // wait for at least k blocks in total
+        int success = 0;
+        int errors = 0;
+        while (success < LonghairLib.k) {
+            try {
+                Future<List<ECBlock>> resultFuture = completionService.take();
+                List<ECBlock> ecblocksRes = resultFuture.get();
+                if (ecblocksRes != null) {
+                    ecblocks.addAll(ecblocksRes);
+                    success += ecblocksRes.size();
+                } else
+                    errors++;
+            } catch (Exception e) {
+                errors++;
+                logger.debug("Exception reading block.");
             }
-        }*/
-        /*int blocks = reply.getBlocksToCache();
-        byte[] data = null;
-        if (blocks == 0) {
-            // read from backend, nothing to cache
-            //data = readFromS3(key);
-        } else {
-            if (blocks < LonghairLib.k) {
-                // read from backend + cache
-                // if cache miss => read from backend and then cache blocks in the background
-            } else {
-                // read from cache
-                // if cache miss => read from backend and cache in the background
-            }
-        }*/
+            if (errors > LonghairLib.m)
+                break;
+        }
+
+        Set<byte[]> blockBytes = new HashSet<byte[]>();
+        int fromCache = 0;
+        int fromBackend = 0;
+        for (ECBlock ecblock : ecblocks) {
+            blockBytes.add(ecblock.getBytes());
+            if (ecblock.getStorage() == Storage.CACHE)
+                fromCache++;
+            else if (ecblock.getStorage() == Storage.BACKEND)
+                fromBackend++;
+        }
+
+        byte[] data = LonghairLib.decode(blockBytes);
+        logger.info("Read " + key + " " + data.length + " bytes Cache: " + fromCache + " Backend: " + fromBackend);
+
+        return data;
 
         // get data from backend
         /*byte[] data = readS3(key);
@@ -217,8 +410,6 @@ public class SmartCacheClient extends ClientBlueprint {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }*/
-
-        return null;
     }
 
     @Override
