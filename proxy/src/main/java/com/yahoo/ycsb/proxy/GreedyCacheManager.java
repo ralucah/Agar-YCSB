@@ -11,17 +11,17 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class GreedyCacheManager {
     protected static Logger logger = Logger.getLogger(GreedyCacheManager.class);
-    private static List<CacheOption> cacheOptions;
-    private static List<CacheOption> cache;
-    private static Map<String, Integer> frequency;
-    private static Map<String, Double> weightedPopularity;
-    // gouverns when to recompute cache options
-    private static int period;
-    private static double alpha;
+
+    private static int period; // how often to recompute cache (ms)
+    private static List<CacheOption> cacheOptions; // cache options for the seen keys
+    private static List<CacheOption> cache; // current cache configuration
+    private static Map<String, Integer> frequency; // frequency stats for keys
+    private static Map<String, Double> weightedPopularity; // weighted popularity for keys
+    private static double alpha; // coefficient for weighted popularity (between 0 and 1)
     private static AtomicInteger cachesizeMax; // in block numbers
     private static AtomicInteger cachesize; // in block numbers
-    private static int k;
-    private static RegionManager regionManager;
+    private static int k; // number of data chunks (erasure-coding parameter)
+    private static RegionManager regionManager; // computes an overview of the deployed system
 
     public GreedyCacheManager() {
         // max cache size in blocks
@@ -48,13 +48,13 @@ public class GreedyCacheManager {
         exec.scheduleAtFixedRate(new Runnable() {
             @Override
             public void run() {
-                GreedyCacheManager.periodicUpdateThread();
+                GreedyCacheManager.reconfigureCache();
             }
         }, period, period, TimeUnit.MILLISECONDS);
     }
 
-    private static void periodicUpdateThread() {
-        System.err.println("periodic thread!");
+    private static void reconfigureCache() {
+        logger.debug("reconfigure cache BEGIN");
         // update weighted popularity for keys that were encountered over the last period
         for (Map.Entry<String, Integer> entry : frequency.entrySet()) {
             String key = entry.getKey();
@@ -79,33 +79,31 @@ public class GreedyCacheManager {
         }
 
         // print stats
-        printFrequency();
-        //printWeightedPopularity();
+        //prettyPrintFrequency();
+        //prettyPrintWeightedPopularity();
 
         // reset frequency
         frequency.clear();
 
         computeGreedyCache();
 
-        System.out.println("-----------------------------------");
+        logger.debug("reconfigure cache END");
     }
 
-    // dummy
-    private static void printFrequency() {
-        System.out.println("frequency {");
+    private static void prettyPrintFrequency() {
+        logger.debug("frequency {");
         for (Map.Entry<String, Integer> entry : frequency.entrySet()) {
-            System.out.println(entry.getKey() + " " + entry.getValue());
+            logger.debug(entry.getKey() + " " + entry.getValue());
         }
-        System.out.println("}");
+        logger.debug("}");
     }
 
-    // dummy
-    private static void printWeightedPopularity() {
-        System.out.println("weightedPopularity {");
+    private static void prettyPrintWeightedPopularity() {
+        logger.debug("weightedPopularity {");
         for (Map.Entry<String, Double> entry : weightedPopularity.entrySet()) {
-            System.out.println(entry.getKey() + " " + entry.getValue());
+            logger.debug(entry.getKey() + " " + entry.getValue());
         }
-        System.out.println("}");
+        logger.debug("}");
     }
 
     private static void computeGreedyCache() {
@@ -113,9 +111,9 @@ public class GreedyCacheManager {
         computeCacheOptions();
 
         // update current cache according to new options
-        //System.out.println("Current options, sorted:");
+        //logger.debug("Current options, sorted:");
         //printCacheOptions(cacheOptions);
-        //System.out.println("Current cache:");
+        //logger.debug("Current cache:");
         //printCacheOptions(cache);
 
         // populate the cache!
@@ -132,9 +130,9 @@ public class GreedyCacheManager {
             index++;
         }
 
-        System.out.println("Cache:");
+        logger.debug("Cache:");
         printCacheOptions(cache);
-        System.out.println("cachesize:" + cachesize + " cachesizemax:" + cachesizeMax);
+        logger.debug("cachesize:" + cachesize + " cachesizemax:" + cachesizeMax);
     }
 
     private static int cacheContains(String key) {
@@ -160,7 +158,7 @@ public class GreedyCacheManager {
         for (Map.Entry<String, Double> entry : weightedPopularity.entrySet()) {
             String key = entry.getKey();
             //if (isKeyInCacheOptions(key) == false) {
-            List<CacheOption> cacheOptionsKey = generateCacheOptions(key);
+            List<CacheOption> cacheOptionsKey = computeCacheOptionForKey(key);
             cacheOptions.addAll(cacheOptionsKey);
             //}
         }
@@ -168,11 +166,11 @@ public class GreedyCacheManager {
         cacheOptions.sort(CacheOption::compareTo);
         Collections.reverse(cacheOptions);
 
-        System.out.println("All cache options:");
-        printCacheOptions(cacheOptions);
+        //logger.debug("All cache options:");
+        //printCacheOptions(cacheOptions);
     }
 
-    private static List<CacheOption> generateCacheOptions(String key) {
+    private static List<CacheOption> computeCacheOptionForKey(String key) {
         List<CacheOption> cacheOptionsKey = new ArrayList<CacheOption>();
         int blocks = 0;
         List<String> regionNames = new ArrayList<String>();
@@ -209,14 +207,14 @@ public class GreedyCacheManager {
         CacheOption option = new CacheOption(key, k, value, new ArrayList<String>(regionNames));
         cacheOptionsKey.add(option);
 
-        System.out.println("CacheOptions for " + key);
-        printCacheOptions(cacheOptionsKey);
+        //logger.debug("CacheOptions for " + key);
+        //printCacheOptions(cacheOptionsKey);
         return cacheOptionsKey;
     }
 
     private static void printCacheOptions(List<CacheOption> options) {
         for (CacheOption cacheOption : options)
-            System.out.println(cacheOption.prettyPrint());
+            logger.debug(cacheOption.prettyPrint());
     }
 
     private void incrementFrequency(String key) {

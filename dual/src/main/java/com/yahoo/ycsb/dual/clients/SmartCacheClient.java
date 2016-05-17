@@ -210,7 +210,6 @@ public class SmartCacheClient extends ClientBlueprint {
     }
 
     public List<ECBlock> readBackend(String key, List<String> backendRecipe) {
-        logger.debug("readBackend " + key);
         List<ECBlock> ecblocks = new ArrayList<ECBlock>();
 
         int blocksNum = 0;
@@ -288,7 +287,6 @@ public class SmartCacheClient extends ClientBlueprint {
     }
 
     private List<ECBlock> readCache(String key, List<String> cacheRecipe) {
-        logger.debug("readCache " + key);
         List<ECBlock> ecblocks = new ArrayList<ECBlock>();
 
         int blocksNum = 0;
@@ -336,7 +334,7 @@ public class SmartCacheClient extends ClientBlueprint {
     @Override
     public byte[] read(final String key, final int keyNum) {
         final ProxyReply reply = proxyConnection.sendRequest(key);
-        logger.info(reply.prettyPrint());
+        //logger.info(reply.prettyPrint());
 
         // read from cache and backend in parallel
         List<ECBlock> ecblocks = new ArrayList<ECBlock>();

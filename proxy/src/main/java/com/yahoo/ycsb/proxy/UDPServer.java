@@ -36,7 +36,6 @@ public class UDPServer implements Runnable {
 
         // address of current server
         String proxyHost = PropertyFactory.propertiesMap.get(PropertyFactory.PROXY_PROPERTY);
-        logger.debug("Proxy: " + proxyHost);
 
         // datagram socket
         String[] tokens = proxyHost.split(":");
@@ -59,6 +58,7 @@ public class UDPServer implements Runnable {
         // greedy cache manager
         greedy = new GreedyCacheManager();
 
+        System.out.println("Proxy server running on " + proxyHost);
     }
 
     public static void usageMessage() {
@@ -72,11 +72,11 @@ public class UDPServer implements Runnable {
         Properties props = new Properties();
         Properties fileprops = new Properties();
 
-        int i = 0;
+        /*int i = 0;
         while (i < args.length) {
             System.out.println(i + " " + args[i]);
             i++;
-        }
+        }*/
 
         //parse arguments
         int argindex = 0;
@@ -158,8 +158,6 @@ public class UDPServer implements Runnable {
         //logger.info(request.prettyPrint()); // + " from " + clientAddress + ":" + clientPort);
 
         // compute reply
-        //int blocks = greedy.getCachedBlocks(request.getKey());
-        //ProxyReply reply = new ProxyReply(blocks);
         ProxyReply reply = greedy.buildReply(request.getKey());
         //logger.info(reply.prettyPrint());// + " to " + clientAddress + ":" + clientPort);
 
