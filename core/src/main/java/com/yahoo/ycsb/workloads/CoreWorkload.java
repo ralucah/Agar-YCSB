@@ -73,10 +73,8 @@ public class CoreWorkload extends Workload {
     public static final String INSERTION_RETRY_INTERVAL_DEFAULT = "3";
 
     // skew and delay for Slashdot Generator
-    public static final String SLASHDOT_SKEW_PROPERTY = "skew";
-    public static final String SLASHDOT_DELAY_PROPERTY = "delay";
-    public static final String SLASHDOT_SKEW_DEFAULT = "1.75";
-    public static final String SLASHDOT_DELAY_DEFAULT = "10000"; // 10s
+    public static final String SLASHDOT_SKEW_PROPERTY = "slashdot.skew";
+    public static final String SLASHDOT_DELAY_PROPERTY = "slashdot.delay";
 
     // generator object that produces field lengths. Depends on the properties that start with "FIELD_LENGTH_"
     IntegerGenerator fieldlengthgenerator;
@@ -152,8 +150,8 @@ public class CoreWorkload extends Workload {
 
         transactioninsertkeysequence = new AcknowledgedCounterGenerator(1);
         if (requestdistrib.equals("slashdot")) {
-            double skew = Double.parseDouble(p.getProperty(SLASHDOT_SKEW_PROPERTY, SLASHDOT_SKEW_DEFAULT));
-            int delay = Integer.parseInt(p.getProperty(SLASHDOT_DELAY_PROPERTY, SLASHDOT_DELAY_DEFAULT));
+            double skew = Double.parseDouble(p.getProperty(SLASHDOT_SKEW_PROPERTY));
+            int delay = Integer.parseInt(p.getProperty(SLASHDOT_DELAY_PROPERTY));
             keychooser = new SlashdotGenerator(recordcount, skew, delay);
         } else if (requestdistrib.compareTo("uniform") == 0) {
             keychooser = new UniformIntegerGenerator(insertstart, insertstart + insertcount - 1);
@@ -168,7 +166,7 @@ public class CoreWorkload extends Workload {
             // the keyspace doesn't change from the perspective of the scrambled zipfian generator
             int opcount = Integer.parseInt(p.getProperty(Client.OPERATION_COUNT_PROPERTY));
             int expectednewkeys = (int) ((opcount) * insertproportion * 2.0); // 2 is fudge factor
-            keychooser = new ScrambledZipfianGenerator(insertstart, insertstart + insertcount + expectednewkeys);
+            keychooser = new ScrambledZipfianGenerator(insertstart, insertstart + insertcount - 1 + expectednewkeys);
         } else if (requestdistrib.compareTo("latest") == 0) {
             keychooser = new SkewedLatestGenerator(transactioninsertkeysequence);
         } else if (requestdistrib.equals("hotspot")) {

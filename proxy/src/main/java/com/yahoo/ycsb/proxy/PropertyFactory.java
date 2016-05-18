@@ -5,19 +5,34 @@ import java.util.Map;
 import java.util.Properties;
 
 public class PropertyFactory {
-    public static String EXECUTOR_THREADS_PROPERTY = "executor.threads";
-    public static String PACKET_SIZE_PROPERTY = "packetsize";
-    public static String CACHE_SIZE_PROPERTY = "cachesize";
-    public static String FIELD_LENGTH_PROPERTY = "fieldlength";
-    public static String MEMCACHED_SERVER_PROPERTY = "memcached.server";
+    /* ip:port e.g., 127.0.0.1:11000*/
     public static String PROXY_PROPERTY = "proxy";
-    public static String LONGHAIR_K_PROPERTY = "longhair.k";
-    public static String LONGHAIR_M_PROPERTY = "longhair.m";
-    public static String S3_REGIONS_PROPERTY = "s3.regions";
-    public static String S3_ENDPOINTS_PROPERTY = "s3.endpoints";
-    public static String PERIOD_PROPERTY = "period";
-    public static String ALPHA_PROPERTY = "alpha";
+    /* size of UDP packets exchanged with client e.g., 1024*/
+    public static String PACKET_SIZE_PROPERTY = "proxy.packetsize";
+    /* size of cache in MB e.g., 64 (mind the slab size, set using -I <size>) */
+    public static String CACHE_SIZE_PROPERTY = "proxy.cachesize";
+    /* how often to recompute the cache configuration, in ms e.g., 10000*/
+    public static String PERIOD_PROPERTY = "proxy.period";
+    /* weighted popularity coefficient, between 0 and 1; controls impact of old popularity value*/
+    public static String ALPHA_PROPERTY = "proxy.alpha";
 
+    /* size of data record */
+    public static String FIELD_LENGTH_PROPERTY = "fieldlength";
+    /* ip:port of memcached server */
+    public static String MEMCACHED_SERVER_PROPERTY = "memcached.server";
+    /* erasure-coding parameter; number of data chunks */
+    public static String LONGHAIR_K_PROPERTY = "longhair.k";
+    /* erasure-coding parameter; number of redundant chunks */
+    public static String LONGHAIR_M_PROPERTY = "longhair.m";
+    /* AWS S3 region names */
+    public static String S3_REGIONS_PROPERTY = "s3.regions";
+    /* AWS S3 region endpoints */
+    public static String S3_ENDPOINTS_PROPERTY = "s3.endpoints";
+
+    /* number of processing threads in the proxy's executor pool */
+    public static String EXECUTOR_THREADS_PROPERTY = "executor.threads";
+
+    /* all known properties */
     public static Map<String, String> propertiesMap;
 
     protected PropertyFactory(Properties properties) {

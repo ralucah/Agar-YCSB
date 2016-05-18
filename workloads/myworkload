@@ -1,6 +1,9 @@
-recordcount=5
-operationcount=100
+recordcount=100
+operationcount=1000000
 workload=com.yahoo.ycsb.workloads.CoreWorkload
+
+insertstart=0
+insertcount=100
 
 readproportion=1
 updateproportion=0
@@ -8,14 +11,11 @@ scanproportion=0
 insertproportion=0
 maxexecutiontime=300
 
-insertstart=0
-insertcount=4
-
 #requestdistribution=zipfian
 #requestdistribution=uniform
 requestdistribution=slashdot
-skew=0.7
-delay=-1
+slashdot.skew=0.5
+slashdot.delay=-1
 
 s3.endpoints=s3-eu-west-1.amazonaws.com,s3-eu-central-1.amazonaws.com,s3-external-1.amazonaws.com
 s3.regions=eu-west-1,eu-central-1,us-east-1
@@ -28,13 +28,12 @@ longhair.k=6
 longhair.m=3
 executor.threads=10
 
-#eccache
+# eccache client
 blocksincache=3
 
-#proxy
+# proxy
 proxy=127.0.0.1:11000
-packetsize=1024
-cachesize=8
-period=7000
-# how much the new popularity counts in the weighted moving avg
-alpha=0.8
+proxy.packetsize=1024
+proxy.cachesize=8
+proxy.period=7000
+proxy.alpha=0.8

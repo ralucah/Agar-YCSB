@@ -15,6 +15,9 @@ import java.util.concurrent.Executors;
 
 // http://stackoverflow.com/questions/28051060/java-properties-best-practices
 
+//./bin/ycsb proxy -p fieldlength=4194304 -P workloads/myworkload
+
+
 public class UDPServer implements Runnable {
     protected static Logger logger = Logger.getLogger(UDPServer.class);
 

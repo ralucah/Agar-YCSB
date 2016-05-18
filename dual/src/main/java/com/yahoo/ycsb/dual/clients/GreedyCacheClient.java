@@ -15,9 +15,8 @@ import org.apache.log4j.Logger;
 import java.util.*;
 import java.util.concurrent.*;
 
-/**
- * Created by Raluca on 23.04.16.
- */
+// bin/ycsb run greedy -threads 5 -p fieldlength=4194304 -P workloads/myworkload
+
 public class GreedyCacheClient extends ClientBlueprint {
     public static String S3_REGIONS_PROPERTIES = "s3.regions";
     public static String S3_ENDPOINTS_PROPERTIES = "s3.endpoints";

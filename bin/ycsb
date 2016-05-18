@@ -59,7 +59,8 @@ CLIENTS = {
     "localcache" : "com.yahoo.ycsb.dual.clients.LocalCacheClient",
     "fixcache" : "com.yahoo.ycsb.dual.clients.FixCacheClient",
     "eccache" : "com.yahoo.ycsb.dual.clients.ECCacheClient",
-    "greedy" : "com.yahoo.ycsb.dual.clients.GreedyCacheClient"
+    "greedy" : "com.yahoo.ycsb.dual.clients.GreedyCacheClient",
+    "dummy" : "com.yahoo.ycsb.dual.clients.DummyClient"
 }
 
 BINDING = "dual"
