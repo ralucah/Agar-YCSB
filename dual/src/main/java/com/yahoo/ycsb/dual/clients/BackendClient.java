@@ -3,6 +3,7 @@ package com.yahoo.ycsb.dual.clients;
 // -client com.yahoo.ycsb.dual.clients.BackendClient -p fieldlength=100 -s -P workloads/myworkload -load
 // -client com.yahoo.ycsb.dual.clients.BackendClient -p skew=1.5 -p delay=1000 -p fieldlength=100 -s -P workloads/myworkload
 
+//  bin/ycsb load backend -s -threads 1 -p fieldlength=4194304 -P workloads/myworkload
 import com.yahoo.ycsb.ClientBlueprint;
 import com.yahoo.ycsb.ClientException;
 import com.yahoo.ycsb.Status;
