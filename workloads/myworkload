@@ -1,5 +1,5 @@
 recordcount=100
-operationcount=100
+operationcount=1000000
 workload=com.yahoo.ycsb.workloads.CoreWorkload
 
 insertstart=0
@@ -9,7 +9,7 @@ readproportion=1
 updateproportion=0
 scanproportion=0
 insertproportion=0
-#maxexecutiontime=300
+maxexecutiontime=60
 
 #requestdistribution=zipfian
 #requestdistribution=uniform
@@ -34,6 +34,6 @@ blocksincache=3
 # proxy
 proxy=127.0.0.1:11000
 proxy.packetsize=1024
-proxy.cachesize=8
+proxy.cachesize=40
 proxy.period=7000
 proxy.alpha=0.8

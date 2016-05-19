@@ -10,6 +10,7 @@ import com.yahoo.ycsb.common.liberasure.LonghairLib;
 import com.yahoo.ycsb.common.memcached.MemcachedConnection;
 import com.yahoo.ycsb.dual.connections.S3Connection;
 import com.yahoo.ycsb.dual.utils.ECBlock;
+import com.yahoo.ycsb.dual.utils.PropertyFactory;
 import com.yahoo.ycsb.dual.utils.Storage;
 import org.apache.log4j.Logger;
 
@@ -18,34 +19,23 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class ECCacheClient extends ClientBlueprint {
-    public static String S3_REGIONS_PROPERTIES = "s3.regions";
-    public static String S3_ENDPOINTS_PROPERTIES = "s3.endpoints";
-    public static String S3_BUCKETS_PROPERTIES = "s3.buckets";
-    public static String MEMCACHED_PROPERTY = "memcached.server";
-    public static String LONGHAIR_K_PROPERTY = "longhair.k";
-    public static String LONGHAIR_K_DEFAULT = "6";
-    public static String LONGHAIR_M_PROPERTY = "longhair.m";
-    public static String LONGHAIR_M_DEFAULT = "3";
-    public static String EXECUTOR_THREADS_PROPERTY = "executor.threads";
-    public static String EXECUTOR_THREADS_DEFAULT = "10";
-    public static String BLOCKS_TO_CACHE = "blocksincache";
-    protected static Logger logger = Logger.getLogger(ECCacheClient.class);
-    protected static AtomicInteger cacheHits = new AtomicInteger(0);
-    protected static AtomicInteger cachePartialHits = new AtomicInteger(0);
-    protected static AtomicInteger cacheMisses = new AtomicInteger(0);
-    private Properties properties;
+    public static PropertyFactory propertyFactory;
+    private static Logger logger = Logger.getLogger(ECCacheClient.class);
+    private static AtomicInteger cacheHits = new AtomicInteger(0);
+    private static AtomicInteger cachePartialHits = new AtomicInteger(0);
+    private static AtomicInteger cacheMisses = new AtomicInteger(0);
     // S3 bucket names mapped to connections to AWS S3 buckets
     private List<S3Connection> s3Connections;
+    private MemcachedConnection memConnection;
     // for concurrent processing
     private ExecutorService executor;
-    private MemcachedConnection memConnection;
     private int blocksincache;
 
     // TODO Assumption: one bucket per region (num regions = num endpoints = num buckets)
     private void initS3() {
-        List<String> regions = Arrays.asList(properties.getProperty(S3_REGIONS_PROPERTIES).split("\\s*,\\s*"));
-        List<String> endpoints = Arrays.asList(properties.getProperty(S3_ENDPOINTS_PROPERTIES).split("\\s*,\\s*"));
-        List<String> s3Buckets = Arrays.asList(properties.getProperty(S3_BUCKETS_PROPERTIES).split("\\s*,\\s*"));
+        List<String> regions = Arrays.asList(propertyFactory.propertiesMap.get(PropertyFactory.S3_REGIONS_PROPERTY).split("\\s*,\\s*"));
+        List<String> endpoints = Arrays.asList(propertyFactory.propertiesMap.get(PropertyFactory.S3_ENDPOINTS_PROPERTY).split("\\s*,\\s*"));
+        List<String> s3Buckets = Arrays.asList(propertyFactory.propertiesMap.get(PropertyFactory.S3_BUCKETS_PROPERTY).split("\\s*,\\s*"));
         if (s3Buckets.size() != endpoints.size() || endpoints.size() != regions.size())
             logger.error("Configuration error: #buckets = #regions = #endpoints");
 
@@ -67,8 +57,8 @@ public class ECCacheClient extends ClientBlueprint {
 
     private void initLonghair() {
         // erasure coding-related configuration
-        LonghairLib.k = Integer.valueOf(properties.getProperty(LONGHAIR_K_PROPERTY, LONGHAIR_K_DEFAULT));
-        LonghairLib.m = Integer.valueOf(properties.getProperty(LONGHAIR_M_PROPERTY, LONGHAIR_M_DEFAULT));
+        LonghairLib.k = Integer.valueOf(propertyFactory.propertiesMap.get(PropertyFactory.LONGHAIR_K_PROPERTY));
+        LonghairLib.m = Integer.valueOf(propertyFactory.propertiesMap.get(PropertyFactory.LONGHAIR_M_PROPERTY));
         logger.debug("k: " + LonghairLib.k + " m: " + LonghairLib.m);
 
         // check k >= 0 and k < 256
@@ -87,24 +77,24 @@ public class ECCacheClient extends ClientBlueprint {
     }
 
     private void initCache() throws ClientException {
-        String memHost = properties.getProperty(MEMCACHED_PROPERTY);
+        String memHost = propertyFactory.propertiesMap.get(PropertyFactory.MEMCACHED_SERVER_PROPERTY);
         memConnection = new MemcachedConnection(memHost);
         logger.debug("Memcached connection " + memHost);
-        blocksincache = Integer.valueOf(properties.getProperty(BLOCKS_TO_CACHE, new Integer(LonghairLib.k).toString()));
+        blocksincache = Integer.valueOf(propertyFactory.propertiesMap.get(PropertyFactory.BLOCKS_IN_CACHE));
         logger.debug("blocksincache: " + blocksincache);
     }
 
     @Override
     public void init() throws ClientException {
         logger.debug("DualClient.init() start");
-        properties = getProperties();
+        propertyFactory = new PropertyFactory(getProperties());
 
         initS3();
         initLonghair();
         initCache();
 
         // init executor service
-        final int threadsNum = Integer.valueOf(properties.getProperty(EXECUTOR_THREADS_PROPERTY, EXECUTOR_THREADS_DEFAULT));
+        final int threadsNum = Integer.valueOf(propertyFactory.propertiesMap.get(PropertyFactory.EXECUTOR_THREADS_PROPERTY));
         logger.debug("threads num: " + threadsNum);
         executor = Executors.newFixedThreadPool(threadsNum);
 

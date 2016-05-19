@@ -9,6 +9,7 @@ import com.yahoo.ycsb.common.memcached.MemcachedConnection;
 import com.yahoo.ycsb.dual.connections.ProxyConnection;
 import com.yahoo.ycsb.dual.connections.S3Connection;
 import com.yahoo.ycsb.dual.utils.ECBlock;
+import com.yahoo.ycsb.dual.utils.PropertyFactory;
 import com.yahoo.ycsb.dual.utils.Storage;
 import org.apache.log4j.Logger;
 
@@ -18,19 +19,8 @@ import java.util.concurrent.*;
 // bin/ycsb run greedy -threads 5 -p fieldlength=4194304 -P workloads/myworkload
 
 public class GreedyCacheClient extends ClientBlueprint {
-    public static String S3_REGIONS_PROPERTIES = "s3.regions";
-    public static String S3_ENDPOINTS_PROPERTIES = "s3.endpoints";
-    public static String S3_BUCKETS_PROPERTIES = "s3.buckets";
-    public static String MEMCACHED_SERVER_PROPERTY = "memcached.server";
-    public static String LONGHAIR_K_PROPERTY = "longhair.k";
-    public static String LONGHAIR_K_DEFAULT = "3";
-    public static String LONGHAIR_M_PROPERTY = "longhair.m";
-    public static String LONGHAIR_M_DEFAULT = "2";
-    public static String EXECUTOR_THREADS_PROPERTY = "executor.threads";
-    public static String EXECUTOR_THREADS_DEFAULT = "10";
-    protected static Logger logger = Logger.getLogger(GreedyCacheClient.class);
-    private Properties properties;
-
+    public static PropertyFactory propertyFactory;
+    private static Logger logger = Logger.getLogger(GreedyCacheClient.class);
     private List<S3Connection> s3Connections;
     private MemcachedConnection memConnection;
     private ProxyConnection proxyConnection;
@@ -38,11 +28,12 @@ public class GreedyCacheClient extends ClientBlueprint {
     private int blocksPerRegion;
 
     private void initS3() {
-        List<String> regions = Arrays.asList(properties.getProperty(S3_REGIONS_PROPERTIES).split("\\s*,\\s*"));
-        List<String> endpoints = Arrays.asList(properties.getProperty(S3_ENDPOINTS_PROPERTIES).split("\\s*,\\s*"));
-        List<String> s3Buckets = Arrays.asList(properties.getProperty(S3_BUCKETS_PROPERTIES).split("\\s*,\\s*"));
+        List<String> regions = Arrays.asList(propertyFactory.propertiesMap.get(PropertyFactory.S3_REGIONS_PROPERTY).split("\\s*,\\s*"));
+        List<String> endpoints = Arrays.asList(propertyFactory.propertiesMap.get(PropertyFactory.S3_ENDPOINTS_PROPERTY).split("\\s*,\\s*"));
+        List<String> s3Buckets = Arrays.asList(propertyFactory.propertiesMap.get(PropertyFactory.S3_BUCKETS_PROPERTY).split("\\s*,\\s*"));
         if (s3Buckets.size() != endpoints.size() || endpoints.size() != regions.size())
             logger.error("Configuration error: #buckets = #regions = #endpoints");
+
         s3Connections = new ArrayList<S3Connection>();
         for (int i = 0; i < s3Buckets.size(); i++) {
             String bucket = s3Buckets.get(i);
@@ -59,8 +50,9 @@ public class GreedyCacheClient extends ClientBlueprint {
     }
 
     private void initLonghair() {
-        LonghairLib.k = Integer.valueOf(properties.getProperty(LONGHAIR_K_PROPERTY, LONGHAIR_K_DEFAULT));
-        LonghairLib.m = Integer.valueOf(properties.getProperty(LONGHAIR_M_PROPERTY, LONGHAIR_M_DEFAULT));
+        LonghairLib.k = Integer.valueOf(propertyFactory.propertiesMap.get(PropertyFactory.LONGHAIR_K_PROPERTY));
+        LonghairLib.m = Integer.valueOf(propertyFactory.propertiesMap.get(PropertyFactory.LONGHAIR_M_PROPERTY));
+        logger.debug("k: " + LonghairLib.k + " m: " + LonghairLib.m);
         logger.debug("k: " + LonghairLib.k + " m: " + LonghairLib.m);
         // check k >= 0 and k < 256
         if (LonghairLib.k < 0 || LonghairLib.k >= 256) {
@@ -76,21 +68,21 @@ public class GreedyCacheClient extends ClientBlueprint {
     }
 
     private void initCache() throws ClientException {
-        proxyConnection = new ProxyConnection(properties);
+        proxyConnection = new ProxyConnection(getProperties());
 
-        String memHost = properties.getProperty(MEMCACHED_SERVER_PROPERTY);
+        String memHost = propertyFactory.propertiesMap.get(PropertyFactory.MEMCACHED_SERVER_PROPERTY);
         memConnection = new MemcachedConnection(memHost);
         logger.debug("Memcached connection " + memHost);
     }
 
     public void init() throws ClientException {
         logger.debug("SmartCacheClient.init() start");
-        properties = getProperties();
+        propertyFactory = new PropertyFactory(getProperties());
         initS3();
         initLonghair();
         initCache();
         blocksPerRegion = (LonghairLib.k + LonghairLib.m) / s3Connections.size();
-        final int threadsNum = Integer.valueOf(properties.getProperty(EXECUTOR_THREADS_PROPERTY, EXECUTOR_THREADS_DEFAULT));
+        final int threadsNum = Integer.valueOf(propertyFactory.propertiesMap.get(PropertyFactory.EXECUTOR_THREADS_PROPERTY));
         logger.debug("threads num: " + threadsNum);
         executor = Executors.newFixedThreadPool(threadsNum);
         logger.debug("SmartCacheClient.init() end");
