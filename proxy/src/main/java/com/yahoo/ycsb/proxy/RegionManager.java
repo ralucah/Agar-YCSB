@@ -2,6 +2,8 @@ package com.yahoo.ycsb.proxy;
 
 import org.apache.log4j.Logger;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -48,7 +50,7 @@ public class RegionManager {
     }
 
     private double ping(String host) {
-        /*double avgTime = Double.MIN_VALUE;
+        double avgTime = Double.MIN_VALUE;
 
         try {
             String command = "ping -c 5 " + host;
@@ -69,9 +71,9 @@ public class RegionManager {
             logger.warn("Could not ping " + host);
         }
 
-        return avgTime;*/
+        return avgTime;
 
-        if (host.contains("eu-west-1"))
+        /*if (host.contains("eu-west-1"))
             return 38.392;
             //return 100;
         else if (host.contains("eu-central-1"))
@@ -80,7 +82,7 @@ public class RegionManager {
         else if (host.contains("external-1"))
             return 97.114;
         //return 10;
-        return Double.MIN_VALUE;
+        return Double.MIN_VALUE;*/
     }
 
     public List<Region> getRegions() {
