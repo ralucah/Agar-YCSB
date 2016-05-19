@@ -10,7 +10,7 @@ public class PropertyFactory {
     /* size of UDP packets exchanged with client e.g., 1024*/
     public static String PACKET_SIZE_PROPERTY = "proxy.packetsize";
     /* size of cache in MB e.g., 64 (mind the slab size, set using -I <size>) */
-    public static String CACHE_SIZE_PROPERTY = "proxy.cachesize";
+    public static String CACHE_SIZE_PROPERTY = "cachesize";
     /* how often to recompute the cache configuration, in ms e.g., 10000*/
     public static String PERIOD_PROPERTY = "proxy.period";
     /* weighted popularity coefficient, between 0 and 1; controls impact of old popularity value*/

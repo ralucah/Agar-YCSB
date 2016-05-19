@@ -31,7 +31,7 @@ import java.util.concurrent.atomic.AtomicInteger;
    Command line:
    cd YCSB
    mvn clean package
-   bin/ycsb proxy -p fieldlength=4194304 -P workloads/myworkload
+   bin/ycsb proxy -p cachesize=40 -P workloads/myworkload
    bin/ycsb run greedy -threads 2 -p fieldlength=4194304 -P workloads/myworkload
 */
 

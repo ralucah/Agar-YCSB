@@ -27,10 +27,11 @@ public class GreedyCacheManager {
         // max cache size in blocks
         k = Integer.valueOf(PropertyFactory.propertiesMap.get(PropertyFactory.LONGHAIR_K_PROPERTY));
         int cachesizeMB = Integer.valueOf(PropertyFactory.propertiesMap.get(PropertyFactory.CACHE_SIZE_PROPERTY));
-        int fieldlength = Integer.valueOf(PropertyFactory.propertiesMap.get(PropertyFactory.FIELD_LENGTH_PROPERTY));
-        int blocksize = fieldlength / k;
-        cachesizeMax = new AtomicInteger((cachesizeMB * 1024 * 1024) / blocksize);
-        //cachesizeMax = (cachesizeMB * 1024 * 1024) / blocksize;
+        //int fieldlength = Integer.valueOf(PropertyFactory.propertiesMap.get(PropertyFactory.FIELD_LENGTH_PROPERTY));
+        //int blocksize = fieldlength / k;
+        //cachesizeMax = new AtomicInteger((cachesizeMB * 1024 * 1024) / blocksize);
+        // assume that 1 item = 1 mb (slab size in memcached)
+        cachesizeMax = new AtomicInteger(cachesizeMB);
 
         // current cache size
         cachesize = new AtomicInteger(0);
