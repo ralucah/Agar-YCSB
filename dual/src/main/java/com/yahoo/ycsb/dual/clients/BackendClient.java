@@ -1,15 +1,30 @@
 package com.yahoo.ycsb.dual.clients;
 
-// -client com.yahoo.ycsb.dual.clients.BackendClient -p fieldlength=100 -s -P workloads/myworkload -load
-// -client com.yahoo.ycsb.dual.clients.BackendClient -p skew=1.5 -p delay=1000 -p fieldlength=100 -s -P workloads/myworkload
+/*
+  IntelliJ
+  Main: com.yahoo.ycsb.Client
+  VM options: -Xmx3g
+  Program arguments: -client com.yahoo.ycsb.dual.clients.LocalCacheClient -p fieldlength=4194304 -P workloads/myworkload
+  Working directory: /home/ubuntu/work/repos/YCSB
+  Use classpath of module: root
+  JRE: 1.8
+*/
 
-//  bin/ycsb load backend -s -threads 1 -p fieldlength=4194304 -P workloads/myworkload
+/*
+   Command line:
+   cd YCSB
+   mvn clean package
+   bin/ycsb load backend -s -threads 1 -p fieldlength=4194304 -P workloads/myworkload
+   bin/ycsb run backend -threads 2 -p fieldlength=4194304 -P workloads/myworkload
+*/
+
 import com.yahoo.ycsb.ClientBlueprint;
 import com.yahoo.ycsb.ClientException;
 import com.yahoo.ycsb.Status;
 import com.yahoo.ycsb.common.liberasure.LonghairLib;
 import com.yahoo.ycsb.dual.connections.S3Connection;
 import com.yahoo.ycsb.dual.utils.ClientUtils;
+import com.yahoo.ycsb.dual.utils.PropertyFactory;
 import org.apache.log4j.Logger;
 
 import java.util.*;
@@ -22,33 +37,18 @@ import java.util.concurrent.*;
 */
 
 public class BackendClient extends ClientBlueprint {
-    public static String S3_ZONES = "s3.zones";
-    public static String S3_REGIONS_PROPERTIES = "s3.regions";
-    public static String S3_ENDPOINTS_PROPERTIES = "s3.endpoints";
-    public static String S3_BUCKETS_PROPERTIES = "s3.buckets";
-
-    public static String LONGHAIR_K_PROPERTY = "longhair.k";
-    public static String LONGHAIR_K_DEFAULT = "3";
-    public static String LONGHAIR_M_PROPERTY = "longhair.m";
-    public static String LONGHAIR_M_DEFAULT = "2";
-
-    public static String EXECUTOR_THREADS_PROPERTY = "executor.threads";
-    public static String EXECUTOR_THREADS_DEFAULT = "5";
-    protected static Logger logger = Logger.getLogger(BackendClient.class);
-
-    private Properties properties;
+    public static Logger logger = Logger.getLogger(BackendClient.class);
+    public static PropertyFactory propertyFactory;
+    public static ExecutorService executor;
 
     // S3 bucket names mapped to connections to AWS S3 buckets
     private List<S3Connection> s3Connections;
 
-    // for concurrent processing
-    private ExecutorService executor;
-
     // TODO Assumption: one bucket per region (num regions = num endpoints = num buckets)
     private void initS3() {
-        List<String> regions = Arrays.asList(properties.getProperty(S3_REGIONS_PROPERTIES).split("\\s*,\\s*"));
-        List<String> endpoints = Arrays.asList(properties.getProperty(S3_ENDPOINTS_PROPERTIES).split("\\s*,\\s*"));
-        List<String> s3Buckets = Arrays.asList(properties.getProperty(S3_BUCKETS_PROPERTIES).split("\\s*,\\s*"));
+        List<String> regions = Arrays.asList(propertyFactory.propertiesMap.get(PropertyFactory.S3_REGIONS_PROPERTY).split("\\s*,\\s*"));
+        List<String> endpoints = Arrays.asList(propertyFactory.propertiesMap.get(PropertyFactory.S3_ENDPOINTS_PROPERTY).split("\\s*,\\s*"));
+        List<String> s3Buckets = Arrays.asList(propertyFactory.propertiesMap.get(PropertyFactory.S3_BUCKETS_PROPERTY).split("\\s*,\\s*"));
         if (s3Buckets.size() != endpoints.size() || endpoints.size() != regions.size())
             logger.error("Configuration error: #buckets = #regions = #endpoints");
 
@@ -70,8 +70,8 @@ public class BackendClient extends ClientBlueprint {
 
     private void initLonghair() {
         // erasure coding-related configuration
-        LonghairLib.k = Integer.valueOf(properties.getProperty(LONGHAIR_K_PROPERTY, LONGHAIR_K_DEFAULT));
-        LonghairLib.m = Integer.valueOf(properties.getProperty(LONGHAIR_M_PROPERTY, LONGHAIR_M_DEFAULT));
+        LonghairLib.k = Integer.valueOf(propertyFactory.propertiesMap.get(PropertyFactory.LONGHAIR_K_PROPERTY));
+        LonghairLib.m = Integer.valueOf(propertyFactory.propertiesMap.get(PropertyFactory.LONGHAIR_M_PROPERTY));
         logger.debug("k: " + LonghairLib.k + " m: " + LonghairLib.m);
 
         // check k >= 0 and k < 256
@@ -92,15 +92,17 @@ public class BackendClient extends ClientBlueprint {
     @Override
     public void init() throws ClientException {
         logger.debug("BackendClient.init() start");
-        properties = getProperties();
+        propertyFactory = new PropertyFactory(getProperties());
 
         initS3();
         initLonghair();
 
         // init executor service
-        final int threadsNum = Integer.valueOf(properties.getProperty(EXECUTOR_THREADS_PROPERTY, EXECUTOR_THREADS_DEFAULT));
-        logger.debug("threads num: " + threadsNum);
-        executor = Executors.newFixedThreadPool(threadsNum);
+        if (executor == null) {
+            final int threadsNum = Integer.valueOf(propertyFactory.propertiesMap.get(PropertyFactory.EXECUTOR_THREADS_PROPERTY));
+            logger.debug("threads num: " + threadsNum);
+            executor = Executors.newFixedThreadPool(threadsNum);
+        }
 
         logger.debug("BackendClient.init() end");
     }
@@ -108,7 +110,8 @@ public class BackendClient extends ClientBlueprint {
     @Override
     public void cleanup() throws ClientException {
         logger.debug("Cleaning up.");
-        //executor.shutdown();
+        if (executor.isTerminated())
+            executor.shutdown();
     }
 
 

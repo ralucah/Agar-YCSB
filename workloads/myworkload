@@ -1,19 +1,19 @@
-recordcount=100
-operationcount=1000000
+recordcount=1000
+operationcount=1000
 workload=com.yahoo.ycsb.workloads.CoreWorkload
 
 insertstart=0
-insertcount=100
+insertcount=1000
 
 readproportion=1
 updateproportion=0
 scanproportion=0
 insertproportion=0
-maxexecutiontime=60
+#maxexecutiontime=60
 
 #requestdistribution=zipfian
-#requestdistribution=uniform
-requestdistribution=slashdot
+requestdistribution=uniform
+#requestdistribution=slashdot
 slashdot.skew=0.5
 slashdot.delay=-1
 

@@ -15,16 +15,39 @@ import org.apache.log4j.Logger;
 
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
-// bin/ycsb run greedy -threads 5 -p fieldlength=4194304 -P workloads/myworkload
+/*
+  IntelliJ
+  Main: com.yahoo.ycsb.Client
+  VM options: -Xmx3g
+  Program arguments: -client com.yahoo.ycsb.dual.clients.GreedyCacheClient -p fieldlength=4194304 -P workloads/myworkload
+  Working directory: /home/ubuntu/work/repos/YCSB
+  Use classpath of module: root
+  JRE: 1.8
+*/
+
+/*
+   Command line:
+   cd YCSB
+   mvn clean package
+   bin/ycsb proxy -p fieldlength=4194304 -P workloads/myworkload
+   bin/ycsb run greedy -threads 2 -p fieldlength=4194304 -P workloads/myworkload
+*/
 
 public class GreedyCacheClient extends ClientBlueprint {
+    public static Logger logger = Logger.getLogger(GreedyCacheClient.class);
+
+    public static AtomicInteger cacheHits;
+    public static AtomicInteger cachePartialHits;
+    public static AtomicInteger cacheMisses;
+
     public static PropertyFactory propertyFactory;
-    private static Logger logger = Logger.getLogger(GreedyCacheClient.class);
+    public static ExecutorService executor;
+
     private List<S3Connection> s3Connections;
     private MemcachedConnection memConnection;
     private ProxyConnection proxyConnection;
-    private ExecutorService executor;
     private int blocksPerRegion;
 
     private void initS3() {
@@ -53,7 +76,7 @@ public class GreedyCacheClient extends ClientBlueprint {
         LonghairLib.k = Integer.valueOf(propertyFactory.propertiesMap.get(PropertyFactory.LONGHAIR_K_PROPERTY));
         LonghairLib.m = Integer.valueOf(propertyFactory.propertiesMap.get(PropertyFactory.LONGHAIR_M_PROPERTY));
         logger.debug("k: " + LonghairLib.k + " m: " + LonghairLib.m);
-        logger.debug("k: " + LonghairLib.k + " m: " + LonghairLib.m);
+
         // check k >= 0 and k < 256
         if (LonghairLib.k < 0 || LonghairLib.k >= 256) {
             logger.error("Invalid Longhair.k: k should be >= 0 and < 256.");
@@ -77,21 +100,34 @@ public class GreedyCacheClient extends ClientBlueprint {
 
     public void init() throws ClientException {
         logger.debug("SmartCacheClient.init() start");
+
+        if (cacheHits == null)
+            cacheHits = new AtomicInteger(0);
+        if (cacheMisses == null)
+            cacheMisses = new AtomicInteger(0);
+        if (cachePartialHits == null)
+            cachePartialHits = new AtomicInteger(0);
+
         propertyFactory = new PropertyFactory(getProperties());
         initS3();
         initLonghair();
         initCache();
         blocksPerRegion = (LonghairLib.k + LonghairLib.m) / s3Connections.size();
-        final int threadsNum = Integer.valueOf(propertyFactory.propertiesMap.get(PropertyFactory.EXECUTOR_THREADS_PROPERTY));
-        logger.debug("threads num: " + threadsNum);
-        executor = Executors.newFixedThreadPool(threadsNum);
+
+        if (executor == null) {
+            final int threadsNum = Integer.valueOf(propertyFactory.propertiesMap.get(PropertyFactory.EXECUTOR_THREADS_PROPERTY));
+            logger.debug("threads num: " + threadsNum);
+            executor = Executors.newFixedThreadPool(threadsNum);
+        }
         logger.debug("SmartCacheClient.init() end");
     }
 
 
     @Override
     public void cleanup() throws ClientException {
-        super.cleanup();
+        logger.error("Hits: " + cacheHits + " Misses: " + cacheMisses + " PartialHits: " + cachePartialHits);
+        if (executor.isTerminated())
+            executor.shutdown();
     }
 
     private ECBlock readS3Block(String key, int blockId, int s3ConnId) {
@@ -319,6 +355,19 @@ public class GreedyCacheClient extends ClientBlueprint {
                 break;
         }
 
+        int fromCache = 0;
+        for (ECBlock ecblock : ecblocks) {
+            if (ecblock.getStorage() == Storage.CACHE)
+                fromCache++;
+        }
+
+        if (blocksNum > 0 && fromCache == blocksNum)
+            cacheHits.incrementAndGet();
+        else if (fromCache > 0 && fromCache < blocksNum)
+            cachePartialHits.incrementAndGet();
+        else if (fromCache == 0)
+            cacheMisses.incrementAndGet();
+
         return ecblocks;
     }
 
@@ -337,6 +386,8 @@ public class GreedyCacheClient extends ClientBlueprint {
                     return readCache(key, reply.getCacheRecipe());
                 }
             });
+        } else {
+            cacheMisses.incrementAndGet();
         }
         if (reply.getS3Recipe().size() > 0) {
             completionService.submit(new Callable<List<ECBlock>>() {

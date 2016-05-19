@@ -213,17 +213,19 @@ public class S3Connection {
                         }
                     }
                 }
-                return Status.OK;
             } catch (Exception e) {
                 logger.error("Not possible to write object :" + key);
-                //e.printStackTrace();
-                return Status.ERROR;
+                System.err.println("Retrying " + key);
+                insert(key, bytes);
             }
         } catch (Exception e) {
             logger.error("Error in the creation of the stream :" + e.toString());
+            System.err.println("Retrying " + key);
+            insert(key, bytes);
             //e.printStackTrace();
-            return Status.ERROR;
+            //return Status.ERROR;
         }
+        return Status.OK;
     }
 
     public byte[] read(String key) {

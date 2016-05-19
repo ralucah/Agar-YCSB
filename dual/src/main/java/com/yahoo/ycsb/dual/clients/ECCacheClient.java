@@ -1,7 +1,21 @@
 package com.yahoo.ycsb.dual.clients;
 
-// -db com.yahoo.ycsb.dual.clients.ECCacheClient2 -p fieldlength=100 -s -P workloads/myworkload -load
-// -db com.yahoo.ycsb.dual.clients.ECCacheClient1 -p fieldlength=100 -s -P workloads/myworkload
+/*
+  IntelliJ
+  Main: com.yahoo.ycsb.Client
+  VM options: -Xmx3g
+  Program arguments: -client com.yahoo.ycsb.dual.clients.ECCacheClient -p fieldlength=4194304 -P workloads/myworkload
+  Working directory: /home/ubuntu/work/repos/YCSB
+  Use classpath of module: root
+  JRE: 1.8
+*/
+
+/*
+   Command line:
+   cd YCSB
+   mvn clean package
+   bin/ycsb run eccache -threads 2 -p fieldlength=4194304 -P workloads/myworkload
+*/
 
 import com.yahoo.ycsb.ClientBlueprint;
 import com.yahoo.ycsb.ClientException;
@@ -19,16 +33,14 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class ECCacheClient extends ClientBlueprint {
+    public static AtomicInteger cacheHits;
+    public static AtomicInteger cachePartialHits;
+    public static AtomicInteger cacheMisses;
     public static PropertyFactory propertyFactory;
+    public static ExecutorService executor;
     private static Logger logger = Logger.getLogger(ECCacheClient.class);
-    private static AtomicInteger cacheHits = new AtomicInteger(0);
-    private static AtomicInteger cachePartialHits = new AtomicInteger(0);
-    private static AtomicInteger cacheMisses = new AtomicInteger(0);
-    // S3 bucket names mapped to connections to AWS S3 buckets
     private List<S3Connection> s3Connections;
     private MemcachedConnection memConnection;
-    // for concurrent processing
-    private ExecutorService executor;
     private int blocksincache;
 
     // TODO Assumption: one bucket per region (num regions = num endpoints = num buckets)
@@ -87,6 +99,14 @@ public class ECCacheClient extends ClientBlueprint {
     @Override
     public void init() throws ClientException {
         logger.debug("DualClient.init() start");
+
+        if (cacheHits == null)
+            cacheHits = new AtomicInteger(0);
+        if (cacheMisses == null)
+            cacheMisses = new AtomicInteger(0);
+        if (cachePartialHits == null)
+            cachePartialHits = new AtomicInteger(0);
+
         propertyFactory = new PropertyFactory(getProperties());
 
         initS3();
@@ -94,9 +114,11 @@ public class ECCacheClient extends ClientBlueprint {
         initCache();
 
         // init executor service
-        final int threadsNum = Integer.valueOf(propertyFactory.propertiesMap.get(PropertyFactory.EXECUTOR_THREADS_PROPERTY));
-        logger.debug("threads num: " + threadsNum);
-        executor = Executors.newFixedThreadPool(threadsNum);
+        if (executor == null) {
+            final int threadsNum = Integer.valueOf(propertyFactory.propertiesMap.get(PropertyFactory.EXECUTOR_THREADS_PROPERTY));
+            logger.debug("threads num: " + threadsNum);
+            executor = Executors.newFixedThreadPool(threadsNum);
+        }
 
         logger.debug("DualClient.init() end");
     }
@@ -104,7 +126,8 @@ public class ECCacheClient extends ClientBlueprint {
     @Override
     public void cleanup() throws ClientException {
         logger.error("Hits: " + cacheHits + " Misses: " + cacheMisses + " PartialHits: " + cachePartialHits);
-        executor.shutdown();
+        if (executor.isTerminated())
+            executor.shutdown();
     }
 
     private ECBlock readBlockParallel(String key, int blockId) {
@@ -208,13 +231,15 @@ public class ECCacheClient extends ClientBlueprint {
                     }
                 }
             });
-
-            cacheMisses.incrementAndGet();
         }
-        if (fromBackend == 0 && fromCache > 0)
+
+        // stats
+        if (fromCache == blocksincache)
             cacheHits.incrementAndGet();
-        if (fromCache > 0 && fromBackend > 0)
+        else if (fromCache > 0 && fromBackend > 0)
             cachePartialHits.incrementAndGet();
+        else if (fromCache == 0 && fromBackend > 0)
+            cacheMisses.incrementAndGet();
 
         data = LonghairLib.decode(blockBytes);
         logger.info("Read " + key + " " + data.length + " bytes Cache: " + fromCache + " Backend: " + fromBackend);

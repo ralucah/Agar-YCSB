@@ -1,15 +1,11 @@
 package com.yahoo.ycsb.dual.clients;
 
-// -db com.yahoo.ycsb.dual.DualClient -p fieldlength=100 -s -P workloads/myworkload -load
-// -db com.yahoo.ycsb.dual.DualClient -p fieldlength=100 -s -P workloads/myworkload
-
 import com.yahoo.ycsb.ClientBlueprint;
 import com.yahoo.ycsb.ClientException;
 import com.yahoo.ycsb.Status;
 import com.yahoo.ycsb.common.liberasure.LonghairLib;
 import com.yahoo.ycsb.common.memcached.MemcachedConnection;
 import com.yahoo.ycsb.dual.connections.S3Connection;
-import com.yahoo.ycsb.dual.utils.ClientUtils;
 import com.yahoo.ycsb.dual.utils.PropertyFactory;
 import org.apache.log4j.Logger;
 
@@ -18,21 +14,33 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /*
- Assumptions:
- - number of Amazon regions = k + m
- - there is one S3 bucket per Amazon region
- */
+  IntelliJ
+  Main: com.yahoo.ycsb.Client
+  VM options: -Xmx3g
+  Program arguments: -client com.yahoo.ycsb.dual.clients.LocalCacheClient -p fieldlength=4194304 -P workloads/myworkload
+  Working directory: /home/ubuntu/work/repos/YCSB
+  Use classpath of module: root
+  JRE: 1.8
+*/
+
+/*
+   Command line:
+   cd YCSB
+   mvn clean package
+   bin/ycsb run localcache -threads 2 -p fieldlength=4194304 -P workloads/myworkload
+*/
 
 public class LocalCacheClient extends ClientBlueprint {
-    private static final AtomicInteger cacheHits = new AtomicInteger(0);
-    private static final AtomicInteger cacheMisses = new AtomicInteger(0);
+    public static AtomicInteger cacheHits;
+    public static AtomicInteger cacheMisses;
+
     public static PropertyFactory propertyFactory;
+    // for concurrent processing
+    public static ExecutorService executor;
     protected static Logger logger = Logger.getLogger(LocalCacheClient.class);
     //private Properties properties;
     // S3 bucket names mapped to connections to AWS S3 buckets
     private List<S3Connection> s3Connections;
-    // for concurrent processing
-    private ExecutorService executor;
     private MemcachedConnection memConnection;
 
     // TODO Assumption: one bucket per region (num regions = num endpoints = num buckets)
@@ -89,6 +97,12 @@ public class LocalCacheClient extends ClientBlueprint {
     @Override
     public void init() throws ClientException {
         logger.debug("LocalCacheClient.init() BEGIN");
+
+        if (cacheHits == null)
+            cacheHits = new AtomicInteger(0);
+        if (cacheMisses == null)
+            cacheMisses = new AtomicInteger(0);
+
         propertyFactory = new PropertyFactory(getProperties());
 
         initS3();
@@ -96,9 +110,11 @@ public class LocalCacheClient extends ClientBlueprint {
         initCache();
 
         // init executor service
-        final int threadsNum = Integer.valueOf(propertyFactory.propertiesMap.get(PropertyFactory.EXECUTOR_THREADS_PROPERTY));
-        logger.debug("threads num: " + threadsNum);
-        executor = Executors.newFixedThreadPool(threadsNum);
+        if (executor == null) {
+            final int threadsNum = Integer.valueOf(propertyFactory.propertiesMap.get(PropertyFactory.EXECUTOR_THREADS_PROPERTY));
+            logger.debug("threads num: " + threadsNum);
+            executor = Executors.newFixedThreadPool(threadsNum);
+        }
 
         logger.debug("AllCachesClient.init() END");
     }
@@ -106,7 +122,8 @@ public class LocalCacheClient extends ClientBlueprint {
     @Override
     public void cleanup() throws ClientException {
         logger.error(memConnection.getHost() + " Hits: " + cacheHits + " Misses: " + cacheMisses);
-        executor.shutdown();
+        if (executor.isTerminated())
+            executor.shutdown();
     }
 
     private byte[] readBlock(String baseKey, int blockNum) {
@@ -176,7 +193,7 @@ public class LocalCacheClient extends ClientBlueprint {
         if (data == null) {
             data = readFromBackend(key);
             if (data != null) {
-                logger.info("Read BACKEND " + key + " " + data.length + "B " + ClientUtils.bytesToHash(data));
+                logger.info("Read BACKEND " + key + " " + data.length + "B"); // + ClientUtils.bytesToHash(data));
                 cacheMisses.incrementAndGet();
 
                 final byte[] dataFin = data;
@@ -188,7 +205,7 @@ public class LocalCacheClient extends ClientBlueprint {
                 });
             }
         } else {
-            logger.info("Read CACHE " + key + " " + data.length + "B  " + ClientUtils.bytesToHash(data) + " " + memConnection.getHost());
+            logger.info("Read CACHE " + key + " " + data.length + "B"); // + ClientUtils.bytesToHash(data) + " " + memConnection.getHost());
             cacheHits.incrementAndGet();
         }
 
