@@ -8,18 +8,18 @@ public class PropertyFactory {
     /* ip:port e.g., 127.0.0.1:11000*/
     public static String PROXY_PROPERTY = "proxy";
     /* size of UDP packets exchanged with client e.g., 1024*/
-    public static String PACKET_SIZE_PROPERTY = "proxy.packetsize";
+    public static String PACKET_SIZE_PROPERTY = "packetsize";
     /* size of cache in MB e.g., 64 (mind the slab size, set using -I <size>) */
     public static String CACHE_SIZE_PROPERTY = "cachesize";
     /* how often to recompute the cache configuration, in ms e.g., 10000*/
-    public static String PERIOD_PROPERTY = "proxy.period";
+    public static String PERIOD_PROPERTY = "period";
     /* weighted popularity coefficient, between 0 and 1; controls impact of old popularity value*/
-    public static String ALPHA_PROPERTY = "proxy.alpha";
+    public static String ALPHA_PROPERTY = "alpha";
 
     /* size of data record */
-    public static String FIELD_LENGTH_PROPERTY = "fieldlength";
+    //public static String FIELD_LENGTH_PROPERTY = "fieldlength";
     /* ip:port of memcached server */
-    public static String MEMCACHED_SERVER_PROPERTY = "memcached.server";
+    //public static String MEMCACHED_SERVER_PROPERTY = "memcached.server";
     /* erasure-coding parameter; number of data chunks */
     public static String LONGHAIR_K_PROPERTY = "longhair.k";
     /* erasure-coding parameter; number of redundant chunks */
@@ -42,8 +42,8 @@ public class PropertyFactory {
             propertiesMap.put(EXECUTOR_THREADS_PROPERTY, properties.getProperty(EXECUTOR_THREADS_PROPERTY));
             propertiesMap.put(PACKET_SIZE_PROPERTY, properties.getProperty(PACKET_SIZE_PROPERTY));
             propertiesMap.put(CACHE_SIZE_PROPERTY, properties.getProperty(CACHE_SIZE_PROPERTY));
-            propertiesMap.put(FIELD_LENGTH_PROPERTY, properties.getProperty(FIELD_LENGTH_PROPERTY));
-            propertiesMap.put(MEMCACHED_SERVER_PROPERTY, properties.getProperty(MEMCACHED_SERVER_PROPERTY));
+            //propertiesMap.put(FIELD_LENGTH_PROPERTY, properties.getProperty(FIELD_LENGTH_PROPERTY));
+            //propertiesMap.put(MEMCACHED_SERVER_PROPERTY, properties.getProperty(MEMCACHED_SERVER_PROPERTY));
             propertiesMap.put(PROXY_PROPERTY, properties.getProperty(PROXY_PROPERTY));
             propertiesMap.put(LONGHAIR_K_PROPERTY, properties.getProperty(LONGHAIR_K_PROPERTY));
             propertiesMap.put(LONGHAIR_M_PROPERTY, properties.getProperty(LONGHAIR_M_PROPERTY));

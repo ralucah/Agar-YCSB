@@ -35,7 +35,7 @@ blocksincache=3
 
 # proxy
 proxy=0.0.0.0:11000
-proxy.packetsize=1024
-#cachesize=50
-proxy.period=7000
-proxy.alpha=0.8
+packetsize=1024
+period=7000
+alpha=0.8
+#cachesize=...

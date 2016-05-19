@@ -44,7 +44,7 @@ public class UDPServer implements Runnable {
         String[] tokens = proxyHost.split(":");
         InetAddress address = null;
         try {
-            address = InetAddress.getByName(tokens[0]);
+            address = InetAddress.getByName("0.0.0.0"); // tokens[0]
         } catch (UnknownHostException e) {
             logger.error("Error getting inetaddress.");
         }

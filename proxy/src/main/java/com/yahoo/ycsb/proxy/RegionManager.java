@@ -46,7 +46,7 @@ public class RegionManager {
         latencyMax = regions.get(0).getLatency();
 
         for (Region region : regions)
-            logger.debug(region.prettyPrint());
+            System.out.println(region.prettyPrint());
     }
 
     private double ping(String host) {
