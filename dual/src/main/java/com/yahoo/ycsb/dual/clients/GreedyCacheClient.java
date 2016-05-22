@@ -43,12 +43,12 @@ public class GreedyCacheClient extends ClientBlueprint {
     public static AtomicInteger cacheMisses;
 
     public static PropertyFactory propertyFactory;
-    public static ExecutorService executor;
 
     private List<S3Connection> s3Connections;
     private MemcachedConnection memConnection;
     private ProxyConnection proxyConnection;
     private int blocksPerRegion;
+    private ExecutorService executor;
 
     private void initS3() {
         List<String> regions = Arrays.asList(propertyFactory.propertiesMap.get(PropertyFactory.S3_REGIONS_PROPERTY).split("\\s*,\\s*"));
@@ -130,72 +130,6 @@ public class GreedyCacheClient extends ClientBlueprint {
             executor.shutdown();
     }
 
-    private ECBlock readS3Block(String key, int blockId, int s3ConnId) {
-        String blockKey = key + blockId;
-        S3Connection s3Connection = s3Connections.get(s3ConnId);
-        byte[] bytes = s3Connection.read(blockKey);
-
-        ECBlock ecblock = null;
-        if (bytes != null)
-            ecblock = new ECBlock(blockId, blockKey, bytes, Storage.BACKEND);
-        else
-            logger.error("[Error] ReadBlockBackend " + key + " block" + blockId + " from bucket" + s3ConnId);
-
-        return ecblock;
-    }
-
-
-    private List<ECBlock> readS3(final String key, String region, int blocks) {
-        // get s3 connection id
-        int s3connId = Integer.MIN_VALUE;
-        for (int i = 0; i < s3Connections.size(); i++) {
-            String name = s3Connections.get(i).getRegion();
-            if (name.equals(region)) {
-                s3connId = i;
-                break;
-            }
-        }
-        if (s3connId == Integer.MIN_VALUE)
-            logger.error("Invalid s3 connection id!");
-
-        // request blocks in parallel
-        final int s3ConnIdFin = s3connId;
-        CompletionService<ECBlock> completionService = new ExecutorCompletionService<ECBlock>(executor);
-        int s3ConnNum = s3Connections.size();
-        int blocksPerRegion = (LonghairLib.k + LonghairLib.m) / s3ConnNum;
-        for (int i = 0; i < s3ConnNum; i++) {
-            final int blockId = i * blocksPerRegion + s3connId;
-            completionService.submit(new Callable<ECBlock>() {
-                @Override
-                public ECBlock call() throws Exception {
-                    return readS3Block(key, blockId, s3ConnIdFin);
-                }
-            });
-        }
-
-        int success = 0;
-        int errors = 0;
-        List<ECBlock> ecblocks = new ArrayList<ECBlock>();
-        while (success < blocks) {
-            try {
-                Future<ECBlock> resultFuture = completionService.take();
-                ECBlock ecblock = resultFuture.get();
-                if (ecblock != null) {
-                    ecblocks.add(ecblock);
-                    success++;
-                } else
-                    errors++;
-            } catch (Exception e) {
-                errors++;
-                logger.debug("Exception reading block.");
-            }
-            if (errors > 0)
-                break;
-        }
-
-        return ecblocks;
-    }
-
     private List<Integer> getBlockIdsByRegion(String region) {
         List<Integer> blockIds = new ArrayList<Integer>();
 
@@ -223,7 +157,8 @@ public class GreedyCacheClient extends ClientBlueprint {
 
     private ECBlock readBackendBlock(String key, int blockId) {
         String blockKey = key + blockId;
-        int s3ConnNum = blockId % s3Connections.size();
+        return new ECBlock(blockId, blockKey, new byte[699072], Storage.BACKEND);
+        /*int s3ConnNum = blockId % s3Connections.size();
         S3Connection s3Connection = s3Connections.get(s3ConnNum);
         byte[] bytes = s3Connection.read(blockKey);
 
@@ -233,7 +168,7 @@ public class GreedyCacheClient extends ClientBlueprint {
         else
             logger.error("[Error] ReadBlockBackend " + key + " block" + blockId + " from bucket" + s3ConnNum);
 
-        return ecblock;
+        return ecblock;*/
     }
 
     public List<ECBlock> readBackend(final String key, List<String> backendRecipe) {

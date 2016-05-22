@@ -39,16 +39,17 @@ import java.util.concurrent.*;
 public class BackendClient extends ClientBlueprint {
     public static Logger logger = Logger.getLogger(BackendClient.class);
     public static PropertyFactory propertyFactory;
-    public static ExecutorService executor;
 
     // S3 bucket names mapped to connections to AWS S3 buckets
     private List<S3Connection> s3Connections;
+    private ExecutorService executor;
+    private List<String> s3Buckets;
 
     // TODO Assumption: one bucket per region (num regions = num endpoints = num buckets)
     private void initS3() {
         List<String> regions = Arrays.asList(propertyFactory.propertiesMap.get(PropertyFactory.S3_REGIONS_PROPERTY).split("\\s*,\\s*"));
         List<String> endpoints = Arrays.asList(propertyFactory.propertiesMap.get(PropertyFactory.S3_ENDPOINTS_PROPERTY).split("\\s*,\\s*"));
-        List<String> s3Buckets = Arrays.asList(propertyFactory.propertiesMap.get(PropertyFactory.S3_BUCKETS_PROPERTY).split("\\s*,\\s*"));
+        s3Buckets = Arrays.asList(propertyFactory.propertiesMap.get(PropertyFactory.S3_BUCKETS_PROPERTY).split("\\s*,\\s*"));
         if (s3Buckets.size() != endpoints.size() || endpoints.size() != regions.size())
             logger.error("Configuration error: #buckets = #regions = #endpoints");
 
@@ -121,7 +122,7 @@ public class BackendClient extends ClientBlueprint {
         S3Connection s3Connection = s3Connections.get(s3ConnNum);
         byte[] block = s3Connection.read(blockKey);
         //logger.debug("ReadBlock " + blockNum + " " + blockKey + " " + ClientUtils.bytesToHash(block));
-        logger.debug("Read " + baseKey + " block" + blockNum + " " + block.length + "B bucket" + blockNum);
+        logger.info("Read " + baseKey + " block" + blockNum + " " + block.length + " bucket " + s3Buckets.get(s3ConnNum));
         return block;
     }
 
@@ -182,7 +183,7 @@ public class BackendClient extends ClientBlueprint {
         int s3ConnNum = blockNum % s3Connections.size();
         S3Connection s3Connection = s3Connections.get(s3ConnNum);
         Status status = s3Connection.insert(blockKey, block);
-        logger.info("Insert " + baseKey + " block" + blockNum + " " + block.length + " bucket" + s3ConnNum);
+        logger.info("Insert " + baseKey + " block" + blockNum + " " + block.length + " bucket " + s3Buckets.get(s3ConnNum));
         return status;
     }
 

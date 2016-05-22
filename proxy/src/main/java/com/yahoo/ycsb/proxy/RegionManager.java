@@ -2,8 +2,6 @@ package com.yahoo.ycsb.proxy;
 
 import org.apache.log4j.Logger;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -41,9 +39,9 @@ public class RegionManager {
         }
 
         Collections.sort(regions);
-        Collections.reverse(regions);
+        //Collections.reverse(regions);
 
-        latencyMax = regions.get(0).getLatency();
+        latencyMax = regions.get(regionsSize - 1).getLatency();
 
         for (Region region : regions)
             System.out.println(region.prettyPrint());
@@ -53,9 +51,33 @@ public class RegionManager {
         double avgTime = Double.MIN_VALUE;
 
         try {
-            String command = "ping -c 5 " + host;
+            //String command = "ping -c 5 " + host;
+            String command = "wget ";
+            if (host.contains("sa-east-1"))  // sao
+                command += "https://s3-sa-east-1.amazonaws.com/sao101/key10003851782042273600";
+            else if (host.contains("external-1")) // virginia
+                command += "https://s3.amazonaws.com/virginia101/key10003851782042273601";
+            else if (host.contains("eu-west-1")) // ireland
+                command += "https://s3-eu-west-1.amazonaws.com/patrick101/key10003851782042273602";
+            else if (host.contains("eu-central-1")) // frankfurt
+                command += "https://s3.eu-central-1.amazonaws.com/frank101/key10003851782042273603";
+            else if (host.contains("ap-northeast-1")) // tokyo
+                command += "https://s3-ap-northeast-1.amazonaws.com/tokyo101/key10003851782042273604";
+            else if (host.contains("ap-southeast-2")) // sydney
+                command += "https://s3-ap-southeast-2.amazonaws.com/sydney101/key10003851782042273605";
+
+            long start = System.currentTimeMillis();
             Process process = Runtime.getRuntime().exec(command);
-            BufferedReader inputStream = new BufferedReader(
+            process.waitFor();
+            avgTime = System.currentTimeMillis() - start;
+            Runtime.getRuntime().exec("rm key10003851782042273600");
+            Runtime.getRuntime().exec("rm key10003851782042273601");
+            Runtime.getRuntime().exec("rm key10003851782042273602");
+            Runtime.getRuntime().exec("rm key10003851782042273603");
+            Runtime.getRuntime().exec("rm key10003851782042273604");
+            Runtime.getRuntime().exec("rm key10003851782042273605");
+
+            /*BufferedReader inputStream = new BufferedReader(
                 new InputStreamReader(process.getInputStream()));
             String s = "";
             // reading output stream of the command
@@ -65,7 +87,7 @@ public class RegionManager {
                     //System.out.println(s.split(" ")[3].split("/")[1]);
                     return new Double(s.split(" ")[3].split("/")[1]);
                 }
-            }
+            }*/
 
         } catch (Exception e) {
             logger.warn("Could not ping " + host);

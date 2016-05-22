@@ -37,11 +37,12 @@ public class ECCacheClient extends ClientBlueprint {
     public static AtomicInteger cachePartialHits;
     public static AtomicInteger cacheMisses;
     public static PropertyFactory propertyFactory;
-    public static ExecutorService executor;
+
     private static Logger logger = Logger.getLogger(ECCacheClient.class);
     private List<S3Connection> s3Connections;
     private MemcachedConnection memConnection;
     private int blocksincache;
+    private ExecutorService executor;
 
     // TODO Assumption: one bucket per region (num regions = num endpoints = num buckets)
     private void initS3() {

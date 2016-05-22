@@ -1,34 +1,35 @@
 fieldlength=4194304
 
-recordcount=1000
-operationcount=1000000
+recordcount=100
+operationcount=100000
 workload=com.yahoo.ycsb.workloads.CoreWorkload
 
 insertstart=0
-insertcount=1000
+insertcount=100
 
 readproportion=1
 updateproportion=0
 scanproportion=0
 insertproportion=0
-#maxexecutiontime=60
+maxexecutiontime=300
 
 #requestdistribution=zipfian
 #requestdistribution=uniform
 requestdistribution=slashdot
-slashdot.skew=0.5
+slashdot.skew=1.2
 slashdot.delay=-1
 
-s3.endpoints=s3-eu-west-1.amazonaws.com,s3-eu-central-1.amazonaws.com,s3-external-1.amazonaws.com
-s3.regions=eu-west-1,eu-central-1,us-east-1
-s3.buckets=patrick101,frank101,virginia101
+# sao paulo, north virginia, ireland, frankfurt, tokyo, sydney
+s3.endpoints=s3-sa-east-1.amazonaws.com,s3-external-1.amazonaws.com,s3-eu-west-1.amazonaws.com,s3-eu-central-1.amazonaws.com,s3-ap-northeast-1.amazonaws.com,s3-ap-southeast-2.amazonaws.com
+s3.regions=sa-east-1,us-east-1,eu-west-1,eu-central-1,ap-northeast-1,ap-southeast-2
+s3.buckets=sao101,virginia101,patrick101,frank101,tokyo101,sydney101
 
 memcached.server=127.0.0.1:11211
-memcached.servers=127.0.0.1:11211,127.0.0.1:11212,127.0.0.1:11213
+#memcached.servers=127.0.0.1:11211,127.0.0.1:11212,127.0.0.1:11213
 
-longhair.k=6
+longhair.k=9
 longhair.m=3
-executor.threads=10
+executor.threads=20
 
 # eccache client
 blocksincache=3
@@ -36,6 +37,8 @@ blocksincache=3
 # proxy
 proxy=0.0.0.0:11000
 packetsize=1024
-period=7000
+# in seconds
+period=20
 alpha=0.8
-#cachesize=...
+# in mb
+cachesize=50

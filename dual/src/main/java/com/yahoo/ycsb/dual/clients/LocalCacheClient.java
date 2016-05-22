@@ -35,13 +35,12 @@ public class LocalCacheClient extends ClientBlueprint {
     public static AtomicInteger cacheMisses;
 
     public static PropertyFactory propertyFactory;
-    // for concurrent processing
-    public static ExecutorService executor;
     protected static Logger logger = Logger.getLogger(LocalCacheClient.class);
-    //private Properties properties;
+
     // S3 bucket names mapped to connections to AWS S3 buckets
     private List<S3Connection> s3Connections;
     private MemcachedConnection memConnection;
+    private ExecutorService executor;
 
     // TODO Assumption: one bucket per region (num regions = num endpoints = num buckets)
     private void initS3() {

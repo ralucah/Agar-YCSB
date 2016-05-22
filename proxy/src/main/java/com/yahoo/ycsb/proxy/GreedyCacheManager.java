@@ -21,11 +21,13 @@ public class GreedyCacheManager {
     private static AtomicInteger cachesizeMax; // in block numbers
     private static AtomicInteger cachesize; // in block numbers
     private static int k; // number of data chunks (erasure-coding parameter)
+    private static int m;
     private static RegionManager regionManager; // computes an overview of the deployed system
 
     public GreedyCacheManager() {
         // max cache size in blocks
         k = Integer.valueOf(PropertyFactory.propertiesMap.get(PropertyFactory.LONGHAIR_K_PROPERTY));
+        m = Integer.valueOf(PropertyFactory.propertiesMap.get(PropertyFactory.LONGHAIR_M_PROPERTY));
         int cachesizeMB = Integer.valueOf(PropertyFactory.propertiesMap.get(PropertyFactory.CACHE_SIZE_PROPERTY));
         //int fieldlength = Integer.valueOf(PropertyFactory.propertiesMap.get(PropertyFactory.FIELD_LENGTH_PROPERTY));
         //int blocksize = fieldlength / k;
@@ -52,7 +54,7 @@ public class GreedyCacheManager {
             public void run() {
                 GreedyCacheManager.reconfigureCache();
             }
-        }, period, period, TimeUnit.MILLISECONDS);
+        }, period, period, TimeUnit.SECONDS);
     }
 
     private static void reconfigureCache() {
@@ -113,8 +115,8 @@ public class GreedyCacheManager {
         computeCacheOptions();
 
         // update current cache according to new options
-        //logger.debug("Current options, sorted:");
-        //printCacheOptions(cacheOptions);
+        logger.debug("Current options, sorted:");
+        printCacheOptions(cacheOptions);
         //logger.debug("Current cache:");
         //printCacheOptions(cache);
 
@@ -182,30 +184,42 @@ public class GreedyCacheManager {
         // regions[0] is the most distant
         // regions[size() - 1] is my region
         List<Region> regions = regionManager.getRegions();
-        int myRegionId = regions.size() - 1;
+        int myRegionId = 0;
         int numBlocksInMyRegion = regions.get(myRegionId).getBlocks();
-        int crtRegionId = myRegionId - 1;
+        int crtRegionId = regions.size() - 1;
 
-        while (crtRegionId >= 0 && numBlocksInMyRegion + blocks < k) {
+        // compute which region to start from
+        int avoidedBlocks = 0;
+        while (avoidedBlocks + regions.get(crtRegionId).getBlocks() < m) {
+            crtRegionId--;
+            avoidedBlocks += regions.get(crtRegionId).getBlocks();
+        }
+
+        int furthestCachedRegion = crtRegionId;
+        while (crtRegionId > 0 && blocks + numBlocksInMyRegion < k) {
+            //System.out.println(key + " " + blocks);
             Region region = regions.get(crtRegionId);
-            latency = region.getLatency();
+            //latency = region.getLatency();
             blocks += region.getBlocks();
             regionNames.add(region.getName());
 
             // value should be latency save * weighted popularity
-            double value = 0;
-            value = regionManager.getLatencyMax() - regions.get(crtRegionId + 1).getLatency();
-            if (weightedPopularity.containsKey(key) == true)
+            double value = regions.get(furthestCachedRegion).getLatency() - regions.get(crtRegionId - 1).getLatency();
+            //System.out.println(key + " " + blocks + " " + value);
+            if (weightedPopularity.containsKey(key) == true) {
                 value *= weightedPopularity.get(key);
+            }
             CacheOption option = new CacheOption(key, blocks, value, new ArrayList<String>(regionNames));
             cacheOptionsKey.add(option);
             crtRegionId--;
         }
         // add my region to cache
         regionNames.add(regions.get(myRegionId).getName());
-        double value = regionManager.getLatencyMax() - regions.get(crtRegionId + 1).getLatency();
-        if (weightedPopularity.containsKey(key) == true)
+        double value = regions.get(furthestCachedRegion).getLatency();
+        //System.out.println(key + " " + k + " " + value);
+        if (weightedPopularity.containsKey(key) == true) {
             value *= weightedPopularity.get(key);
+        }
         CacheOption option = new CacheOption(key, k, value, new ArrayList<String>(regionNames));
         cacheOptionsKey.add(option);
 
