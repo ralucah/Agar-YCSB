@@ -35,8 +35,8 @@ import java.util.concurrent.atomic.AtomicInteger;
    bin/ycsb run greedy -threads 2 -p fieldlength=4194304 -P workloads/myworkload
 */
 
-public class GreedyCacheClient extends ClientBlueprint {
-    public static Logger logger = Logger.getLogger(GreedyCacheClient.class);
+public class DynamicCacheClient extends ClientBlueprint {
+    public static Logger logger = Logger.getLogger(DynamicCacheClient.class);
 
     public static AtomicInteger cacheHits;
     public static AtomicInteger cachePartialHits;

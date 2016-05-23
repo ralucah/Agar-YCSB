@@ -23,7 +23,7 @@ public class UDPServer implements Runnable {
 
     protected static ExecutorService executor;
     protected static int packetSize;
-    private static GreedyCacheManager greedy;
+    private static CacheManager cacheManager;
     private DatagramSocket socket;
     private int k = 6;
 
@@ -59,7 +59,7 @@ public class UDPServer implements Runnable {
         executor = Executors.newFixedThreadPool(executorThreads);
 
         // greedy cache manager
-        greedy = new GreedyCacheManager();
+        cacheManager = new GreedyCacheManager();
 
         System.out.println("Proxy server running on " + proxyHost);
     }
@@ -161,7 +161,7 @@ public class UDPServer implements Runnable {
         //logger.info(request.prettyPrint()); // + " from " + clientAddress + ":" + clientPort);
 
         // compute reply
-        ProxyReply reply = greedy.buildReply(request.getKey());
+        ProxyReply reply = cacheManager.buildReply(request.getKey());
         //logger.info(reply.prettyPrint());// + " to " + clientAddress + ":" + clientPort);
 
         // send reply to client

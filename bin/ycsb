@@ -49,7 +49,7 @@ COMMANDS = {
     },
     "proxy" : {
         "command"     : "proxy",
-        "description" : "Start the Greedy Cache Proxy",
+        "description" : "Start the Cache Proxy",
         "main"        : "com.yahoo.ycsb.proxy.UDPServer"
     },
 }
@@ -59,7 +59,7 @@ CLIENTS = {
     "localcache" : "com.yahoo.ycsb.dual.clients.LocalCacheClient",
     "fixcache" : "com.yahoo.ycsb.dual.clients.FixCacheClient",
     "eccache" : "com.yahoo.ycsb.dual.clients.ECCacheClient",
-    "greedy" : "com.yahoo.ycsb.dual.clients.GreedyCacheClient",
+    "dynamic" : "com.yahoo.ycsb.dual.clients.DynamicCacheClient",
     "dummy" : "com.yahoo.ycsb.dual.clients.DummyClient"
 }
 
