@@ -17,7 +17,7 @@ public class PropertyFactory {
     public static String ALPHA_PROPERTY = "alpha";
 
     /* size of data record */
-    //public static String FIELD_LENGTH_PROPERTY = "fieldlength";
+    public static String FIELD_LENGTH_PROPERTY = "fieldlength";
     /* ip:port of memcached server */
     //public static String MEMCACHED_SERVER_PROPERTY = "memcached.server";
     /* erasure-coding parameter; number of data chunks */
@@ -42,7 +42,7 @@ public class PropertyFactory {
             propertiesMap.put(EXECUTOR_THREADS_PROPERTY, properties.getProperty(EXECUTOR_THREADS_PROPERTY));
             propertiesMap.put(PACKET_SIZE_PROPERTY, properties.getProperty(PACKET_SIZE_PROPERTY));
             propertiesMap.put(CACHE_SIZE_PROPERTY, properties.getProperty(CACHE_SIZE_PROPERTY));
-            //propertiesMap.put(FIELD_LENGTH_PROPERTY, properties.getProperty(FIELD_LENGTH_PROPERTY));
+            propertiesMap.put(FIELD_LENGTH_PROPERTY, properties.getProperty(FIELD_LENGTH_PROPERTY));
             //propertiesMap.put(MEMCACHED_SERVER_PROPERTY, properties.getProperty(MEMCACHED_SERVER_PROPERTY));
             propertiesMap.put(PROXY_PROPERTY, properties.getProperty(PROXY_PROPERTY));
             propertiesMap.put(LONGHAIR_K_PROPERTY, properties.getProperty(LONGHAIR_K_PROPERTY));

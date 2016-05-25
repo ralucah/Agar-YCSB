@@ -27,7 +27,7 @@ public class RegionManager {
             String regionName = regionNames.get(i);
             String endpointName = endpointNames.get(i);
             Region region = new Region(regionName, endpointName);
-            double pingTime = ping(endpointName);
+            double pingTime = wgetFake(endpointName);
             region.setLatency(pingTime);
             regions.add(region);
         }
@@ -44,10 +44,26 @@ public class RegionManager {
         latencyMax = regions.get(regionsSize - 1).getLatency();
 
         for (Region region : regions)
-            System.out.println(region.prettyPrint());
+            System.err.println(region.prettyPrint());
     }
 
-    private double ping(String host) {
+    private double wgetFake(String host) {
+        if (host.contains("sa-east-1"))  // sao
+            return 1594;
+        else if (host.contains("external-1")) // virginia
+            return 618;
+        else if (host.contains("eu-west-1")) // ireland
+            return 356;
+        else if (host.contains("eu-central-1")) // frankfurt
+            return 184;
+        else if (host.contains("ap-northeast-1")) // tokyo
+            return 1685;
+        else if (host.contains("ap-southeast-2")) // sydney
+            return 1633;
+        return Double.MIN_VALUE;
+    }
+
+    private double wget(String host) {
         double avgTime = Double.MIN_VALUE;
 
         try {
@@ -109,6 +125,10 @@ public class RegionManager {
 
     public List<Region> getRegions() {
         return regions;
+    }
+
+    public int getNumRegions() {
+        return regions.size();
     }
 
     public double getLatencyMax() {

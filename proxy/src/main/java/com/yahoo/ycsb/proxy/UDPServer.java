@@ -23,7 +23,7 @@ public class UDPServer implements Runnable {
 
     protected static ExecutorService executor;
     protected static int packetSize;
-    private static CacheManager cacheManager;
+    private static DynamicCacheManager cacheManager;
     private DatagramSocket socket;
     private int k = 6;
 
@@ -31,11 +31,10 @@ public class UDPServer implements Runnable {
 
         // threads
         int executorThreads = Integer.valueOf(PropertyFactory.propertiesMap.get(PropertyFactory.EXECUTOR_THREADS_PROPERTY));
-        logger.debug("Executor threads: " + executorThreads);
+        System.err.println("Executor threads: " + executorThreads);
 
         // packet size for UDP communication
         packetSize = Integer.valueOf(PropertyFactory.propertiesMap.get(PropertyFactory.PACKET_SIZE_PROPERTY));
-        logger.trace("Packet size: " + packetSize);
 
         // address of current server
         String proxyHost = PropertyFactory.propertiesMap.get(PropertyFactory.PROXY_PROPERTY);
@@ -59,9 +58,9 @@ public class UDPServer implements Runnable {
         executor = Executors.newFixedThreadPool(executorThreads);
 
         // greedy cache manager
-        cacheManager = new GreedyCacheManager();
+        cacheManager = new DynamicCacheManager();
 
-        System.out.println("Proxy server running on " + proxyHost);
+        System.err.println("Proxy server running on " + proxyHost);
     }
 
     public static void usageMessage() {
