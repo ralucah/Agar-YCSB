@@ -13,12 +13,13 @@ public class DynamicCacheManager {
     public static Logger logger = Logger.getLogger(DynamicCacheManager.class);
 
     private int period; // how often to recompute cache (ms)
-    private List<CacheOption> cache; // current cache configuration
     private Map<String, Integer> frequency; // frequency stats for keys
     private Map<String, Double> weightedPopularity; // weighted popularity for keys
     private double alpha; // coefficient for weighted popularity (between 0 and 1)
     private AtomicInteger cachesizeMax; // in block numbers
     private AtomicInteger cachesize; // in block numbers
+
+    private List<CacheOption> cache; // current cache configuration
 
     private RegionManager regionManager; // computes an overview of the deployed system
     private int k; // number of data chunks
@@ -79,16 +80,21 @@ public class DynamicCacheManager {
         maxValue = new HashMap<Integer, Double>();
 
         ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
-        exec.scheduleAtFixedRate(new Runnable() {
+        exec.schedule(new Runnable() {
             @Override
             public void run() {
                 reconfigureCache();
             }
-        }, period, period, TimeUnit.SECONDS);
+        }, period, TimeUnit.SECONDS);
+        /*exec.scheduleAtFixedRate(new Runnable() {
+            @Override
+            public void run() {
+                reconfigureCache();
+            }
+        }, period, period, TimeUnit.SECONDS);*/
     }
 
-    private void reconfigureCache() {
-        logger.debug("reconfigure cache BEGIN");
+    private void updateWeightedPopularity() {
         // update weighted popularity for keys that were encountered over the last period
         for (Map.Entry<String, Integer> entry : frequency.entrySet()) {
             String key = entry.getKey();
@@ -112,146 +118,27 @@ public class DynamicCacheManager {
             }
         }
 
-        // print stats
-        prettyPrintFrequency();
         prettyPrintWeightedPopularity();
+    }
+
+    private void reconfigureCache() {
+        logger.debug("reconfigure cache BEGIN");
+
+        // print frequency
+        prettyPrintFrequency();
+
+        // compute weighted popularity
+        updateWeightedPopularity();
 
         // reset frequency
         frequency.clear();
 
-        computeCache();
+        computeCacheOptions();
 
-        logger.debug("reconfigure cache END");
-    }
+        sortKeysByValue();
 
-    private synchronized void computeCache() {
-        // compute cache options
-        cacheOptions.clear();
-        for (Map.Entry<String, Double> entry : weightedPopularity.entrySet()) {
-            String key = entry.getKey();
-            Map<Integer, CacheOption> cacheOptionsKey = computeCacheOptionsForKey(key);
-            cacheOptions.put(key, cacheOptionsKey);
-        }
-        //printCacheOptions();
+        computeChosenOptions();
 
-        // build list of keys sorted by value
-        keys = new String[cacheOptions.size()];
-        SortedMap<Double, String> sortedKeys = new TreeMap<Double, String>();
-        for (Map.Entry<String, Map<Integer, CacheOption>> entry : cacheOptions.entrySet()) {
-            // get first entry
-            CacheOption first = entry.getValue().entrySet().iterator().next().getValue();
-            sortedKeys.put(first.getValue(), entry.getKey());
-        }
-        sortedKeys.values().toArray(keys);
-        Collections.reverse(Arrays.asList(keys));
-        logger.debug("Keys sorted increasingly by value: " + sortedKeys);
-        logger.debug("Keys sorted decreasingly by value: " + Arrays.asList(keys));
-
-
-        // clear both?
-        maxValue.clear();
-        chosenOptions.clear();
-
-        // start by computing the max value entries for the first key
-        Map<Integer, CacheOption> cacheOptionsKey1 = cacheOptions.get(keys[0]);
-        for (int weight : weights) {
-            // max value
-            maxValue.put(weight, cacheOptionsKey1.get(weight).getValue());
-            // chosen options
-            List<CacheOption> chosenCacheOptions;
-            if (chosenOptions.get(weight) == null) {
-                chosenCacheOptions = new ArrayList<CacheOption>();
-            } else {
-                chosenCacheOptions = chosenOptions.get(weight);
-            }
-            chosenCacheOptions.add(cacheOptionsKey1.get(weight));
-            chosenOptions.put(weight, chosenCacheOptions);
-        }
-        printMaxValue();
-        int maxWeight = weights[weights.length - 1];
-        logger.debug("maxWeight=" + maxWeight);
-        printChosenOptions();
-
-        int numKeys = cachesizeMax.intValue();
-        if (numKeys > keys.length)
-            numKeys = keys.length;
-        logger.debug("numKeys=" + numKeys);
-
-        for (int i = 1; i < keys.length; i++) {
-            int newMaxWeight = maxWeight;
-            Map<Integer, CacheOption> cacheOptionsKey = cacheOptions.get(keys[i]);
-            for (int j = weights.length - 1; j >= 0; j--) {
-                CacheOption co = cacheOptionsKey.get(weights[j]);
-                int crtWeight = co.getWeight();
-
-                // iterate through possible weights and try to relax a previous choice
-                for (int weight : weights) {
-                    // see if we can improve the last 5 options by replacing a larger cacheoption with two smaller ones
-                    int weightToRelax = maxWeight - weight;
-                    if (!maxValue.containsKey(weightToRelax))
-                        continue;
-                    double prevValue = maxValue.get(weightToRelax);
-                    int last = chosenOptions.get(weightToRelax).size() - 1;
-                    // get cacheoption at the end of the list and try to split it
-                    CacheOption lastAddedCacheOption = chosenOptions.get(weightToRelax).get(last);
-
-                    //do not relax our own key
-                    if (lastAddedCacheOption.getKey() == co.getKey())
-                        continue;
-
-                    if (lastAddedCacheOption.getWeight() > co.getWeight()) {
-                        // we replace the lastAddedCacheOption with a smaller weight option and fill in the remaining space with the current cacheoption
-                        double newValue = prevValue -
-                            lastAddedCacheOption.getValue() +
-                            co.getValue() +
-                            cacheOptions.get(lastAddedCacheOption.getKey()).get(lastAddedCacheOption.getWeight() -
-                                co.getWeight()).getValue();
-
-                        // if a better combination of cache options exists, then update the chosen options list (relaxation step)
-                        if (newValue > prevValue) {
-                            maxValue.put(weightToRelax, newValue);
-                            chosenOptions.get(weightToRelax).remove(last);
-                            chosenOptions.get(weightToRelax).add(last, cacheOptions.get(lastAddedCacheOption.getKey()).get(lastAddedCacheOption.getWeight() -
-                                co.getWeight()));
-                            chosenOptions.get(weightToRelax).add(last + 1, co);
-
-                        }
-                    }
-                }
-
-                //try to add new co at the end
-                for (int weight : weights) {
-                    int weightToAddTo = maxWeight - weight;
-                    if (!maxValue.containsKey(weightToAddTo))
-                        continue;
-
-                    int newWeight = weightToAddTo + co.getWeight();
-
-                    if (newWeight > newMaxWeight)
-                        newMaxWeight = newWeight;
-
-                    if (maxValue.containsKey(newWeight)) {
-                        double prevValue = maxValue.get(weightToAddTo + co.getWeight());
-
-                        // we add co at the end of weightToAddTo
-                        double newValue = maxValue.get(weightToAddTo) + co.getValue();
-
-                        // if a better combination of cache options exists, then update the chosen options list (relaxation step)
-                        if (newValue > prevValue && !cacheOptionsContainsKey(chosenOptions.get(newWeight), co.getKey())) {
-                            maxValue.put(newWeight, newValue);
-                            chosenOptions.get(newWeight).add(co);
-                        }
-                    } else {
-                        double newValue = maxValue.get(weightToAddTo) + co.getValue();
-                        maxValue.put(newWeight, newValue);
-                        chosenOptions.put(newWeight, new ArrayList<CacheOption>(chosenOptions.get(weightToAddTo)));
-                        chosenOptions.get(newWeight).add(co);
-                    }
-                }
-            }
-            maxWeight = newMaxWeight;
-        }
-        printChosenOptions();
         System.exit(1);
 
         //cacheOptions.sort(CacheOption::compareTo);
@@ -261,14 +148,14 @@ public class DynamicCacheManager {
         //printCacheOptions(cacheOptions);
 
         // update current cache according to new options
-        logger.debug("Current cache options:");
+        //logger.debug("Current cache options:");
         //printCacheOptions(cacheOptions);
         //logger.debug("Current cache:");
         //printCacheOptions(cache);
 
         // populate the cache!
-        cachesize.set(0);
-        cache.clear();
+        //cachesize.set(0);
+        //cache.clear();
 
         /*int index = 0;
         while (cachesize.intValue() < cachesizeMax.intValue() && index < cacheOptions.size()) {
@@ -283,7 +170,158 @@ public class DynamicCacheManager {
 
         //logger.debug("Cache:");
         //printCacheOptions(cache);
-        logger.debug("cachesize:" + cachesize + " cachesizemax:" + cachesizeMax);
+        //logger.debug("cachesize:" + cachesize + " cachesizemax:" + cachesizeMax);
+
+        logger.debug("reconfigure cache END");
+    }
+
+    private void computeCacheOptions() {
+        // compute cache options
+        cacheOptions.clear();
+        for (Map.Entry<String, Double> entry : weightedPopularity.entrySet()) {
+            String key = entry.getKey();
+            Map<Integer, CacheOption> cacheOptionsKey = computeCacheOptionsForKey(key);
+            cacheOptions.put(key, cacheOptionsKey);
+        }
+        //printCacheOptions();
+    }
+
+    private void sortKeysByValue() {
+        // build list of keys sorted by value
+        keys = new String[cacheOptions.size()];
+        SortedMap<Double, String> sortedKeys = new TreeMap<Double, String>();
+        for (Map.Entry<String, Map<Integer, CacheOption>> entry : cacheOptions.entrySet()) {
+            // get first entry
+            CacheOption first = entry.getValue().entrySet().iterator().next().getValue();
+            sortedKeys.put(first.getValue(), entry.getKey());
+        }
+        sortedKeys.values().toArray(keys);
+        Collections.reverse(Arrays.asList(keys));
+        logger.debug("Keys sorted increasingly by value: " + sortedKeys);
+        logger.debug("Keys sorted decreasingly by value: " + Arrays.asList(keys));
+    }
+
+    private void computeChosenOptions() {
+        // clear
+        maxValue.clear();
+        chosenOptions.clear();
+
+        // start by computing the max value entries for the first key
+        Map<Integer, CacheOption> cacheOptionsKey1 = cacheOptions.get(keys[0]);
+        for (int weight : weights) {
+            maxValue.put(weight, cacheOptionsKey1.get(weight).getValue());
+            List<CacheOption> chosenCacheOptions;
+            if (chosenOptions.get(weight) == null) {
+                chosenCacheOptions = new ArrayList<CacheOption>();
+            } else {
+                chosenCacheOptions = chosenOptions.get(weight);
+            }
+            chosenCacheOptions.add(cacheOptionsKey1.get(weight));
+            chosenOptions.put(weight, chosenCacheOptions);
+        }
+
+        printMaxValue();
+        printChosenOptions();
+
+        // get max weight
+        int maxWeight = weights[weights.length - 1];
+        logger.debug("maxWeight=" + maxWeight);
+
+        // TODO estimate number of keys
+        int numKeys = cachesizeMax.intValue();
+        if (numKeys > keys.length)
+            numKeys = keys.length;
+        logger.debug("numKeys=" + numKeys);
+
+        // TODO keys.length -> numKeys
+        for (int i = 1; i < keys.length; i++) {
+            // we need to update max weight only at the end of this for loop
+            int newMaxWeight = maxWeight;
+
+            // check cache options for this key
+            Map<Integer, CacheOption> cacheOptionsKey = cacheOptions.get(keys[i]);
+            for (int j = weights.length - 1; j >= 0; j--) {
+                CacheOption co = cacheOptionsKey.get(weights[j]);
+                //int crtWeight = co.getWeight();
+
+                // iterate through possible weights and try to relax a previous choice
+                for (int weight = weights[weights.length - 1]; weight >= 0; weight--) {
+                    // see if we can improve the last options by replacing a larger cacheoption with two smaller ones
+                    int weightToRelax = maxWeight - weight;
+                    if (!maxValue.containsKey(weightToRelax))
+                        continue;
+                    double prevValue = maxValue.get(weightToRelax);
+
+                    // get cacheoption at the end of the list and try to split it
+                    int last = chosenOptions.get(weightToRelax).size() - 1;
+                    CacheOption lastAddedCacheOption = chosenOptions.get(weightToRelax).get(last);
+
+                    // do not relax our own key
+                    if (lastAddedCacheOption.getKey() == co.getKey())
+                        continue;
+
+                    if (lastAddedCacheOption.getWeight() > co.getWeight()) {
+                        // we replace the lastAddedCacheOption with a smaller weight option and fill in the remaining space with the current cacheoption
+                        double newValue = prevValue -
+                            lastAddedCacheOption.getValue() +
+                            co.getValue() +
+                            cacheOptions.get(lastAddedCacheOption.getKey()).get(lastAddedCacheOption.getWeight() - co.getWeight()).getValue();
+
+                        // if a better combination of cache options exists, then update the chosen options list (relaxation step)
+                        if (newValue > prevValue) {
+                            maxValue.put(weightToRelax, newValue);
+                            chosenOptions.get(weightToRelax).remove(last);
+                            chosenOptions.get(weightToRelax).add(last, cacheOptions.get(lastAddedCacheOption.getKey()).get(lastAddedCacheOption.getWeight() - co.getWeight()));
+                            chosenOptions.get(weightToRelax).add(last + 1, co);
+
+                        }
+                    }
+                }
+
+                //try to add new co at the end
+                for (int weight = weights[weights.length - 1]; weight >= 0; weight--) {
+                    int weightToAddTo = maxWeight - weight;
+
+                    if (!maxValue.containsKey(weightToAddTo))
+                        continue;
+
+                    int newWeight = weightToAddTo + co.getWeight();
+
+                    if (newWeight > newMaxWeight)
+                        newMaxWeight = newWeight;
+
+                    if (maxValue.containsKey(newWeight)) {
+                        double prevValue = maxValue.get(newWeight);
+
+                        // we add co at the end of weightToAddTo
+                        double newValue = maxValue.get(weightToAddTo) + co.getValue();
+
+                        // if a better combination of cache options exists, then update the chosen options list (relaxation step)
+                        if (newValue > prevValue) {
+                            if (!cacheOptionsContainsKey(chosenOptions.get(weightToAddTo), co.getKey())) {
+                                maxValue.put(newWeight, newValue);
+                                chosenOptions.put(newWeight, new ArrayList<CacheOption>(chosenOptions.get(weightToAddTo)));
+                                chosenOptions.get(newWeight).add(co);
+                            }
+                        }
+                    } else {
+                        if (!cacheOptionsContainsKey(chosenOptions.get(weightToAddTo), co.getKey())) {
+                            double newValue = maxValue.get(weightToAddTo) + co.getValue();
+                            maxValue.put(newWeight, newValue);
+                            chosenOptions.put(newWeight, new ArrayList<CacheOption>(chosenOptions.get(weightToAddTo)));
+                            chosenOptions.get(newWeight).add(co);
+                        }
+                    }
+                }
+            }
+            maxWeight = newMaxWeight;
+
+            // after this point the algorithm will never update maxValue[cachesizeMax]
+            // which means that we have found the best value
+            if (maxWeight > cachesizeMax.get() + 2 * weights[weights.length - 1])
+                break;
+        }
+        printChosenOptions();
     }
 
     private boolean cacheOptionsContainsKey(List<CacheOption> chosenOptions, String key) {
@@ -371,15 +409,6 @@ public class DynamicCacheManager {
         return cacheOptionsKey;
     }
 
-    private void printCacheOptions() {
-        for (Map.Entry<String, Map<Integer, CacheOption>> entry : cacheOptions.entrySet()) {
-            String str = entry.getKey() + " ";
-            for (Map.Entry<Integer, CacheOption> cacheOptionEntry : entry.getValue().entrySet())
-                str += cacheOptionEntry.getKey() + " " + cacheOptionEntry.getValue().prettyPrint() + " ";
-            logger.debug(str);
-        }
-    }
-
     protected int cacheContains(String key) {
         int index = 0;
         for (CacheOption cacheOption : cache) {
@@ -414,6 +443,15 @@ public class DynamicCacheManager {
         return reply;
     }
 
+    private void incrementFrequency(String key) {
+        if (frequency.get(key) == null) {
+            frequency.put(key, 1);
+        } else {
+            int freq = frequency.get(key);
+            frequency.put(key, freq + 1);
+        }
+    }
+
     private void prettyPrintFrequency() {
         logger.debug("frequency {");
         for (Map.Entry<String, Integer> entry : frequency.entrySet()) {
@@ -430,20 +468,12 @@ public class DynamicCacheManager {
         logger.debug("}");
     }
 
-    /*private boolean isKeyInCacheOptions(String key) {
-        for (CacheOption cacheOption : cacheOptions) {
-            if (cacheOption.getKey().equals(key))
-                return true;
-        }
-        return false;
-    }*/
-
-    private void incrementFrequency(String key) {
-        if (frequency.get(key) == null) {
-            frequency.put(key, 1);
-        } else {
-            int freq = frequency.get(key);
-            frequency.put(key, freq + 1);
+    private void printCacheOptions() {
+        for (Map.Entry<String, Map<Integer, CacheOption>> entry : cacheOptions.entrySet()) {
+            String str = entry.getKey() + " ";
+            for (Map.Entry<Integer, CacheOption> cacheOptionEntry : entry.getValue().entrySet())
+                str += cacheOptionEntry.getKey() + " " + cacheOptionEntry.getValue().prettyPrint() + " ";
+            logger.debug(str);
         }
     }
 }

@@ -25,7 +25,7 @@ public class CacheOption implements Comparable<CacheOption> {
 
     public String prettyPrint() {
         //String str = key + " blocks:" + blocks + " weight:" + weight + " value:" + value + " value/weight:" + value / weight + " regions:";
-        String str = key + " weight:" + weight + " value:" + value + " regions: " + regions;
+        String str = key + " weight:" + weight + " value:" + (int) value; // + " regions: " + regions;
         return str;
     }
 
