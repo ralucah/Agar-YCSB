@@ -125,7 +125,7 @@ public class ECCacheClient2 extends ClientBlueprint {
 
         ECBlock ecblock = null;
         if (bytes != null) {
-            ecblock = new ECBlock(blockId, blockKey, bytes, Storage.CACHE);
+            ecblock = new ECBlock(key, blockId, bytes, Storage.CACHE);
             logger.debug("CacheHit " + key + " block " + blockId + " from " + memConnection.getHost());
         } else
             logger.debug("CacheMiss " + key + " block " + blockId + " from " + memConnection.getHost());
@@ -194,7 +194,7 @@ public class ECCacheClient2 extends ClientBlueprint {
 
         ECBlock ecblock = null;
         if (bytes != null) {
-            ecblock = new ECBlock(blockId, blockKey, bytes, Storage.BACKEND);
+            ecblock = new ECBlock(key, blockId, bytes, Storage.BACKEND);
             logger.debug("ReadBlockBackend " + key + " block" + blockId + " from bucket" + blockId);
         } else
             logger.error("[Error] ReadBlockBackend " + key + " block" + blockId + " from bucket" + blockId);

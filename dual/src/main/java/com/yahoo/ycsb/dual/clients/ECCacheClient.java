@@ -138,7 +138,7 @@ public class ECCacheClient extends ClientBlueprint {
         ECBlock ecblock = null;
         if (bytes != null) {
             logger.debug("CacheHit " + key + " block " + blockId);
-            ecblock = new ECBlock(blockId, blockKey, bytes, Storage.CACHE);
+            ecblock = new ECBlock(key, blockId, bytes, Storage.CACHE);
         } else {
             logger.debug("CacheMiss " + key + " block " + blockId);
             ecblock = readBlockBackend(key, blockId);
@@ -155,7 +155,7 @@ public class ECCacheClient extends ClientBlueprint {
 
         ECBlock ecblock = null;
         if (bytes != null)
-            ecblock = new ECBlock(blockId, blockKey, bytes, Storage.BACKEND);
+            ecblock = new ECBlock(key, blockId, bytes, Storage.BACKEND);
         else
             logger.error("[Error] ReadBlockBackend " + key + " block" + blockId + " from bucket" + s3ConnNum);
 

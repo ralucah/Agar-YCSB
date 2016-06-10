@@ -31,7 +31,7 @@ public class UDPServer implements Runnable {
 
         // threads
         int executorThreads = Integer.valueOf(PropertyFactory.propertiesMap.get(PropertyFactory.EXECUTOR_THREADS_PROPERTY));
-        System.err.println("Executor threads: " + executorThreads);
+        //System.err.println("Executor threads: " + executorThreads);
 
         // packet size for UDP communication
         packetSize = Integer.valueOf(PropertyFactory.propertiesMap.get(PropertyFactory.PACKET_SIZE_PROPERTY));

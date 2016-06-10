@@ -47,13 +47,14 @@ public class DynamicCacheClient extends ClientBlueprint {
     private List<S3Connection> s3Connections;
     private MemcachedConnection memConnection;
     private ProxyConnection proxyConnection;
-    private int blocksPerRegion;
+    private List<String> s3Buckets;
+    //private int blocksPerRegion;
     private ExecutorService executor;
 
     private void initS3() {
         List<String> regions = Arrays.asList(propertyFactory.propertiesMap.get(PropertyFactory.S3_REGIONS_PROPERTY).split("\\s*,\\s*"));
         List<String> endpoints = Arrays.asList(propertyFactory.propertiesMap.get(PropertyFactory.S3_ENDPOINTS_PROPERTY).split("\\s*,\\s*"));
-        List<String> s3Buckets = Arrays.asList(propertyFactory.propertiesMap.get(PropertyFactory.S3_BUCKETS_PROPERTY).split("\\s*,\\s*"));
+        s3Buckets = Arrays.asList(propertyFactory.propertiesMap.get(PropertyFactory.S3_BUCKETS_PROPERTY).split("\\s*,\\s*"));
         if (s3Buckets.size() != endpoints.size() || endpoints.size() != regions.size())
             logger.error("Configuration error: #buckets = #regions = #endpoints");
 
@@ -112,7 +113,7 @@ public class DynamicCacheClient extends ClientBlueprint {
         initS3();
         initLonghair();
         initCache();
-        blocksPerRegion = (LonghairLib.k + LonghairLib.m) / s3Connections.size();
+        //blocksPerRegion = (LonghairLib.k + LonghairLib.m) / s3Connections.size();
 
         if (executor == null) {
             final int threadsNum = Integer.valueOf(propertyFactory.propertiesMap.get(PropertyFactory.EXECUTOR_THREADS_PROPERTY));
@@ -148,27 +149,28 @@ public class DynamicCacheClient extends ClientBlueprint {
         // compute block ids
         int s3ConnNum = s3Connections.size();
         int blocksPerRegion = (LonghairLib.k + LonghairLib.m) / s3ConnNum;
-        for (int i = 0; i < s3ConnNum; i++) {
-            int blockId = i * blocksPerRegion + s3connId;
+        for (int i = 0; i < blocksPerRegion; i++) {
+            int blockId = i * s3ConnNum + s3connId;
             blockIds.add(blockId);
         }
+        logger.info(region + " " + blockIds);
         return blockIds;
     }
 
     private ECBlock readBackendBlock(String key, int blockId) {
         String blockKey = key + blockId;
-        return new ECBlock(blockId, blockKey, new byte[699072], Storage.BACKEND);
-        /*int s3ConnNum = blockId % s3Connections.size();
+        //return new ECBlock(blockId, blockKey, new byte[699072], Storage.BACKEND);
+        int s3ConnNum = blockId % s3Connections.size();
         S3Connection s3Connection = s3Connections.get(s3ConnNum);
         byte[] bytes = s3Connection.read(blockKey);
 
         ECBlock ecblock = null;
         if (bytes != null)
-            ecblock = new ECBlock(blockId, blockKey, bytes, Storage.BACKEND);
+            ecblock = new ECBlock(key, blockId, bytes, Storage.BACKEND);
         else
-            logger.error("[Error] ReadBlockBackend " + key + " block" + blockId + " from bucket" + s3ConnNum);
+            logger.error("[Error] ReadBlockBackend " + key + " block" + blockId + " from bucket " + s3Buckets.get(s3ConnNum));
 
-        return ecblock;*/
+        return ecblock;
     }
 
     public List<ECBlock> readBackend(final String key, List<String> backendRecipe) {
@@ -231,7 +233,7 @@ public class DynamicCacheClient extends ClientBlueprint {
         ECBlock ecblock = null;
         if (bytes != null) {
             logger.debug("CacheHit " + key + " block " + blockId);
-            ecblock = new ECBlock(blockId, blockKey, bytes, Storage.CACHE);
+            ecblock = new ECBlock(key, blockId, bytes, Storage.CACHE);
         } else {
             logger.debug("CacheMiss " + key + " block " + blockId);
             ecblock = readBackendBlock(key, blockId);

@@ -38,7 +38,7 @@ blocksincache=3
 proxy=0.0.0.0:11000
 packetsize=1024
 # in seconds
-period=20
+period=30
 alpha=0.8
 # in mb
 cachesize=50

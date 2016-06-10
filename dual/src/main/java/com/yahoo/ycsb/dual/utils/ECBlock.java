@@ -9,9 +9,9 @@ public class ECBlock {
     private byte[] bytes;
     private Storage storage;
 
-    public ECBlock(int id, String key, byte[] bytes, Storage storage) {
-        this.id = id;
+    public ECBlock(String key, int id, byte[] bytes, Storage storage) {
         this.key = key;
+        this.id = id;
         this.bytes = bytes;
         this.storage = storage;
     }
@@ -21,7 +21,7 @@ public class ECBlock {
     }
 
     public String getKey() {
-        return key;
+        return key + id;
     }
 
     public byte[] getBytes() {
