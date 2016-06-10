@@ -1,6 +1,7 @@
 package com.yahoo.ycsb.proxy;
 
 import com.yahoo.ycsb.common.communication.ProxyReply;
+import javafx.util.Pair;
 import org.apache.log4j.Logger;
 
 import java.util.*;
@@ -25,7 +26,7 @@ public class DynamicCacheManager {
     private int m; // number of redundant chunks
 
     private int[] weights; // weight options (i.e., take blocks from one data center, two data centers, etc.)
-    private String[] keys; // all seen keys, sorted by value
+    private List<Pair<String, Double>> keys; // all seen keys, sorted by value
 
     private Map<String, Map<Integer, CacheOption>> cacheOptions; // (key, list of cache options)
     private Map<Integer, Double> maxValue; // max value for each weight
@@ -131,35 +132,30 @@ public class DynamicCacheManager {
         if (weightedPopularity.size() > 0) {
             // compute cache options + populate keys
             cacheOptions.clear();
-            SortedMap<Double, String> sortedKeys = new TreeMap<Double, String>();
-            keys = new String[weightedPopularity.size()];
+            keys = new ArrayList<Pair<String, Double>>();
             //int keyNum = 0;
             for (Map.Entry<String, Double> entry : weightedPopularity.entrySet()) {
                 String key = entry.getKey();
-
-                //keys[keyNum] = key;
-                //logger.debug("keys[" + keyNum + "] = " + key);
-                //keyNum++;
 
                 Map<Integer, CacheOption> cacheOptionsKey = computeCacheOptionsForKey(key);
                 cacheOptions.put(key, cacheOptionsKey);
 
                 CacheOption first = cacheOptionsKey.entrySet().iterator().next().getValue();
-                if (first != null) {
-                    sortedKeys.put(first.getValue(), key);
-                    //logger.debug("sortedKeys.put(" + first.getValue() + "," + key + ")");
-                } else {
-                    sortedKeys.put(0.0, key);
-                    //logger.debug("sortedKeys.put(0," + key + ")");
-                }
+                keys.add(new Pair<>(key, first.getValue()));
+                logger.debug("keys.add(" + key + "," + first.getValue() + ")");
             }
 
-            // sort keys by value
-            sortedKeys.values().toArray(keys);
-            logger.debug("Keys: " + Arrays.asList(keys));
-            Collections.reverse(Arrays.asList(keys));
-            logger.debug("Keys sorted increasingly by value: " + sortedKeys);
-            logger.debug("Keys sorted decreasingly by value: " + Arrays.asList(keys));
+            logger.debug("Keys: " + keys);
+            // sort keys decreasingly by value
+            Collections.sort(keys, new Comparator<Pair<String, Double>>() {
+                @Override
+                public int compare(final Pair<String, Double> o1, final Pair<String, Double> o2) {
+                    return o1.getValue().compareTo(o2.getValue());
+                }
+            });
+            logger.debug("Keys sorted increasingly by value: " + keys);
+            Collections.reverse(keys);
+            logger.debug("Keys sorted decreasingly by value: " + keys);
 
             // knapsack solution using dynamic programming
             computeChosenOptions();
@@ -185,13 +181,12 @@ public class DynamicCacheManager {
         chosenOptions.clear();
 
         // start by computing the max value entries for the first key
-        Map<Integer, CacheOption> cacheOptionsKey1 = cacheOptions.get(keys[0]);
+        Map<Integer, CacheOption> cacheOptionsKey1 = cacheOptions.get(keys.get(0).getKey());
         for (int weight : weights) {
             maxValue.put(weight, cacheOptionsKey1.get(weight).getValue());
-            List<CacheOption> chosenCacheOptions;
-            if (chosenOptions.get(weight) == null) {
-                chosenCacheOptions = new ArrayList<CacheOption>();
-            } else {
+            List<CacheOption> chosenCacheOptions = new ArrayList<CacheOption>();
+            ;
+            if (chosenOptions.get(weight) != null) {
                 chosenCacheOptions = chosenOptions.get(weight);
             }
             chosenCacheOptions.add(cacheOptionsKey1.get(weight));
@@ -207,17 +202,17 @@ public class DynamicCacheManager {
 
         // TODO estimate number of keys
         int numKeys = cacheCapacity;
-        if (numKeys > keys.length)
-            numKeys = keys.length;
+        if (numKeys > keys.size())
+            numKeys = keys.size();
         logger.debug("numKeys=" + numKeys);
 
         // TODO keys.length -> numKeys
-        for (int i = 1; i < keys.length; i++) {
+        for (int i = 1; i < keys.size(); i++) {
             // we need to update max weight only at the end of this for loop
             int newMaxWeight = maxWeight;
 
             // check cache options for this key
-            Map<Integer, CacheOption> cacheOptionsKey = cacheOptions.get(keys[i]);
+            Map<Integer, CacheOption> cacheOptionsKey = cacheOptions.get(keys.get(i).getKey());
             for (int j = weights.length - 1; j >= 0; j--) {
                 CacheOption co = cacheOptionsKey.get(weights[j]);
                 //int crtWeight = co.getWeight();
