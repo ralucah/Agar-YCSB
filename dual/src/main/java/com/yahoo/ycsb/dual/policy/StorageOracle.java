@@ -80,12 +80,12 @@ public class StorageOracle {
         Set<StorageSubitem> backend = storageItem.getBackendSet();
         // remove what it is not available
         for (StorageSubitem ssitem : strategy) {
-            if (availableKeys.contains(ssitem.getKey()) == false)
+            if (availableKeys.contains(ssitem.getBaseKey()) == false)
                 storageItem.removeFromStrategy(ssitem);
         }
         // fill in with backend elements
         for (StorageSubitem ssitem : backend) {
-            if (availableKeys.contains(ssitem.getKey()) == false)
+            if (availableKeys.contains(ssitem.getBaseKey()) == false)
                 storageItem.addToStrategy(ssitem);
         }
     }*/
@@ -97,7 +97,7 @@ public class StorageOracle {
         Iterator iter = keyToCacheInfo.entrySet().iterator();
         while (iter.hasNext()) {
             Map.Entry<String, CacheInfo> pair = (Map.Entry<String, CacheInfo>) iter.next();
-            String key = pair.getKey();
+            String key = pair.getBaseKey();
             CacheInfo cinfo = pair.getValue();
             ReadPolicyItem rpItem;
             if (cinfo.isCached() == true) {
@@ -127,7 +127,7 @@ public class StorageOracle {
         Iterator iter = keyToCacheInfo.entrySet().iterator();
         while (iter.hasNext()) {
             Map.Entry<String, CacheInfo> entry = (Map.Entry<String, CacheInfo>) iter.next();
-            String key = entry.getKey();
+            String key = entry.getBaseKey();
             CacheInfo cacheInfo = entry.getValue();
 
             if (cacheInfo.isCached() == true)

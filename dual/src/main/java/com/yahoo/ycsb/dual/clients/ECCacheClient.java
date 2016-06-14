@@ -203,10 +203,12 @@ public class ECCacheClient extends ClientBlueprint {
     @Override
     public byte[] read(final String key, final int keyNum) {
         byte[] data = null;
-        // read from cache
-        final List<ECBlock> ecblocks = readParallel(key);
-        Set<byte[]> blockBytes = new HashSet<byte[]>();
 
+        // read from cache and backend in parallel
+        final List<ECBlock> ecblocks = readParallel(key);
+
+        // extract bytes from read blocks and compute stats (how many blocks read from cache and how many from backend)
+        Set<byte[]> blockBytes = new HashSet<byte[]>();
         int fromCache = 0;
         int fromBackend = 0;
         for (ECBlock ecblock : ecblocks) {
@@ -234,7 +236,7 @@ public class ECCacheClient extends ClientBlueprint {
             });
         }
 
-        // stats
+        // update stats: if data was entirely read from cache, backend or a mix
         if (fromCache == blocksincache)
             cacheHits.incrementAndGet();
         else if (fromCache > 0 && fromBackend > 0)
@@ -242,6 +244,7 @@ public class ECCacheClient extends ClientBlueprint {
         else if (fromCache == 0 && fromBackend > 0)
             cacheMisses.incrementAndGet();
 
+        // decode data
         data = LonghairLib.decode(blockBytes);
         logger.info("Read " + key + " " + data.length + " bytes Cache: " + fromCache + " Backend: " + fromBackend);
 
@@ -249,7 +252,7 @@ public class ECCacheClient extends ClientBlueprint {
     }
 
     private void cacheBlock(String key, ECBlock ecblock) {
-        Status status = memConnection.insert(ecblock.getKey(), ecblock.getBytes());
+        Status status = memConnection.insert(ecblock.getBaseKey(), ecblock.getBytes());
         if (status == Status.OK)
             logger.debug("Cache  " + key + " block " + ecblock.getId() + " at " + memConnection.getHost());
         else

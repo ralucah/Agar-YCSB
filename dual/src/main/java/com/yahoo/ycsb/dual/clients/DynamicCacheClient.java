@@ -48,8 +48,7 @@ public class DynamicCacheClient extends ClientBlueprint {
     private MemcachedConnection memConnection;
     private ProxyConnection proxyConnection;
     private List<String> s3Buckets;
-    //private int blocksPerRegion;
-    private ExecutorService executor;
+    private ExecutorService executor; // one executor per client thread
 
     private void initS3() {
         List<String> regions = Arrays.asList(propertyFactory.propertiesMap.get(PropertyFactory.S3_REGIONS_PROPERTY).split("\\s*,\\s*"));
@@ -92,8 +91,10 @@ public class DynamicCacheClient extends ClientBlueprint {
     }
 
     private void initCache() throws ClientException {
+        // connection to closest proxy
         proxyConnection = new ProxyConnection(getProperties());
 
+        // connection to closest memcached server
         String memHost = propertyFactory.propertiesMap.get(PropertyFactory.MEMCACHED_SERVER_PROPERTY);
         memConnection = new MemcachedConnection(memHost);
         logger.debug("Memcached connection " + memHost);
@@ -102,6 +103,7 @@ public class DynamicCacheClient extends ClientBlueprint {
     public void init() throws ClientException {
         logger.debug("SmartCacheClient.init() start");
 
+        // init counters for stats
         if (cacheHits == null)
             cacheHits = new AtomicInteger(0);
         if (cacheMisses == null)
@@ -113,7 +115,6 @@ public class DynamicCacheClient extends ClientBlueprint {
         initS3();
         initLonghair();
         initCache();
-        //blocksPerRegion = (LonghairLib.k + LonghairLib.m) / s3Connections.size();
 
         if (executor == null) {
             final int threadsNum = Integer.valueOf(propertyFactory.propertiesMap.get(PropertyFactory.EXECUTOR_THREADS_PROPERTY));
@@ -131,10 +132,16 @@ public class DynamicCacheClient extends ClientBlueprint {
             executor.shutdown();
     }
 
+    /**
+     * Compute which blocks are stored in the given region
+     *
+     * @param region name of region
+     * @return list of block ids stored in that region
+     */
     private List<Integer> getBlockIdsByRegion(String region) {
         List<Integer> blockIds = new ArrayList<Integer>();
 
-        // identify connection id
+        // identify connection id corresponding to region
         int s3connId = Integer.MIN_VALUE;
         for (int i = 0; i < s3Connections.size(); i++) {
             String name = s3Connections.get(i).getRegion();
@@ -157,6 +164,12 @@ public class DynamicCacheClient extends ClientBlueprint {
         return blockIds;
     }
 
+    /**
+     * Read a block from the backend
+     * @param key base key of data the block is part of
+     * @param blockId id of the block within the data
+     * @return the block
+     */
     private ECBlock readBackendBlock(String key, int blockId) {
         String blockKey = key + blockId;
         //return new ECBlock(blockId, blockKey, new byte[699072], Storage.BACKEND);
@@ -173,18 +186,25 @@ public class DynamicCacheClient extends ClientBlueprint {
         return ecblock;
     }
 
+    /**
+     * Read blocks from backend, according to background recipe from proxy
+     * @param key base key of the data blocks are part of
+     * @param backendRecipe which blocks should be read from backend, according to proxy
+     * @return list of blocks
+     */
     public List<ECBlock> readBackend(final String key, List<String> backendRecipe) {
         List<ECBlock> ecblocks = new ArrayList<ECBlock>();
 
-        int blocksNum = 0;
+        int targetBlocksNum = 0;
         CompletionService<ECBlock> completionService = new ExecutorCompletionService<ECBlock>(executor);
 
         // for each region
         for (final String region : backendRecipe) {
+            // compute block ids
             List<Integer> blockIds = getBlockIdsByRegion(region);
-            blocksNum += blockIds.size();
+            targetBlocksNum += blockIds.size();
 
-            // read each block
+            // try to read each block
             for (Integer blockId : blockIds) {
                 final int blockIdFin = blockId;
                 completionService.submit(new Callable<ECBlock>() {
@@ -196,9 +216,10 @@ public class DynamicCacheClient extends ClientBlueprint {
             }
         }
 
+        // wait to receive block num blocks
         int success = 0;
         int errors = 0;
-        while (success < blocksNum) {
+        while (success + errors < targetBlocksNum) {
             try {
                 Future<ECBlock> resultFuture = completionService.take();
                 ECBlock ecblock = resultFuture.get();
@@ -209,59 +230,77 @@ public class DynamicCacheClient extends ClientBlueprint {
                     errors++;
             } catch (Exception e) {
                 errors++;
-                logger.debug("Exception reading block.");
+                logger.warn("Error reading block for " + key);
             }
-            if (errors == blocksNum)
-                break;
         }
 
         return ecblocks;
     }
 
-    private void cacheBlock(String key, ECBlock ecblock) {
-        Status status = memConnection.insert(ecblock.getKey(), ecblock.getBytes());
+    /**
+     * Store a block in cache
+     *
+     * @param ecblock block to be cached
+     */
+    private void cacheBlock(ECBlock ecblock) {
+        String key = ecblock.getBaseKey();
+        Status status = memConnection.insert(ecblock.getBaseKey(), ecblock.getBytes());
         if (status == Status.OK)
             logger.debug("Cache  " + key + " block " + ecblock.getId() + " at " + memConnection.getHost());
         else
             logger.debug("[Error] Cache  " + key + " block " + ecblock.getId() + " at " + memConnection.getHost());
     }
 
+    /**
+     * Read block from cache; if it is not possible, fall back to the backend and cache the block in the background
+     * @param key base key of data the block is part of
+     * @param blockId id of block to read
+     * @return block (bytes of encoded data + where it was read from: cache or backend)
+     */
     private ECBlock readCacheBlock(final String key, int blockId) {
         String blockKey = key + blockId;
         byte[] bytes = memConnection.read(blockKey);
 
         ECBlock ecblock = null;
+        // try to read block from cache
         if (bytes != null) {
             logger.debug("CacheHit " + key + " block " + blockId);
             ecblock = new ECBlock(key, blockId, bytes, Storage.CACHE);
         } else {
+            // if not possible, read block from backend
             logger.debug("CacheMiss " + key + " block " + blockId);
             ecblock = readBackendBlock(key, blockId);
-            if (ecblock != null) {
-                final ECBlock ecblockFin = ecblock;
-                executor.submit(new Runnable() {
-                    @Override
-                    public void run() {
-                        cacheBlock(key, ecblockFin);
-                    }
-                });
-            }
+
+            // cache block in the background
+            final ECBlock ecblockFin = ecblock;
+            executor.submit(new Runnable() {
+                @Override
+                public void run() {
+                    cacheBlock(ecblockFin);
+                }
+            });
         }
         return ecblock;
     }
 
+    /**
+     * Read blocks from cache in parallel, according to cache recipe
+     * @param key base key of data to be read
+     * @param cacheRecipe which blocks are supposed to be in the cache (identified by region)
+     * @return list of blocks
+     */
     private List<ECBlock> readCache(final String key, List<String> cacheRecipe) {
         List<ECBlock> ecblocks = new ArrayList<ECBlock>();
 
-        int blocksNum = 0;
+        int targetBlocksNum = 0;
         CompletionService<ECBlock> completionService = new ExecutorCompletionService<ECBlock>(executor);
-
-        // for each region
+        // for each region in cache recipe
         for (final String region : cacheRecipe) {
+            // compute block ids
             List<Integer> blockIds = getBlockIdsByRegion(region);
-            blocksNum += blockIds.size();
+            targetBlocksNum += blockIds.size();
 
-            // read each block
+            // try to read each block from cache; if not possible, readCache falls back to backend
             for (Integer blockId : blockIds) {
                 final int blockIdFin = blockId;
                 completionService.submit(new Callable<ECBlock>() {
@@ -273,9 +312,10 @@ public class DynamicCacheClient extends ClientBlueprint {
             }
         }
 
+        // wait for an answer for each block (success / error)
         int success = 0;
         int errors = 0;
-        while (success < blocksNum) {
+        while (success + errors < targetBlocksNum) {
             try {
                 Future<ECBlock> resultFuture = completionService.take();
                 ECBlock ecblock = resultFuture.get();
@@ -286,56 +326,54 @@ public class DynamicCacheClient extends ClientBlueprint {
                     errors++;
             } catch (Exception e) {
                 errors++;
-                logger.debug("Exception reading block.");
+                logger.warn("Error reading block for " + key);
             }
-            if (errors == blocksNum)
-                break;
         }
-
-        int fromCache = 0;
-        for (ECBlock ecblock : ecblocks) {
-            if (ecblock.getStorage() == Storage.CACHE)
-                fromCache++;
-        }
-
-        if (blocksNum > 0 && fromCache == blocksNum)
-            cacheHits.incrementAndGet();
-        else if (fromCache > 0 && fromCache < blocksNum)
-            cachePartialHits.incrementAndGet();
-        else if (fromCache == 0)
-            cacheMisses.incrementAndGet();
-
         return ecblocks;
     }
 
+    /**
+     * Read data item identified by key
+     * @param key identifier for a data item
+     * @param keyNum number based on which this key was generated
+     * @return actual bytes of the data item
+     */
     @Override
     public byte[] read(final String key, final int keyNum) {
-        final ProxyReply reply = proxyConnection.sendRequest(key);
-        //logger.info(reply.prettyPrint());
+        // request info from proxy
+        final ProxyReply reply = proxyConnection.requestRecipe(key);
+        logger.debug(reply.prettyPrint());
+        List<String> cacheRecipe = reply.getCacheRecipe();
+        List<String> backendRecipe = reply.getBackendRecipe();
 
-        // read from cache and backend in parallel
+        // read blocks in parallel according to cache and backend recipes from proxy
         List<ECBlock> ecblocks = new ArrayList<ECBlock>();
         CompletionService<List<ECBlock>> completionService = new ExecutorCompletionService<List<ECBlock>>(executor);
-        if (reply.getCacheRecipe().size() > 0) {
+
+        // read blocks from cache (readCache will fall back to backend, if need be)
+        if (cacheRecipe.size() > 0) {
             completionService.submit(new Callable<List<ECBlock>>() {
                 @Override
                 public List<ECBlock> call() throws Exception {
-                    return readCache(key, reply.getCacheRecipe());
+                    return readCache(key, cacheRecipe);
                 }
             });
         } else {
+            // if no block is cached for this key not cached, count this read as a cache miss
             cacheMisses.incrementAndGet();
         }
-        if (reply.getS3Recipe().size() > 0) {
+
+        // read blocks from backend
+        if (backendRecipe.size() > 0) {
             completionService.submit(new Callable<List<ECBlock>>() {
                 @Override
                 public List<ECBlock> call() throws Exception {
-                    return readBackend(key, reply.getS3Recipe());
+                    return readBackend(key, backendRecipe);
                 }
             });
         }
 
-        // wait for at least k blocks in total
+        // wait for k blocks (note: the proxy does not try to cache more than k blocks)
         int success = 0;
         int errors = 0;
         while (success < LonghairLib.k) {
@@ -355,6 +393,7 @@ public class DynamicCacheClient extends ClientBlueprint {
                 break;
         }
 
+        // extract bytes from blocks + count how many blocks were read from cache and how many from backend
         Set<byte[]> blockBytes = new HashSet<byte[]>();
         int fromCache = 0;
         int fromBackend = 0;
@@ -366,27 +405,26 @@ public class DynamicCacheClient extends ClientBlueprint {
                 fromBackend++;
         }
 
+        // stats: this was a hit / miss / partial hit
+        if (fromCache > 0) {
+            if (fromBackend == 0) {
+                // all blocks read from cache
+                cacheHits.incrementAndGet();
+            } else {
+                // subset of blocks read from cache
+                cachePartialHits.incrementAndGet();
+            }
+        } else {
+            if (fromBackend > 0) {
+                // all blocks read from backend
+                cacheMisses.incrementAndGet();
+            }
+        }
+
+        // decode data + return it
         byte[] data = LonghairLib.decode(blockBytes);
         logger.info("Read " + key + " " + data.length + " bytes Cache: " + fromCache + " Backend: " + fromBackend);
-
         return data;
-
-        // get data from backend
-        /*byte[] data = readS3(key);
-
-        // cache data
-        Status insertst = memConnection.insert(key, data);
-        logger.info("insert: " + insertst);
-
-        // remove data
-        Status delst = memConnection.delete(key);
-        logger.info("delete: " + delst);*/
-
-        /*try {
-            Thread.sleep(500);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }*/
     }
 
     @Override

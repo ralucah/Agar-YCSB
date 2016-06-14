@@ -5,22 +5,22 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ProxyReply implements Serializable {
-    private static final long serialVersionUID = 7526472295622776148L;
+    private static final long serialVersionUID = 7526472295622776148L; // for serialization
 
-    private List<String> s3Recipe; // s3 region names
-    private List<String> cacheRecipe; // s3 region names
+    private List<String> backendRecipe; // fetch from backend blocks from these regions
+    private List<String> cacheRecipe; // fetch from cache blocks from these regions
 
     public ProxyReply() {
-        s3Recipe = new ArrayList<String>();
+        backendRecipe = new ArrayList<String>();
         cacheRecipe = new ArrayList<String>();
     }
 
-    public void addToS3Recipe(String region) {
-        s3Recipe.add(region);
+    public void addToBackendRecipe(String region) {
+        backendRecipe.add(region);
     }
 
-    public List<String> getS3Recipe() {
-        return s3Recipe;
+    public List<String> getBackendRecipe() {
+        return backendRecipe;
     }
 
     public List<String> getCacheRecipe() {
@@ -32,8 +32,8 @@ public class ProxyReply implements Serializable {
     }
 
     public String prettyPrint() {
-        String str = "ProxyReply: S3{ ";
-        for (String s3Region : s3Recipe)
+        String str = "ProxyReply: Backend{ ";
+        for (String s3Region : backendRecipe)
             str += s3Region + " ";
         str += "} Cache{ ";
         for (String cacheFromRegion : cacheRecipe)

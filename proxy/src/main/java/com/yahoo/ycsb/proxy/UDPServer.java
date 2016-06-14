@@ -21,20 +21,20 @@ import java.util.concurrent.Executors;
 public class UDPServer implements Runnable {
     protected static Logger logger = Logger.getLogger(UDPServer.class);
 
-    protected static ExecutorService executor;
-    protected static int packetSize;
-    private static DynamicCacheManager cacheManager;
+    protected ExecutorService executor;
+    protected int packetSize;
+    private DynamicCacheManager cacheManager;
     private DatagramSocket socket;
-    private int k = 6;
+    private int k;
 
     public UDPServer() {
-
         // threads
         int executorThreads = Integer.valueOf(PropertyFactory.propertiesMap.get(PropertyFactory.EXECUTOR_THREADS_PROPERTY));
-        //System.err.println("Executor threads: " + executorThreads);
+        logger.debug("Executor threads: " + executorThreads);
 
         // packet size for UDP communication
         packetSize = Integer.valueOf(PropertyFactory.propertiesMap.get(PropertyFactory.PACKET_SIZE_PROPERTY));
+        logger.debug("Packet size: " + packetSize);
 
         // address of current server
         String proxyHost = PropertyFactory.propertiesMap.get(PropertyFactory.PROXY_PROPERTY);
@@ -57,17 +57,17 @@ public class UDPServer implements Runnable {
         // executor service
         executor = Executors.newFixedThreadPool(executorThreads);
 
-        // greedy cache manager
+        // dynamic cache manager
         cacheManager = new DynamicCacheManager();
 
-        System.err.println("Proxy server running on " + proxyHost);
+        logger.warn("Proxy server running on " + proxyHost);
     }
 
     public static void usageMessage() {
-        System.out.println("Usage: java com.yahoo.ycsb.proxy.UDPServer [options]");
-        System.out.println("Options:");
-        System.out.println("-threads n: execute using n threads (default: 1) - \"-p threadcount\"");
-        System.out.println("-P propertyfile: load properties from the given file");
+        logger.warn("Usage: java com.yahoo.ycsb.proxy.UDPServer [options]");
+        logger.warn("Options:");
+        logger.warn("-threads n: execute using n threads (default: 1) - \"-p threadcount\"");
+        logger.warn("-P propertyfile: load properties from the given file");
     }
 
     public static void main(String args[]) {
@@ -102,7 +102,7 @@ public class UDPServer implements Runnable {
                 try {
                     fileprops.load(new FileInputStream(propfile));
                 } catch (IOException e) {
-                    System.out.println(e.getMessage());
+                    logger.error(e.getMessage());
                     System.exit(0);
                 }
 
@@ -130,7 +130,7 @@ public class UDPServer implements Runnable {
                 //System.out.println("["+name+"]=["+value+"]");
                 argindex++;
             } else {
-                System.out.println("Unknown option " + args[argindex]);
+                logger.warn("Unknown option " + args[argindex]);
                 usageMessage();
                 System.exit(0);
             }
@@ -152,16 +152,21 @@ public class UDPServer implements Runnable {
         server.run();
     }
 
+    /**
+     * Handle client request
+     *
+     * @param packet received from client
+     */
     protected void handle(final DatagramPacket packet) {
         // get request from client
         ProxyRequest request = Serializer.deserializeRequest(packet.getData());
         InetAddress clientAddress = packet.getAddress();
         int clientPort = packet.getPort();
-        //logger.info(request.prettyPrint()); // + " from " + clientAddress + ":" + clientPort);
+        logger.debug(request.prettyPrint()); // + " from " + clientAddress + ":" + clientPort);
 
         // compute reply
         ProxyReply reply = cacheManager.buildReply(request.getKey());
-        //logger.info(reply.prettyPrint());// + " to " + clientAddress + ":" + clientPort);
+        logger.debug(reply.prettyPrint());// + " to " + clientAddress + ":" + clientPort);
 
         // send reply to client
         byte[] sendData = Serializer.serializeReply(reply);
@@ -173,6 +178,10 @@ public class UDPServer implements Runnable {
         }
     }
 
+    /**
+     * Handle each client request in a new thread from the executor thread pool
+     * @param packet received from client
+     */
     protected void handleAsync(final DatagramPacket packet) {
         executor.execute(new Runnable() {
             public void run() {
@@ -183,6 +192,7 @@ public class UDPServer implements Runnable {
 
     @Override
     public void run() {
+        // listen for requests from clients, and handle them asynchronously - in a new thread from the executor's thread pool
         byte[] receiveData = new byte[packetSize];
         while (true) {
             DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);

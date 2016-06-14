@@ -1,13 +1,11 @@
 package com.yahoo.ycsb.proxy;
 
-/**
- * Created by Raluca on 11.05.16.
- */
+// A region in the system deployment
 public class Region implements Comparable<Region> {
     private String name;
     private double latency;
     private String endpoint;
-    private int blocks;
+    private int blocks; // how many blocks are stored in this region
 
     public Region(String name, String endpoint) {
         this.name = name;
@@ -40,6 +38,7 @@ public class Region implements Comparable<Region> {
         return str;
     }
 
+    // Compare regions by latency
     @Override
     public int compareTo(Region o) {
         if (latency > o.getLatency())

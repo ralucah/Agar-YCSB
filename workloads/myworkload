@@ -36,7 +36,9 @@ blocksincache=3
 
 # proxy
 proxy=0.0.0.0:11000
-packetsize=1024
+proxy.packetsize=1024
+proxy.retries=3
+proxy.timeout=10000
 # in seconds
 period=30
 alpha=0.8

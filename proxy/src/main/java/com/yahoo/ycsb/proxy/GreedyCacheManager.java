@@ -216,7 +216,7 @@ public class GreedyCacheManager {
         int regionId = regionManager.getRegions().size() - 1;
         while (blocksBackend > 0 && regionId >= 0) {
             Region region = regionManager.getRegions().get(regionId);
-            reply.addToS3Recipe(region.getName());
+            reply.addToBackendRecipe(region.getName());
             blocksBackend -= region.getBlocks();
             regionId--;
         }

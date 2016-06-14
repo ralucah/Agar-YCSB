@@ -26,7 +26,7 @@ You can choose to download either the full stable version or just one of the ava
 
 ### 2. Configuration of the AWS credentials
 
-The access key ID and secret access key as well as the endPoint and region and the Client configurations like the maxErrorRetry can be set in a properties file under s3-binding/conf/s3.properties or sent by command line (see below).
+The access baseKey ID and secret access baseKey as well as the endPoint and region and the Client configurations like the maxErrorRetry can be set in a properties file under s3-binding/conf/s3.properties or sent by command line (see below).
 It is highly suggested to use the property file instead of to send the credentials through the command line.
     
 
@@ -75,5 +75,5 @@ The parameters to configure the S3 client can be set using the file "s3-binding/
   - This parameter set to true activates the Server Side Encryption.
 
 - `s3.ssec`
-  - This parameter if not null activates the SSE-C client side encryption. The value passed with this parameter is the client key used to encrpyt the files.
+  - This parameter if not null activates the SSE-C client side encryption. The value passed with this parameter is the client baseKey used to encrpyt the files.
 

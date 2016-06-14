@@ -7,15 +7,16 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+// Provides an overview of the system deployment
 public class RegionManager {
     protected static Logger logger = Logger.getLogger(RegionManager.class);
 
-    private List<Region> regions;
-    private int k;
-    private int m;
-    private double latencyMax;
+    private List<Region> regions; // regions where blocks are stored, sorted by read latency
+    private int k; // number of data chunks
+    private int m; // number of redundant data chunks
 
     public RegionManager() {
+        // init regions, k, m
         regions = new ArrayList<Region>();
         k = Integer.parseInt(PropertyFactory.propertiesMap.get(PropertyFactory.LONGHAIR_K_PROPERTY));
         m = Integer.parseInt(PropertyFactory.propertiesMap.get(PropertyFactory.LONGHAIR_M_PROPERTY));
@@ -23,12 +24,13 @@ public class RegionManager {
         List<String> regionNames = Arrays.asList(PropertyFactory.propertiesMap.get(PropertyFactory.S3_REGIONS_PROPERTY).split("\\s*,\\s*"));
         List<String> endpointNames = Arrays.asList(PropertyFactory.propertiesMap.get(PropertyFactory.S3_ENDPOINTS_PROPERTY).split("\\s*,\\s*"));
 
+        // for each region, compute time to wget a key
         for (int i = 0; i < regionNames.size(); i++) {
             String regionName = regionNames.get(i);
             String endpointName = endpointNames.get(i);
             Region region = new Region(regionName, endpointName);
-            double pingTime = wgetFake(endpointName);
-            region.setLatency(pingTime);
+            double wgetTime = wgetFake(endpointName);
+            region.setLatency(wgetTime);
             regions.add(region);
         }
 
@@ -38,13 +40,14 @@ public class RegionManager {
             region.incrementBlocks();
         }
 
+        // sort regions by latency
         Collections.sort(regions);
-        //Collections.reverse(regions);
 
-        latencyMax = regions.get(regionsSize - 1).getLatency();
+        // latency to read blocks from the furthest data center
+        //latencyMax = regions.get(regionsSize - 1).getLatency();
 
         for (Region region : regions)
-            System.err.println(region.prettyPrint());
+            logger.error(region.prettyPrint());
     }
 
     private double wgetFake(String host) {
@@ -127,12 +130,33 @@ public class RegionManager {
         return regions;
     }
 
-    public int getNumRegions() {
-        return regions.size();
-    }
+    // Computes the possible weights for the current deployment and returns it
+    public int[] getWeights() {
+        // select the regions to access in order to retrieve k data blocks
+        List<Region> selectedRegions = new ArrayList<Region>();
+        int blocks = 0;
+        for (Region region : regions) {
+            blocks += region.getBlocks();
+            selectedRegions.add(region);
+            if (blocks >= k)
+                break;
+        }
 
-    public double getLatencyMax() {
-        return latencyMax;
+        // sort selected regions decreasingly (when caching, priority is given to blocks from regions that are farthest)
+        Collections.reverse(selectedRegions);
+
+        // to compute possible weights, consider we cache blocks from one region, then two, and so on.
+        int[] weights = new int[selectedRegions.size()];
+        int index = 0;
+        int cummulativeWeight = 0;
+        for (Region region : selectedRegions) {
+            cummulativeWeight += region.getBlocks();
+            weights[index] = cummulativeWeight;
+            index++;
+        }
+        logger.debug("weights: " + Arrays.toString(weights));
+
+        return weights;
     }
 
 }

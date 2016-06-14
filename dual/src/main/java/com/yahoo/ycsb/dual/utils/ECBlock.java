@@ -1,16 +1,14 @@
 package com.yahoo.ycsb.dual.utils;
 
-/**
- * Created by Raluca on 14.04.16.
- */
+// An ecblock represents a block of erasure coded data
 public class ECBlock {
-    private int id;
-    private String key;
-    private byte[] bytes;
-    private Storage storage;
+    private String baseKey; // base key of the data the block is part of
+    private int id; // id of block within the data
+    private byte[] bytes; // encoded bytes
+    private Storage storage; // where the block was read from: cache or backend; used for stats
 
-    public ECBlock(String key, int id, byte[] bytes, Storage storage) {
-        this.key = key;
+    public ECBlock(String baseKey, int id, byte[] bytes, Storage storage) {
+        this.baseKey = baseKey;
         this.id = id;
         this.bytes = bytes;
         this.storage = storage;
@@ -20,8 +18,8 @@ public class ECBlock {
         return id;
     }
 
-    public String getKey() {
-        return key + id;
+    public String getBaseKey() {
+        return baseKey + id;
     }
 
     public byte[] getBytes() {

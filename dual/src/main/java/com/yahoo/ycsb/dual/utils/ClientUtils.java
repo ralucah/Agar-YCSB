@@ -65,7 +65,7 @@ public abstract class ClientUtils {
     /*public static Set<String> extractKeys(List<ReadResult> readResults) {
         Set<String> keys = new HashSet<String>();
         for (ReadResult res : readResults) {
-            keys.add(res.getKey());
+            keys.add(res.getBaseKey());
         }
         return keys;
     }*/

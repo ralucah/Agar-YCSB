@@ -290,7 +290,7 @@ public class ECCacheClient2 extends ClientBlueprint {
     private void cacheBlock(String key, ECBlock ecblock) {
         int memConnId = (ecblock.getId() + 1) % memConnections.size();
         MemcachedConnection memConnection = memConnections.get(memConnId);
-        Status status = memConnection.insert(ecblock.getKey(), ecblock.getBytes());
+        Status status = memConnection.insert(ecblock.getBaseKey(), ecblock.getBytes());
         if (status == Status.OK)
             logger.debug("Cache  " + key + " block " + ecblock.getId() + " at " + memConnection.getHost());
         else
