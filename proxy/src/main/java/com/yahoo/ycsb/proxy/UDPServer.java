@@ -60,7 +60,7 @@ public class UDPServer implements Runnable {
         // dynamic cache manager
         cacheManager = new DynamicCacheManager();
 
-        logger.warn("Proxy server running on " + proxyHost);
+        logger.info("Proxy server running on " + proxyHost);
     }
 
     public static void usageMessage() {

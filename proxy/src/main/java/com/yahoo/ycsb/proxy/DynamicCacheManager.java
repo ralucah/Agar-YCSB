@@ -12,8 +12,6 @@ import java.util.concurrent.TimeUnit;
 public class DynamicCacheManager {
     public static Logger logger = Logger.getLogger(DynamicCacheManager.class);
 
-    private final int period; // how often to recompute cache (ms)
-
     private Map<String, Integer> frequency; // hnumber of times each key was requested during the current period
     private Map<String, Double> weightedPopularity; // weighted popularity for all keys seen since the proxy start
     private double alpha; // coefficient for weighted popularity (between 0 and 1)
@@ -40,39 +38,35 @@ public class DynamicCacheManager {
         // overview of system deployment; regions are sorted by latency, in increasing order
         RegionManager regionManager = new RegionManager();
         weights = regionManager.getWeights();
+        logger.debug("weights: " + Arrays.toString(weights));
         regions = regionManager.getRegions();
 
         // cache size (in blocks); assume that 1 item = 1 mb (slab size in memcached)
         cacheCapacity = Integer.valueOf(PropertyFactory.propertiesMap.get(PropertyFactory.CACHE_SIZE_PROPERTY));
 
         // init cache, frequency, weighted popularity
-        cache = Collections.synchronizedList(new ArrayList<CachingOption>()); // thread that replies to client + thread that reconfigures cache
-        frequency = Collections.synchronizedMap(new HashMap<String, Integer>()); // thread that counts key acces + thread that reconfigures cache (resets)
-        weightedPopularity = new HashMap<String, Double>(); // only accessed from thead that reconfigures cache
+        cache = Collections.synchronizedList(new ArrayList<>()); // thread that replies to client + thread that reconfigures cache
+        frequency = Collections.synchronizedMap(new HashMap<>()); // thread that counts key acces + thread that reconfigures cache (resets)
+        weightedPopularity = new HashMap<>(); // only accessed from thead that reconfigures cache
 
         // init cache options, max values, and chosen options; only accessed from thead that reconfigures cache
-        cachingOptions = new HashMap<String, Map<Integer, CachingOption>>();
-        maxValue = new HashMap<Integer, Double>();
-        chosenOptions = new HashMap<Integer, List<CachingOption>>();
+        cachingOptions = new HashMap<>();
+        maxValue = new HashMap<>();
+        chosenOptions = new HashMap<>();
 
         // init alpha, period
         alpha = Double.parseDouble(PropertyFactory.propertiesMap.get(PropertyFactory.ALPHA_PROPERTY));
-        period = Integer.parseInt(PropertyFactory.propertiesMap.get(PropertyFactory.PERIOD_PROPERTY));
+        int period = Integer.parseInt(PropertyFactory.propertiesMap.get(PropertyFactory.PERIOD_PROPERTY));
         logger.debug("alpha: " + alpha + " period: " + period);
 
         // periodic thread that reconfigures cache
         ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
-        exec.scheduleAtFixedRate(new Runnable() {
-            @Override
-            public void run() {
-                computeCache();
-            }
-        }, period, period, TimeUnit.SECONDS);
+        exec.scheduleAtFixedRate((Runnable) () -> computeCache(), period, period, TimeUnit.SECONDS);
     }
 
     // called periodically to reconfigure the cache according to the new access patterns
     private void computeCache() {
-        logger.debug("computeCache BEGIN");
+        logger.info("computeCache BEGIN");
 
         // adjust weighted popularity based on frequency, then reset frequency
         prettyPrintFrequency();
@@ -84,7 +78,7 @@ public class DynamicCacheManager {
             // for each known key, compute caching options and build a total caching options set
             // compute known keys set: for each key add the value of the first caching option
             cachingOptions.clear();
-            keys = new ArrayList<Pair<String, Double>>();
+            keys = new ArrayList<>();
             for (Map.Entry<String, Double> entry : weightedPopularity.entrySet()) {
                 String key = entry.getKey();
                 Map<Integer, CachingOption> cachingOptionsKey = computeCachingOptionsForKey(key);
@@ -94,16 +88,9 @@ public class DynamicCacheManager {
                 keys.add(new Pair<>(key, first.getValue()));
                 logger.debug("keys.add(" + key + "," + first.getValue() + ")");
             }
-            //logger.debug("Keys: " + keys);
 
             // sort keys decreasingly by value
-            Collections.sort(keys, new Comparator<Pair<String, Double>>() {
-                @Override
-                public int compare(final Pair<String, Double> o1, final Pair<String, Double> o2) {
-                    return o1.getValue().compareTo(o2.getValue());
-                }
-            });
-            //logger.debug("Keys sorted increasingly by value: " + keys);
+            Collections.sort(keys, (o1, o2) -> o1.getValue().compareTo(o2.getValue()));
             Collections.reverse(keys);
             logger.debug("Keys sorted decreasingly by value: " + keys);
 
@@ -121,7 +108,7 @@ public class DynamicCacheManager {
             }
             prettyPrintCache();
         }
-        logger.debug("computeCache END");
+        logger.info("computeCache END");
     }
 
     // for all keys seen since proxy start, compute / adjust the weighted popularity based on the frequency
@@ -143,7 +130,7 @@ public class DynamicCacheManager {
         // also update weighted popularity for keys that were not encountered over the last period
         for (Map.Entry<String, Double> entry : weightedPopularity.entrySet()) {
             String key = entry.getKey();
-            if (frequency.containsKey(key) == false) {
+            if (!frequency.containsKey(key)) {
                 double oldWeightedPopularity = entry.getValue();
                 double newWeightedPopularity = (1 - alpha) * oldWeightedPopularity; // + alpha * 0
                 weightedPopularity.put(key, newWeightedPopularity);
@@ -158,7 +145,7 @@ public class DynamicCacheManager {
      * @return a set of caching options + their weights (in number of blocks)
      */
     private Map<Integer, CachingOption> computeCachingOptionsForKey(String key) {
-        Map<Integer, CachingOption> cachingOptionsKey = new HashMap<Integer, CachingOption>();
+        Map<Integer, CachingOption> cachingOptionsKey = new HashMap<>();
 
         // remember that regions are in increasing order of wget latency
         // compute which region to start from when caching blocks
@@ -177,8 +164,7 @@ public class DynamicCacheManager {
         int furthestCachedRegion = crtRegionId; // where to start caching blocks from
         // caching option attributes
         int blocks = 0; // how many blocks to cache
-        List<String> regionNames = new ArrayList<String>(); // from which regions to cache blocks
-        double latency = 0; // the latency saved by not accessing these regions
+        List<String> regionNames = new ArrayList<>(); // from which regions to cache blocks
         while (crtRegionId > 0 && blocks + blocksinMyRegion < k) {
             Region region = regions.get(crtRegionId);
             blocks += region.getBlocks();
@@ -187,12 +173,12 @@ public class DynamicCacheManager {
             // value = latency save * weighted popularity
             // latency save = latency(most distant region that i avoid) - latency(most distant region that i contact)
             double value = regions.get(furthestCachedRegion).getLatency() - regions.get(crtRegionId - 1).getLatency();
-            if (weightedPopularity.containsKey(key) == true) {
+            if (weightedPopularity.containsKey(key)) {
                 value *= weightedPopularity.get(key);
             }
 
             // add caching option
-            CachingOption option = new CachingOption(key, blocks, value, new ArrayList<String>(regionNames));
+            CachingOption option = new CachingOption(key, blocks, value, new ArrayList<>(regionNames));
             cachingOptionsKey.put(blocks, option);
 
             // next iteration
@@ -201,12 +187,12 @@ public class DynamicCacheManager {
 
         // final caching option: cache blocks from local region too
         regionNames.add(regions.get(myRegionId).getName());
-        double value = regions.get(furthestCachedRegion).getLatency() - regions.get(myRegionId).getLatency();
-        if (weightedPopularity.containsKey(key) == true) {
+        double value = regions.get(furthestCachedRegion).getLatency();// - regions.get(myRegionId).getLatency();
+        if (weightedPopularity.containsKey(key)) {
             value *= weightedPopularity.get(key);
         }
         blocks += regions.get(myRegionId).getBlocks();
-        CachingOption option = new CachingOption(key, blocks, value, new ArrayList<String>(regionNames));
+        CachingOption option = new CachingOption(key, blocks, value, new ArrayList<>(regionNames));
         cachingOptionsKey.put(blocks, option);
 
         // print key caching options
@@ -230,8 +216,7 @@ public class DynamicCacheManager {
         Map<Integer, CachingOption> cachingOptionsFirstKey = cachingOptions.get(firstKey);
         for (int weight : weights) {
             maxValue.put(weight, cachingOptionsFirstKey.get(weight).getValue());
-            List<CachingOption> chosenCachingOptions = new ArrayList<CachingOption>();
-            ;
+            List<CachingOption> chosenCachingOptions = new ArrayList<>();
             if (chosenOptions.get(weight) != null) {
                 chosenCachingOptions = chosenOptions.get(weight);
             }
@@ -274,7 +259,7 @@ public class DynamicCacheManager {
                     CachingOption lastAddedCachingOption = chosenOptions.get(weightToRelax).get(last);
 
                     // do not relax our own key
-                    if (lastAddedCachingOption.getKey() == co.getKey())
+                    if (lastAddedCachingOption.getKey().equals(co.getKey()))
                         continue;
 
                     if (lastAddedCachingOption.getWeight() > co.getWeight()) {
@@ -317,7 +302,7 @@ public class DynamicCacheManager {
                         if (newValue > prevValue) {
                             if (!cachingOptionsContainsKey(chosenOptions.get(weightToAddTo), co.getKey())) {
                                 maxValue.put(newWeight, newValue);
-                                chosenOptions.put(newWeight, new ArrayList<CachingOption>(chosenOptions.get(weightToAddTo)));
+                                chosenOptions.put(newWeight, new ArrayList<>(chosenOptions.get(weightToAddTo)));
                                 chosenOptions.get(newWeight).add(co);
                             }
                         }
@@ -325,7 +310,7 @@ public class DynamicCacheManager {
                         if (!cachingOptionsContainsKey(chosenOptions.get(weightToAddTo), co.getKey())) {
                             double newValue = maxValue.get(weightToAddTo) + co.getValue();
                             maxValue.put(newWeight, newValue);
-                            chosenOptions.put(newWeight, new ArrayList<CachingOption>(chosenOptions.get(weightToAddTo)));
+                            chosenOptions.put(newWeight, new ArrayList<>(chosenOptions.get(weightToAddTo)));
                             chosenOptions.get(newWeight).add(co);
                         }
                     }
@@ -404,34 +389,35 @@ public class DynamicCacheManager {
 
     // pretty prints //////////////////////////////////////////////////////////////
     private void prettyPrintFrequency() {
-        logger.debug("frequency {");
+        logger.info("frequency {");
         for (Map.Entry<String, Integer> entry : frequency.entrySet()) {
-            logger.debug(entry.getKey() + " " + entry.getValue());
+            logger.info(entry.getKey() + " " + entry.getValue());
         }
-        logger.debug("}");
+        logger.info("}");
     }
 
     private void prettyPrintWeightedPopularity() {
-        logger.debug("weightedPopularity {");
+        logger.info("weightedPopularity {");
         for (Map.Entry<String, Double> entry : weightedPopularity.entrySet()) {
-            logger.debug(entry.getKey() + " " + entry.getValue());
+            logger.info(entry.getKey() + " " + entry.getValue());
         }
-        logger.debug("}");
+        logger.info("}");
     }
 
     private void prettyPrintCache() {
-        logger.debug("cache {");
+        logger.info("cache {");
         for (CachingOption co : cache)
-            logger.debug(co.prettyPrint());
-        logger.debug("}");
+            logger.info(co.prettyPrint());
+        logger.info("}");
     }
 
     private void printChosenOptions() {
         logger.debug("chosenOptions {");
         for (Map.Entry<Integer, List<CachingOption>> entry : chosenOptions.entrySet()) {
             String str = entry.getKey().toString();
-            for (CachingOption co : entry.getValue())
+            for (CachingOption co : entry.getValue()) {
                 str += " " + co.prettyPrint();
+            }
             logger.debug(str);
         }
         logger.debug("}");
@@ -440,7 +426,7 @@ public class DynamicCacheManager {
     private void printMaxValue() {
         logger.debug("maxValue {");
         for (Map.Entry<Integer, Double> entry : maxValue.entrySet()) {
-            logger.debug(entry.getKey() + " " + entry.getValue());
+            logger.debug(entry.getKey() + " " + entry.getValue().intValue());
         }
         logger.debug("}");
     }

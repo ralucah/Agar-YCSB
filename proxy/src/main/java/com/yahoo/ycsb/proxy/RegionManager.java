@@ -13,13 +13,12 @@ public class RegionManager {
 
     private List<Region> regions; // regions where blocks are stored, sorted by read latency
     private int k; // number of data chunks
-    private int m; // number of redundant data chunks
 
     public RegionManager() {
         // init regions, k, m
-        regions = new ArrayList<Region>();
+        regions = new ArrayList<>();
         k = Integer.parseInt(PropertyFactory.propertiesMap.get(PropertyFactory.LONGHAIR_K_PROPERTY));
-        m = Integer.parseInt(PropertyFactory.propertiesMap.get(PropertyFactory.LONGHAIR_M_PROPERTY));
+        int m = Integer.parseInt(PropertyFactory.propertiesMap.get(PropertyFactory.LONGHAIR_M_PROPERTY));
 
         List<String> regionNames = Arrays.asList(PropertyFactory.propertiesMap.get(PropertyFactory.S3_REGIONS_PROPERTY).split("\\s*,\\s*"));
         List<String> endpointNames = Arrays.asList(PropertyFactory.propertiesMap.get(PropertyFactory.S3_ENDPOINTS_PROPERTY).split("\\s*,\\s*"));
@@ -133,7 +132,7 @@ public class RegionManager {
     // Computes the possible weights for the current deployment and returns it
     public int[] getWeights() {
         // select the regions to access in order to retrieve k data blocks
-        List<Region> selectedRegions = new ArrayList<Region>();
+        List<Region> selectedRegions = new ArrayList<>();
         int blocks = 0;
         for (Region region : regions) {
             blocks += region.getBlocks();
@@ -154,8 +153,6 @@ public class RegionManager {
             weights[index] = cummulativeWeight;
             index++;
         }
-        logger.debug("weights: " + Arrays.toString(weights));
-
         return weights;
     }
 

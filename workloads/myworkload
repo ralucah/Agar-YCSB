@@ -1,6 +1,6 @@
 fieldlength=4194304
 
-recordcount=3
+recordcount=10
 operationcount=100000
 workload=com.yahoo.ycsb.workloads.CoreWorkload
 
@@ -36,9 +36,9 @@ blocksincache=3
 
 # proxy
 proxy=0.0.0.0:11000
-proxy.packetsize=1024
-proxy.retries=3
-proxy.timeout=10000
+packetsize=1024
+retries=3
+timeout=10000
 # in seconds
 period=30
 alpha=0.8

@@ -12,9 +12,9 @@ import java.util.Properties;
 // Connection established between client and proxy; one connection per client thread
 public class ProxyConnection {
     public static String PROXY_PROPERTY = "proxy"; // ip:port
-    public static String RETRIES = "proxy.retries"; // number of send retries
-    public static String TIMEOUT = "proxy.timeout"; // in ms
-    public static String PACKETSIZE = "proxy.packetSize"; // in bytes
+    public static String RETRIES = "retries"; // number of send retries
+    public static String TIMEOUT = "timeout"; // in ms
+    public static String PACKETSIZE = "packetsize"; // in bytes
 
     protected static Logger logger = Logger.getLogger(ProxyConnection.class);
 

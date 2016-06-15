@@ -17,6 +17,8 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static com.yahoo.ycsb.dual.utils.PropertyFactory.*;
+
 /*
   IntelliJ
   Main: com.yahoo.ycsb.Client
@@ -51,13 +53,13 @@ public class DynamicCacheClient extends ClientBlueprint {
     private ExecutorService executor; // one executor per client thread
 
     private void initS3() {
-        List<String> regions = Arrays.asList(propertyFactory.propertiesMap.get(PropertyFactory.S3_REGIONS_PROPERTY).split("\\s*,\\s*"));
-        List<String> endpoints = Arrays.asList(propertyFactory.propertiesMap.get(PropertyFactory.S3_ENDPOINTS_PROPERTY).split("\\s*,\\s*"));
-        s3Buckets = Arrays.asList(propertyFactory.propertiesMap.get(PropertyFactory.S3_BUCKETS_PROPERTY).split("\\s*,\\s*"));
+        List<String> regions = Arrays.asList(propertyFactory.propertiesMap.get(S3_REGIONS_PROPERTY).split("\\s*,\\s*"));
+        List<String> endpoints = Arrays.asList(propertiesMap.get(S3_ENDPOINTS_PROPERTY).split("\\s*,\\s*"));
+        s3Buckets = Arrays.asList(propertyFactory.propertiesMap.get(S3_BUCKETS_PROPERTY).split("\\s*,\\s*"));
         if (s3Buckets.size() != endpoints.size() || endpoints.size() != regions.size())
             logger.error("Configuration error: #buckets = #regions = #endpoints");
 
-        s3Connections = new ArrayList<S3Connection>();
+        s3Connections = new ArrayList<>();
         for (int i = 0; i < s3Buckets.size(); i++) {
             String bucket = s3Buckets.get(i);
             String region = regions.get(i);
@@ -73,8 +75,8 @@ public class DynamicCacheClient extends ClientBlueprint {
     }
 
     private void initLonghair() {
-        LonghairLib.k = Integer.valueOf(propertyFactory.propertiesMap.get(PropertyFactory.LONGHAIR_K_PROPERTY));
-        LonghairLib.m = Integer.valueOf(propertyFactory.propertiesMap.get(PropertyFactory.LONGHAIR_M_PROPERTY));
+        LonghairLib.k = Integer.valueOf(propertyFactory.propertiesMap.get(LONGHAIR_K_PROPERTY));
+        LonghairLib.m = Integer.valueOf(propertyFactory.propertiesMap.get(LONGHAIR_M_PROPERTY));
         logger.debug("k: " + LonghairLib.k + " m: " + LonghairLib.m);
 
         // check k >= 0 and k < 256
@@ -95,7 +97,7 @@ public class DynamicCacheClient extends ClientBlueprint {
         proxyConnection = new ProxyConnection(getProperties());
 
         // connection to closest memcached server
-        String memHost = propertyFactory.propertiesMap.get(PropertyFactory.MEMCACHED_SERVER_PROPERTY);
+        String memHost = propertyFactory.propertiesMap.get(MEMCACHED_SERVER_PROPERTY);
         memConnection = new MemcachedConnection(memHost);
         logger.debug("Memcached connection " + memHost);
     }
@@ -117,7 +119,7 @@ public class DynamicCacheClient extends ClientBlueprint {
         initCache();
 
         if (executor == null) {
-            final int threadsNum = Integer.valueOf(propertyFactory.propertiesMap.get(PropertyFactory.EXECUTOR_THREADS_PROPERTY));
+            final int threadsNum = Integer.valueOf(propertyFactory.propertiesMap.get(EXECUTOR_THREADS_PROPERTY));
             logger.debug("threads num: " + threadsNum);
             executor = Executors.newFixedThreadPool(threadsNum);
         }
@@ -139,7 +141,7 @@ public class DynamicCacheClient extends ClientBlueprint {
      * @return list of block ids stored in that region
      */
     private List<Integer> getBlockIdsByRegion(String region) {
-        List<Integer> blockIds = new ArrayList<Integer>();
+        List<Integer> blockIds = new ArrayList<>();
 
         // identify connection id corresponding to region
         int s3connId = Integer.MIN_VALUE;
@@ -193,10 +195,10 @@ public class DynamicCacheClient extends ClientBlueprint {
      * @return list of blocks
      */
     public List<ECBlock> readBackend(final String key, List<String> backendRecipe) {
-        List<ECBlock> ecblocks = new ArrayList<ECBlock>();
+        List<ECBlock> ecblocks = new ArrayList<>();
 
         int targetBlocksNum = 0;
-        CompletionService<ECBlock> completionService = new ExecutorCompletionService<ECBlock>(executor);
+        CompletionService<ECBlock> completionService = new ExecutorCompletionService<>(executor);
 
         // for each region
         for (final String region : backendRecipe) {
@@ -394,7 +396,7 @@ public class DynamicCacheClient extends ClientBlueprint {
         }
 
         // extract bytes from blocks + count how many blocks were read from cache and how many from backend
-        Set<byte[]> blockBytes = new HashSet<byte[]>();
+        Set<byte[]> blockBytes = new HashSet<>();
         int fromCache = 0;
         int fromBackend = 0;
         for (ECBlock ecblock : ecblocks) {
