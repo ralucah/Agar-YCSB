@@ -42,7 +42,7 @@ public class ECCacheClient extends ClientBlueprint {
     private List<S3Connection> s3Connections;
     private MemcachedConnection memConnection;
     private int blocksincache;
-    private ExecutorService executor;
+    private ExecutorService executorRead, executorCache;
 
     // TODO Assumption: one bucket per region (num regions = num endpoints = num buckets)
     private void initS3() {
@@ -115,11 +115,10 @@ public class ECCacheClient extends ClientBlueprint {
         initCache();
 
         // init executor service
-        if (executor == null) {
-            final int threadsNum = Integer.valueOf(propertyFactory.propertiesMap.get(PropertyFactory.EXECUTOR_THREADS_PROPERTY));
-            logger.debug("threads num: " + threadsNum);
-            executor = Executors.newFixedThreadPool(threadsNum);
-        }
+        final int threadsNum = Integer.valueOf(propertyFactory.propertiesMap.get(PropertyFactory.EXECUTOR_THREADS_PROPERTY));
+        logger.debug("threads num: " + threadsNum);
+        executorRead = Executors.newFixedThreadPool(threadsNum);
+        executorCache = Executors.newFixedThreadPool(threadsNum);
 
         logger.debug("DualClient.init() end");
     }
@@ -127,8 +126,8 @@ public class ECCacheClient extends ClientBlueprint {
     @Override
     public void cleanup() throws ClientException {
         logger.error("Hits: " + cacheHits + " Misses: " + cacheMisses + " PartialHits: " + cachePartialHits);
-        if (executor.isTerminated())
-            executor.shutdownNow();
+        executorRead.shutdownNow();
+        executorCache.shutdownNow();
     }
 
     private ECBlock readBlockParallel(String key, int blockId) throws InterruptedException {
@@ -168,7 +167,7 @@ public class ECCacheClient extends ClientBlueprint {
         List<ECBlock> ecblocks = new ArrayList<ECBlock>();
 
         // read blocks in parallel from cache and backend
-        CompletionService<ECBlock> completionService = new ExecutorCompletionService<ECBlock>(executor);
+        CompletionService<ECBlock> completionService = new ExecutorCompletionService<ECBlock>(executorRead);
         for (int i = 0; i < LonghairLib.k + LonghairLib.m; i++) {
             final int blockNumFin = i;
             Future newTask = completionService.submit(new Callable<ECBlock>() {
@@ -228,7 +227,7 @@ public class ECCacheClient extends ClientBlueprint {
 
         // cache in background
         if (fromCache == 0 && fromBackend > 0) {
-            executor.submit(new Runnable() {
+            executorCache.submit(new Runnable() {
                 @Override
                 public void run() {
                     int counter = 0;
