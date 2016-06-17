@@ -21,7 +21,12 @@ public class LonghairLib {
 
     public static byte[] decode(Set<byte[]> blockBytes) {
         //Block.ByReference[] blocks = new Block.ByReference[blocksBytes.size()];
-        Block[] blocks = (Block[]) new Block().toArray(blockBytes.size());
+        Block[] blocks;
+        try {
+            blocks = (Block[]) new Block().toArray(blockBytes.size());
+        } catch (ArrayIndexOutOfBoundsException e) {
+            return null;
+        }
         /*for (int i = 0; i < blocksBytes.size(); i++) {
             blocks[i] = new Block();  // .ByReference();
         }*/

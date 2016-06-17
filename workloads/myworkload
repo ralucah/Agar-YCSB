@@ -1,7 +1,7 @@
-fieldlength=4194304
+fieldlength=1048576
 
-recordcount=10
-operationcount=100000
+recordcount=100
+operationcount=1000000
 workload=com.yahoo.ycsb.workloads.CoreWorkload
 
 insertstart=0
@@ -32,7 +32,7 @@ longhair.m=3
 executor.threads=20
 
 # eccache client
-blocksincache=3
+blocksincache=5
 
 # proxy
 proxy=0.0.0.0:11000
@@ -40,7 +40,7 @@ packetsize=1024
 retries=3
 timeout=10000
 # in seconds
-period=30
+period=40
 alpha=0.8
 # in mb
-cachesize=50
+cachesize=44

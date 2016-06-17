@@ -1,5 +1,8 @@
 package com.yahoo.ycsb.proxy;
 
+import com.yahoo.ycsb.ClientException;
+import com.yahoo.ycsb.common.properties.PropertyFactory;
+import com.yahoo.ycsb.common.s3.S3Connection;
 import org.apache.log4j.Logger;
 
 import java.util.ArrayList;
@@ -20,18 +23,7 @@ public class RegionManager {
         k = Integer.parseInt(PropertyFactory.propertiesMap.get(PropertyFactory.LONGHAIR_K_PROPERTY));
         int m = Integer.parseInt(PropertyFactory.propertiesMap.get(PropertyFactory.LONGHAIR_M_PROPERTY));
 
-        List<String> regionNames = Arrays.asList(PropertyFactory.propertiesMap.get(PropertyFactory.S3_REGIONS_PROPERTY).split("\\s*,\\s*"));
-        List<String> endpointNames = Arrays.asList(PropertyFactory.propertiesMap.get(PropertyFactory.S3_ENDPOINTS_PROPERTY).split("\\s*,\\s*"));
-
-        // for each region, compute time to wget a key
-        for (int i = 0; i < regionNames.size(); i++) {
-            String regionName = regionNames.get(i);
-            String endpointName = endpointNames.get(i);
-            Region region = new Region(regionName, endpointName);
-            double wgetTime = wgetFake(endpointName);
-            region.setLatency(wgetTime);
-            regions.add(region);
-        }
+        initS3();
 
         int regionsSize = regions.size();
         for (int i = 0; i < k + m; i++) {
@@ -47,6 +39,62 @@ public class RegionManager {
 
         for (Region region : regions)
             logger.error(region.prettyPrint());
+    }
+
+    private void initS3() {
+        List<String> regionNames = Arrays.asList(PropertyFactory.propertiesMap.get(PropertyFactory.S3_REGIONS_PROPERTY).split("\\s*,\\s*"));
+        List<String> endpointNames = Arrays.asList(PropertyFactory.propertiesMap.get(PropertyFactory.S3_ENDPOINTS_PROPERTY).split("\\s*,\\s*"));
+        List<String> s3BucketNames = Arrays.asList(PropertyFactory.propertiesMap.get(PropertyFactory.S3_BUCKETS_PROPERTY).split("\\s*,\\s*"));
+        if (s3BucketNames.size() != endpointNames.size() || endpointNames.size() != regionNames.size())
+            logger.error("Configuration error: #buckets = #regions = #endpoints");
+
+        List<S3Connection> s3Connections = new ArrayList<>();
+        for (int i = 0; i < s3BucketNames.size(); i++) {
+            String bucket = s3BucketNames.get(i);
+            String regionName = regionNames.get(i);
+            String endpoint = endpointNames.get(i);
+            try {
+                S3Connection client = new S3Connection(s3BucketNames.get(i), regionNames.get(i), endpointNames.get(i));
+                s3Connections.add(client);
+                logger.debug("S3 connection " + i + " " + bucket + " " + regionName + " " + endpoint);
+
+                Region region = new Region(regionName, endpoint);
+                double latency = read(endpoint, client);
+                region.setLatency(latency);
+                regions.add(region);
+            } catch (ClientException e) {
+                logger.error("Error connecting to " + s3BucketNames.get(i));
+            }
+        }
+    }
+
+    private double read(String host, S3Connection s3conn) {
+        double avgTime = Double.MIN_VALUE;
+        String key = null;
+        if (host.contains("sa-east-1"))  // sao
+            key = "key10003851782042273600";
+        else if (host.contains("external-1")) // virginia
+            key = "key10003851782042273601";
+        else if (host.contains("eu-west-1")) // ireland
+            key = "key10003851782042273602";
+        else if (host.contains("eu-central-1")) // frankfurt
+            key = "key10003851782042273603";
+        else if (host.contains("ap-northeast-1")) // tokyo
+            key = "key10003851782042273604";
+        else if (host.contains("ap-southeast-2")) // sydney
+            key = "key10003851782042273605";
+
+        if (key != null) {
+            long start = System.currentTimeMillis();
+            try {
+                s3conn.read(key);
+            } catch (InterruptedException e) {
+                logger.error("Error reading " + key + " from " + host);
+            }
+            avgTime = System.currentTimeMillis() - start;
+        }
+
+        return avgTime;
     }
 
     private double wgetFake(String host) {

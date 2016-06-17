@@ -5,8 +5,8 @@ import com.yahoo.ycsb.ClientException;
 import com.yahoo.ycsb.Status;
 import com.yahoo.ycsb.common.liberasure.LonghairLib;
 import com.yahoo.ycsb.common.memcached.MemcachedConnection;
-import com.yahoo.ycsb.dual.connections.S3Connection;
-import com.yahoo.ycsb.dual.utils.PropertyFactory;
+import com.yahoo.ycsb.common.properties.PropertyFactory;
+import com.yahoo.ycsb.common.s3.S3Connection;
 import org.apache.log4j.Logger;
 
 import java.util.*;
@@ -40,7 +40,7 @@ public class LocalCacheClient extends ClientBlueprint {
     // S3 bucket names mapped to connections to AWS S3 buckets
     private List<S3Connection> s3Connections;
     private MemcachedConnection memConnection;
-    private ExecutorService executor;
+    private ExecutorService executorRead, executorCache;
 
     // TODO Assumption: one bucket per region (num regions = num endpoints = num buckets)
     private void initS3() {
@@ -109,11 +109,10 @@ public class LocalCacheClient extends ClientBlueprint {
         initCache();
 
         // init executor service
-        if (executor == null) {
-            final int threadsNum = Integer.valueOf(propertyFactory.propertiesMap.get(PropertyFactory.EXECUTOR_THREADS_PROPERTY));
-            logger.debug("threads num: " + threadsNum);
-            executor = Executors.newFixedThreadPool(threadsNum);
-        }
+        final int threadsNum = Integer.valueOf(propertyFactory.propertiesMap.get(PropertyFactory.EXECUTOR_THREADS_PROPERTY));
+        logger.debug("threads num: " + threadsNum);
+        executorRead = Executors.newFixedThreadPool(threadsNum);
+        executorCache = Executors.newFixedThreadPool(threadsNum);
 
         logger.debug("AllCachesClient.init() END");
     }
@@ -121,11 +120,11 @@ public class LocalCacheClient extends ClientBlueprint {
     @Override
     public void cleanup() throws ClientException {
         logger.error(memConnection.getHost() + " Hits: " + cacheHits + " Misses: " + cacheMisses);
-        if (executor.isTerminated())
-            executor.shutdown();
+        executorRead.shutdownNow();
+        executorCache.shutdownNow();
     }
 
-    private byte[] readBlock(String baseKey, int blockNum) {
+    private byte[] readBlock(String baseKey, int blockNum) throws InterruptedException {
         String blockKey = baseKey + blockNum;
         int s3ConnNum = blockNum % s3Connections.size();
         S3Connection s3Connection = s3Connections.get(s3ConnNum);
@@ -137,16 +136,18 @@ public class LocalCacheClient extends ClientBlueprint {
     }
 
     private byte[] readFromBackend(final String key) {
+        List<Future> tasks = new ArrayList<Future>();
         // read blocks in parallel
-        CompletionService<byte[]> completionService = new ExecutorCompletionService<byte[]>(executor);
+        CompletionService<byte[]> completionService = new ExecutorCompletionService<byte[]>(executorRead);
         for (int i = 0; i < LonghairLib.k + LonghairLib.m; i++) {
             final int blockNumFin = i;
-            completionService.submit(new Callable<byte[]>() {
+            Future newTask = completionService.submit(new Callable<byte[]>() {
                 @Override
                 public byte[] call() throws Exception {
                     return readBlock(key, blockNumFin);
                 }
             });
+            tasks.add(newTask);
         }
 
         int success = 0;
@@ -167,6 +168,10 @@ public class LocalCacheClient extends ClientBlueprint {
             }
             if (errors > LonghairLib.m)
                 break;
+        }
+
+        for (Future f : tasks) {
+            f.cancel(true);
         }
 
         byte[] data = null;
@@ -196,7 +201,7 @@ public class LocalCacheClient extends ClientBlueprint {
                 cacheMisses.incrementAndGet();
 
                 final byte[] dataFin = data;
-                executor.submit(new Runnable() {
+                executorCache.submit(new Runnable() {
                     @Override
                     public void run() {
                         cacheData(key, dataFin);

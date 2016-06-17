@@ -1,6 +1,7 @@
 package com.yahoo.ycsb.proxy;
 
 import com.yahoo.ycsb.common.communication.ProxyReply;
+import com.yahoo.ycsb.common.properties.PropertyFactory;
 import javafx.util.Pair;
 import org.apache.log4j.Logger;
 
@@ -375,12 +376,15 @@ public class DynamicCacheManager {
 
         // compute backend recipe
         int blocksBackend = k - blocksCache;
-        int regionId = regions.size() - 1;
-        while (blocksBackend > 0 && regionId >= 0) {
+        int regionId = 0;
+        while (blocksBackend > 0 && regionId < regions.size() - 1) {
             Region region = regions.get(regionId);
-            reply.addToBackendRecipe(region.getName());
-            blocksBackend -= region.getBlocks();
-            regionId--;
+            String regionName = region.getName();
+            if (!reply.cacheRecipeContains(regionName)) {
+                reply.addToBackendRecipe(regionName);
+                blocksBackend -= region.getBlocks();
+            }
+            regionId++;
         }
 
         //logger.debug(reply.prettyPrint());

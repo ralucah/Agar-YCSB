@@ -9,7 +9,7 @@ import com.yahoo.ycsb.ClientException;
 import com.yahoo.ycsb.Status;
 import com.yahoo.ycsb.common.liberasure.LonghairLib;
 import com.yahoo.ycsb.common.memcached.MemcachedConnection;
-import com.yahoo.ycsb.dual.connections.S3Connection;
+import com.yahoo.ycsb.common.s3.S3Connection;
 import com.yahoo.ycsb.dual.utils.ClientUtils;
 import org.apache.log4j.Logger;
 
@@ -135,7 +135,7 @@ public class FixCacheClient extends ClientBlueprint {
     }
 
 
-    private byte[] readBlock(String baseKey, int blockNum) {
+    private byte[] readBlock(String baseKey, int blockNum) throws InterruptedException {
         String blockKey = baseKey + blockNum;
         S3Connection s3Connection = s3Connections.get(blockNum);
         byte[] block = s3Connection.read(blockKey);
@@ -144,16 +144,18 @@ public class FixCacheClient extends ClientBlueprint {
     }
 
     private byte[] readFromBackend(final String key) {
+        List<Future> tasks = new ArrayList<Future>();
         // read blocks in parallel
         CompletionService<byte[]> completionService = new ExecutorCompletionService<byte[]>(executor);
         for (int i = 0; i < LonghairLib.k + LonghairLib.m; i++) {
             final int blockNumFin = i;
-            completionService.submit(new Callable<byte[]>() {
+            Future newTask = completionService.submit(new Callable<byte[]>() {
                 @Override
                 public byte[] call() throws Exception {
                     return readBlock(key, blockNumFin);
                 }
             });
+            tasks.add(newTask);
         }
 
         int success = 0;
@@ -174,6 +176,10 @@ public class FixCacheClient extends ClientBlueprint {
             }
             if (errors > LonghairLib.m)
                 break;
+        }
+
+        for (Future f : tasks) {
+            f.cancel(true);
         }
 
         byte[] data = null;

@@ -4,7 +4,7 @@ package com.yahoo.ycsb.dual.clients;
   IntelliJ
   Main: com.yahoo.ycsb.Client
   VM options: -Xmx3g
-  Program arguments: -client com.yahoo.ycsb.dual.clients.LocalCacheClient -p fieldlength=4194304 -P workloads/myworkload
+  Program arguments: -client com.yahoo.ycsb.dual.clients.BackendClient -p fieldlength=4194304 -P workloads/myworkload
   Working directory: /home/ubuntu/work/repos/YCSB
   Use classpath of module: root
   JRE: 1.8
@@ -14,17 +14,17 @@ package com.yahoo.ycsb.dual.clients;
    Command line:
    cd YCSB
    mvn clean package
-   bin/ycsb load backend -s -threads 1 -p fieldlength=4194304 -P workloads/myworkload
-   bin/ycsb run backend -threads 2 -p fieldlength=4194304 -P workloads/myworkload
+   bin/ycsb load backend -s -threads 1 -p fieldlength=1048576 -P workloads/myworkload
+   bin/ycsb run backend -threads 1 -p fieldlength=1048576 -P workloads/myworkload
 */
 
 import com.yahoo.ycsb.ClientBlueprint;
 import com.yahoo.ycsb.ClientException;
 import com.yahoo.ycsb.Status;
 import com.yahoo.ycsb.common.liberasure.LonghairLib;
-import com.yahoo.ycsb.dual.connections.S3Connection;
+import com.yahoo.ycsb.common.properties.PropertyFactory;
+import com.yahoo.ycsb.common.s3.S3Connection;
 import com.yahoo.ycsb.dual.utils.ClientUtils;
-import com.yahoo.ycsb.dual.utils.PropertyFactory;
 import org.apache.log4j.Logger;
 
 import java.util.*;
@@ -45,7 +45,6 @@ public class BackendClient extends ClientBlueprint {
     private ExecutorService executor;
     private List<String> s3Buckets;
 
-    // TODO Assumption: one bucket per region (num regions = num endpoints = num buckets)
     private void initS3() {
         List<String> regions = Arrays.asList(propertyFactory.propertiesMap.get(PropertyFactory.S3_REGIONS_PROPERTY).split("\\s*,\\s*"));
         List<String> endpoints = Arrays.asList(propertyFactory.propertiesMap.get(PropertyFactory.S3_ENDPOINTS_PROPERTY).split("\\s*,\\s*"));
@@ -104,7 +103,6 @@ public class BackendClient extends ClientBlueprint {
             logger.debug("threads num: " + threadsNum);
             executor = Executors.newFixedThreadPool(threadsNum);
         }
-
         logger.debug("BackendClient.init() end");
     }
 
@@ -112,32 +110,47 @@ public class BackendClient extends ClientBlueprint {
     public void cleanup() throws ClientException {
         logger.debug("Cleaning up.");
         if (executor.isTerminated())
-            executor.shutdown();
+            executor.shutdownNow();
     }
 
 
-    private byte[] readBlock(String baseKey, int blockNum) {
+    private byte[] readBlock(String baseKey, int blockNum) throws InterruptedException {
         String blockKey = baseKey + blockNum;
         int s3ConnNum = blockNum % s3Connections.size();
         S3Connection s3Connection = s3Connections.get(s3ConnNum);
         byte[] block = s3Connection.read(blockKey);
         //logger.debug("ReadBlock " + blockNum + " " + blockKey + " " + ClientUtils.bytesToHash(block));
-        logger.info("Read " + baseKey + " block" + blockNum + " " + block.length + " bucket " + s3Buckets.get(s3ConnNum));
+        logger.debug("ReadBlock " + baseKey + " " + blockNum + " " + s3Buckets.get(s3ConnNum));
         return block;
     }
 
     @Override
     public byte[] read(final String key, final int keyNum) {
+
+        //long starttime = System.currentTimeMillis();
+        List<Future> tasks = new ArrayList<Future>();
+
         // read blocks in parallel
         CompletionService<byte[]> completionService = new ExecutorCompletionService<byte[]>(executor);
         for (int i = 0; i < LonghairLib.k + LonghairLib.m; i++) {
+            //try {
             final int blockNumFin = i;
-            completionService.submit(new Callable<byte[]>() {
+            Future newTask = completionService.submit(new Callable<byte[]>() {
                 @Override
                 public byte[] call() throws Exception {
-                    return readBlock(key, blockNumFin);
+                    byte[] toRet = null;
+
+                    try {
+                        toRet = readBlock(key, blockNumFin);
+                    } catch (InterruptedException e) {
+                    }
+
+                    return toRet;
                 }
             });
+
+            tasks.add(newTask);
+            //} catch(RejectedExecutionException e) {}
         }
 
         int success = 0;
@@ -160,15 +173,22 @@ public class BackendClient extends ClientBlueprint {
                 break;
         }
 
+        for (Future f : tasks) {
+            f.cancel(true);
+        }
+
         byte[] data = null;
         if (success >= LonghairLib.k) {
             data = LonghairLib.decode(blocks);
         }
 
         if (data != null)
-            logger.info("Read " + key + " " + data.length + "B " + ClientUtils.bytesToHash(data));
+            logger.info("Read " + key + " " + data.length + "B"); // + ClientUtils.bytesToHash(data));
         else
             logger.error("Error reading " + key);
+
+        //long endtime = System.currentTimeMillis();
+        //System.out.println("Read: " + key + " " + starttime + ":" + endtime + " " + (endtime - starttime));
 
         return data;
     }
@@ -183,7 +203,7 @@ public class BackendClient extends ClientBlueprint {
         int s3ConnNum = blockNum % s3Connections.size();
         S3Connection s3Connection = s3Connections.get(s3ConnNum);
         Status status = s3Connection.insert(blockKey, block);
-        logger.info("Insert " + baseKey + " block" + blockNum + " " + block.length + " bucket " + s3Buckets.get(s3ConnNum));
+        logger.info("InsertBlock " + baseKey + " " + blockNum + " " + s3Buckets.get(s3ConnNum));
         return status;
     }
 

@@ -8,7 +8,7 @@ import com.yahoo.ycsb.ClientException;
 import com.yahoo.ycsb.Status;
 import com.yahoo.ycsb.common.liberasure.LonghairLib;
 import com.yahoo.ycsb.common.memcached.MemcachedConnection;
-import com.yahoo.ycsb.dual.connections.S3Connection;
+import com.yahoo.ycsb.common.s3.S3Connection;
 import com.yahoo.ycsb.dual.utils.ECBlock;
 import com.yahoo.ycsb.dual.utils.Storage;
 import org.apache.log4j.Logger;
@@ -187,7 +187,7 @@ public class ECCacheClient2 extends ClientBlueprint {
         return missing;
     }
 
-    private ECBlock readBlockBackend(String key, int blockId) {
+    private ECBlock readBlockBackend(String key, int blockId) throws InterruptedException {
         String blockKey = key + blockId;
         S3Connection s3Connection = s3Connections.get(blockId); //TODO
         byte[] bytes = s3Connection.read(blockKey);

@@ -19,6 +19,10 @@ public class ProxyReply implements Serializable {
         backendRecipe.add(region);
     }
 
+    public boolean cacheRecipeContains(String region) {
+        return cacheRecipe.contains(region);
+    }
+
     public List<String> getBackendRecipe() {
         return backendRecipe;
     }

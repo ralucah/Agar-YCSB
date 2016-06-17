@@ -1,4 +1,4 @@
-package com.yahoo.ycsb.proxy;
+package com.yahoo.ycsb.common.properties;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -32,10 +32,17 @@ public class PropertyFactory {
     /* number of processing threads in the proxy's executor pool */
     public static String EXECUTOR_THREADS_PROPERTY = "executor.threads";
 
+    public static String S3_BUCKETS_PROPERTY = "s3.buckets";
+
+    public static String MEMCACHED_SERVER_PROPERTY = "memcached.server";
+
+    /* eccache client */
+    public static String BLOCKS_IN_CACHE = "blocksincache";
+
     /* all known properties */
     public static Map<String, String> propertiesMap;
 
-    protected PropertyFactory(Properties properties) {
+    public PropertyFactory(Properties properties) {
         if (propertiesMap == null) {
             propertiesMap = new HashMap<String, String>();
 
@@ -43,14 +50,16 @@ public class PropertyFactory {
             propertiesMap.put(PACKET_SIZE_PROPERTY, properties.getProperty(PACKET_SIZE_PROPERTY));
             propertiesMap.put(CACHE_SIZE_PROPERTY, properties.getProperty(CACHE_SIZE_PROPERTY));
             propertiesMap.put(FIELD_LENGTH_PROPERTY, properties.getProperty(FIELD_LENGTH_PROPERTY));
-            //propertiesMap.put(MEMCACHED_SERVER_PROPERTY, properties.getProperty(MEMCACHED_SERVER_PROPERTY));
+            propertiesMap.put(MEMCACHED_SERVER_PROPERTY, properties.getProperty(MEMCACHED_SERVER_PROPERTY));
             propertiesMap.put(PROXY_PROPERTY, properties.getProperty(PROXY_PROPERTY));
             propertiesMap.put(LONGHAIR_K_PROPERTY, properties.getProperty(LONGHAIR_K_PROPERTY));
             propertiesMap.put(LONGHAIR_M_PROPERTY, properties.getProperty(LONGHAIR_M_PROPERTY));
             propertiesMap.put(S3_REGIONS_PROPERTY, properties.getProperty(S3_REGIONS_PROPERTY));
             propertiesMap.put(S3_ENDPOINTS_PROPERTY, properties.getProperty(S3_ENDPOINTS_PROPERTY));
+            propertiesMap.put(S3_BUCKETS_PROPERTY, properties.getProperty(S3_BUCKETS_PROPERTY));
             propertiesMap.put(PERIOD_PROPERTY, properties.getProperty(PERIOD_PROPERTY));
             propertiesMap.put(ALPHA_PROPERTY, properties.getProperty(ALPHA_PROPERTY));
+            propertiesMap.put(BLOCKS_IN_CACHE, properties.getProperty(BLOCKS_IN_CACHE));
         }
     }
 }

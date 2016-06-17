@@ -6,18 +6,16 @@ import com.yahoo.ycsb.Status;
 import com.yahoo.ycsb.common.communication.ProxyReply;
 import com.yahoo.ycsb.common.liberasure.LonghairLib;
 import com.yahoo.ycsb.common.memcached.MemcachedConnection;
+import com.yahoo.ycsb.common.properties.PropertyFactory;
+import com.yahoo.ycsb.common.s3.S3Connection;
 import com.yahoo.ycsb.dual.connections.ProxyConnection;
-import com.yahoo.ycsb.dual.connections.S3Connection;
 import com.yahoo.ycsb.dual.utils.ECBlock;
-import com.yahoo.ycsb.dual.utils.PropertyFactory;
 import com.yahoo.ycsb.dual.utils.Storage;
 import org.apache.log4j.Logger;
 
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import static com.yahoo.ycsb.dual.utils.PropertyFactory.*;
 
 /*
   IntelliJ
@@ -50,12 +48,13 @@ public class DynamicCacheClient extends ClientBlueprint {
     private MemcachedConnection memConnection;
     private ProxyConnection proxyConnection;
     private List<String> s3Buckets;
-    private ExecutorService executor; // one executor per client thread
+    private ExecutorService executorRead; // one executorRead per client thread
+    private ExecutorService executorCache;
 
     private void initS3() {
-        List<String> regions = Arrays.asList(propertyFactory.propertiesMap.get(S3_REGIONS_PROPERTY).split("\\s*,\\s*"));
-        List<String> endpoints = Arrays.asList(propertiesMap.get(S3_ENDPOINTS_PROPERTY).split("\\s*,\\s*"));
-        s3Buckets = Arrays.asList(propertyFactory.propertiesMap.get(S3_BUCKETS_PROPERTY).split("\\s*,\\s*"));
+        List<String> regions = Arrays.asList(PropertyFactory.propertiesMap.get(PropertyFactory.S3_REGIONS_PROPERTY).split("\\s*,\\s*"));
+        List<String> endpoints = Arrays.asList(PropertyFactory.propertiesMap.get(PropertyFactory.S3_ENDPOINTS_PROPERTY).split("\\s*,\\s*"));
+        s3Buckets = Arrays.asList(PropertyFactory.propertiesMap.get(PropertyFactory.S3_BUCKETS_PROPERTY).split("\\s*,\\s*"));
         if (s3Buckets.size() != endpoints.size() || endpoints.size() != regions.size())
             logger.error("Configuration error: #buckets = #regions = #endpoints");
 
@@ -75,8 +74,8 @@ public class DynamicCacheClient extends ClientBlueprint {
     }
 
     private void initLonghair() {
-        LonghairLib.k = Integer.valueOf(propertyFactory.propertiesMap.get(LONGHAIR_K_PROPERTY));
-        LonghairLib.m = Integer.valueOf(propertyFactory.propertiesMap.get(LONGHAIR_M_PROPERTY));
+        LonghairLib.k = Integer.valueOf(PropertyFactory.propertiesMap.get(PropertyFactory.LONGHAIR_K_PROPERTY));
+        LonghairLib.m = Integer.valueOf(PropertyFactory.propertiesMap.get(PropertyFactory.LONGHAIR_M_PROPERTY));
         logger.debug("k: " + LonghairLib.k + " m: " + LonghairLib.m);
 
         // check k >= 0 and k < 256
@@ -97,7 +96,7 @@ public class DynamicCacheClient extends ClientBlueprint {
         proxyConnection = new ProxyConnection(getProperties());
 
         // connection to closest memcached server
-        String memHost = propertyFactory.propertiesMap.get(MEMCACHED_SERVER_PROPERTY);
+        String memHost = propertyFactory.propertiesMap.get(propertyFactory.MEMCACHED_SERVER_PROPERTY);
         memConnection = new MemcachedConnection(memHost);
         logger.debug("Memcached connection " + memHost);
     }
@@ -118,11 +117,10 @@ public class DynamicCacheClient extends ClientBlueprint {
         initLonghair();
         initCache();
 
-        if (executor == null) {
-            final int threadsNum = Integer.valueOf(propertyFactory.propertiesMap.get(EXECUTOR_THREADS_PROPERTY));
-            logger.debug("threads num: " + threadsNum);
-            executor = Executors.newFixedThreadPool(threadsNum);
-        }
+        final int threadsNum = Integer.valueOf(propertyFactory.propertiesMap.get(propertyFactory.EXECUTOR_THREADS_PROPERTY));
+        logger.debug("threads num: " + threadsNum);
+        executorRead = Executors.newFixedThreadPool(threadsNum);
+        executorCache = Executors.newFixedThreadPool(threadsNum);
         logger.debug("SmartCacheClient.init() end");
     }
 
@@ -130,8 +128,8 @@ public class DynamicCacheClient extends ClientBlueprint {
     @Override
     public void cleanup() throws ClientException {
         logger.error("Hits: " + cacheHits + " Misses: " + cacheMisses + " PartialHits: " + cachePartialHits);
-        if (executor.isTerminated())
-            executor.shutdown();
+        executorRead.shutdownNow();
+        executorCache.shutdownNow();
     }
 
     /**
@@ -162,7 +160,7 @@ public class DynamicCacheClient extends ClientBlueprint {
             int blockId = i * s3ConnNum + s3connId;
             blockIds.add(blockId);
         }
-        logger.info(region + " " + blockIds);
+        logger.debug(region + " " + blockIds);
         return blockIds;
     }
 
@@ -172,7 +170,8 @@ public class DynamicCacheClient extends ClientBlueprint {
      * @param blockId id of the block within the data
      * @return the block
      */
-    private ECBlock readBackendBlock(String key, int blockId) {
+    private ECBlock readBackendBlock(String key, int blockId) throws InterruptedException {
+        long starttime = System.currentTimeMillis();
         String blockKey = key + blockId;
         //return new ECBlock(blockId, blockKey, new byte[699072], Storage.BACKEND);
         int s3ConnNum = blockId % s3Connections.size();
@@ -185,6 +184,8 @@ public class DynamicCacheClient extends ClientBlueprint {
         else
             logger.error("[Error] ReadBlockBackend " + key + " block" + blockId + " from bucket " + s3Buckets.get(s3ConnNum));
 
+        long endtime = System.currentTimeMillis();
+        //System.out.print(" readBlockBackend:" + (endtime - starttime));
         return ecblock;
     }
 
@@ -195,10 +196,11 @@ public class DynamicCacheClient extends ClientBlueprint {
      * @return list of blocks
      */
     public List<ECBlock> readBackend(final String key, List<String> backendRecipe) {
+        long starttime = System.currentTimeMillis();
         List<ECBlock> ecblocks = new ArrayList<>();
 
         int targetBlocksNum = 0;
-        CompletionService<ECBlock> completionService = new ExecutorCompletionService<>(executor);
+        CompletionService<ECBlock> completionService = new ExecutorCompletionService<>(executorRead);
 
         // for each region
         for (final String region : backendRecipe) {
@@ -235,7 +237,8 @@ public class DynamicCacheClient extends ClientBlueprint {
                 logger.warn("Error reading block for " + key);
             }
         }
-
+        long endtime = System.currentTimeMillis();
+        //System.out.print(" readBackend:" + (endtime - starttime));
         return ecblocks;
     }
 
@@ -245,12 +248,15 @@ public class DynamicCacheClient extends ClientBlueprint {
      * @param ecblock block to be cached
      */
     private void cacheBlock(ECBlock ecblock) {
+        long starttime = System.currentTimeMillis();
         String key = ecblock.getBaseKey();
         Status status = memConnection.insert(ecblock.getBaseKey(), ecblock.getBytes());
         if (status == Status.OK)
             logger.debug("Cache  " + key + " block " + ecblock.getId() + " at " + memConnection.getHost());
         else
             logger.debug("[Error] Cache  " + key + " block " + ecblock.getId() + " at " + memConnection.getHost());
+        long endtime = System.currentTimeMillis();
+        //System.out.print(" cacheBlock:" + (endtime - starttime));
     }
 
     /**
@@ -259,11 +265,12 @@ public class DynamicCacheClient extends ClientBlueprint {
      * @param blockId id of block to read
      * @return block (bytes of encoded data + where it was read from: cache or backend)
      */
-    private ECBlock readCacheBlock(final String key, int blockId) {
+    private ECBlock readCacheBlock(final String key, int blockId) throws InterruptedException {
+        long starttime = System.currentTimeMillis();
         String blockKey = key + blockId;
         byte[] bytes = memConnection.read(blockKey);
 
-        ECBlock ecblock = null;
+        ECBlock ecblock;
         // try to read block from cache
         if (bytes != null) {
             logger.debug("CacheHit " + key + " block " + blockId);
@@ -275,13 +282,15 @@ public class DynamicCacheClient extends ClientBlueprint {
 
             // cache block in the background
             final ECBlock ecblockFin = ecblock;
-            executor.submit(new Runnable() {
+            executorCache.submit(new Runnable() {
                 @Override
                 public void run() {
                     cacheBlock(ecblockFin);
                 }
             });
         }
+        long endtime = System.currentTimeMillis();
+        //System.out.print("readCacheBlock:" + (endtime - starttime));
         return ecblock;
     }
 
@@ -292,10 +301,11 @@ public class DynamicCacheClient extends ClientBlueprint {
      * @return list of blocks
      */
     private List<ECBlock> readCache(final String key, List<String> cacheRecipe) {
+        //long starttime = System.currentTimeMillis();
         List<ECBlock> ecblocks = new ArrayList<ECBlock>();
 
         int targetBlocksNum = 0;
-        CompletionService<ECBlock> completionService = new ExecutorCompletionService<ECBlock>(executor);
+        CompletionService<ECBlock> completionService = new ExecutorCompletionService<ECBlock>(executorRead);
         // for each region in cache recipe
         for (final String region : cacheRecipe) {
             // compute block ids
@@ -331,6 +341,8 @@ public class DynamicCacheClient extends ClientBlueprint {
                 logger.warn("Error reading block for " + key);
             }
         }
+        long endtime = System.currentTimeMillis();
+        //System.out.print(" readCache:" + (endtime - starttime));
         return ecblocks;
     }
 
@@ -342,40 +354,65 @@ public class DynamicCacheClient extends ClientBlueprint {
      */
     @Override
     public byte[] read(final String key, final int keyNum) {
+        //long t1, t2;
+        //long starttime = System.currentTimeMillis();
+
         // request info from proxy
         final ProxyReply reply = proxyConnection.requestRecipe(key);
-        logger.debug(reply.prettyPrint());
-        List<String> cacheRecipe = reply.getCacheRecipe();
-        List<String> backendRecipe = reply.getBackendRecipe();
+        //t1 = System.currentTimeMillis();
+        //System.out.println("proxyReplyT:" + (t1 - starttime));
 
+        if (reply == null)
+            return null;
+
+        logger.debug(reply.prettyPrint());
+        final List<String> cacheRecipe = reply.getCacheRecipe();
+        final List<String> backendRecipe = reply.getBackendRecipe();
+
+        List<Future> tasks = new ArrayList<Future>();
+
+        //t1 = System.currentTimeMillis();
         // read blocks in parallel according to cache and backend recipes from proxy
         List<ECBlock> ecblocks = new ArrayList<ECBlock>();
-        CompletionService<List<ECBlock>> completionService = new ExecutorCompletionService<List<ECBlock>>(executor);
+        CompletionService<List<ECBlock>> completionService = new ExecutorCompletionService<List<ECBlock>>(executorRead);
 
         // read blocks from cache (readCache will fall back to backend, if need be)
         if (cacheRecipe.size() > 0) {
-            completionService.submit(new Callable<List<ECBlock>>() {
-                @Override
-                public List<ECBlock> call() throws Exception {
-                    return readCache(key, cacheRecipe);
-                }
-            });
-        } else {
-            // if no block is cached for this key not cached, count this read as a cache miss
-            cacheMisses.incrementAndGet();
+            try {
+                Future newTask = completionService.submit(new Callable<List<ECBlock>>() {
+                    @Override
+                    public List<ECBlock> call() throws Exception {
+                        return readCache(key, cacheRecipe);
+                    }
+                });
+                tasks.add(newTask);
+            } catch (RejectedExecutionException e) {
+
+            }
         }
+        //t2 = System.currentTimeMillis();
+        //System.out.println("cacheRecipe: " + (t2 - t1) + " " + cacheRecipe);
 
         // read blocks from backend
+        //t1 = System.currentTimeMillis();
         if (backendRecipe.size() > 0) {
-            completionService.submit(new Callable<List<ECBlock>>() {
-                @Override
-                public List<ECBlock> call() throws Exception {
-                    return readBackend(key, backendRecipe);
-                }
-            });
+            try {
+                Future newTask = completionService.submit(new Callable<List<ECBlock>>() {
+                    @Override
+                    public List<ECBlock> call() throws Exception {
+                        return readBackend(key, backendRecipe);
+                    }
+                });
+                tasks.add(newTask);
+            } catch (RejectedExecutionException e) {
+
+            }
         }
+        //t2 = System.currentTimeMillis();
+        //System.out.println("backendRecipe: " + (t2 - t1) + " " + backendRecipe);
 
         // wait for k blocks (note: the proxy does not try to cache more than k blocks)
+        //t1 = System.currentTimeMillis();
         int success = 0;
         int errors = 0;
         while (success < LonghairLib.k) {
@@ -393,6 +430,13 @@ public class DynamicCacheClient extends ClientBlueprint {
             }
             if (errors > LonghairLib.m)
                 break;
+        }
+        //t2 = System.currentTimeMillis();
+        //System.out.println("wait for res: " + (t2 - t1));
+
+        // cancel unnecessary tasks
+        for (Future f : tasks) {
+            f.cancel(true);
         }
 
         // extract bytes from blocks + count how many blocks were read from cache and how many from backend
@@ -417,15 +461,26 @@ public class DynamicCacheClient extends ClientBlueprint {
                 cachePartialHits.incrementAndGet();
             }
         } else {
-            if (fromBackend > 0) {
                 // all blocks read from backend
                 cacheMisses.incrementAndGet();
-            }
         }
 
         // decode data + return it
-        byte[] data = LonghairLib.decode(blockBytes);
-        logger.info("Read " + key + " " + data.length + " bytes Cache: " + fromCache + " Backend: " + fromBackend);
+        //t1 = System.currentTimeMillis()
+        byte[] data = null;
+        //System.out.println(blockBytes.size() + " " + LonghairLib.k);
+        if (blockBytes.size() >= LonghairLib.k) ;
+        data = LonghairLib.decode(blockBytes);
+
+        //t2 = System.currentTimeMillis();
+        //System.out.println("decode: " + (t2 - t1));
+        if (data != null)
+            logger.info("Read " + key + " " + data.length + " bytes Cache: " + fromCache + " Backend: " + fromBackend);
+
+        //endtime = System.currentTimeMillis();
+        //System.out.println("Read: " + key + " " + starttime + ":" + endtime + " " + (endtime - starttime));
+        //System.exit(1);
+
         return data;
     }
 

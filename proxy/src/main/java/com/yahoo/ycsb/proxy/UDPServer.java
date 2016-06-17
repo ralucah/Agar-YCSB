@@ -3,6 +3,7 @@ package com.yahoo.ycsb.proxy;
 import com.yahoo.ycsb.common.communication.ProxyReply;
 import com.yahoo.ycsb.common.communication.ProxyRequest;
 import com.yahoo.ycsb.common.communication.Serializer;
+import com.yahoo.ycsb.common.properties.PropertyFactory;
 import org.apache.log4j.Logger;
 
 import java.io.FileInputStream;
@@ -25,7 +26,6 @@ public class UDPServer implements Runnable {
     protected int packetSize;
     private DynamicCacheManager cacheManager;
     private DatagramSocket socket;
-    private int k;
 
     public UDPServer() {
         // threads

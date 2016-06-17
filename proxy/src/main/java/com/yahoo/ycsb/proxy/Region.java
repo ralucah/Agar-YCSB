@@ -34,7 +34,7 @@ public class Region implements Comparable<Region> {
     }
 
     public String prettyPrint() {
-        String str = name + " " + latency + " " + blocks;
+        String str = name + " " + (int) latency + " " + blocks;
         return str;
     }
 

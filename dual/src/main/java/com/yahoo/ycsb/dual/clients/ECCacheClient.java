@@ -22,9 +22,9 @@ import com.yahoo.ycsb.ClientException;
 import com.yahoo.ycsb.Status;
 import com.yahoo.ycsb.common.liberasure.LonghairLib;
 import com.yahoo.ycsb.common.memcached.MemcachedConnection;
-import com.yahoo.ycsb.dual.connections.S3Connection;
+import com.yahoo.ycsb.common.properties.PropertyFactory;
+import com.yahoo.ycsb.common.s3.S3Connection;
 import com.yahoo.ycsb.dual.utils.ECBlock;
-import com.yahoo.ycsb.dual.utils.PropertyFactory;
 import com.yahoo.ycsb.dual.utils.Storage;
 import org.apache.log4j.Logger;
 
@@ -46,7 +46,7 @@ public class ECCacheClient extends ClientBlueprint {
 
     // TODO Assumption: one bucket per region (num regions = num endpoints = num buckets)
     private void initS3() {
-        List<String> regions = Arrays.asList(propertyFactory.propertiesMap.get(PropertyFactory.S3_REGIONS_PROPERTY).split("\\s*,\\s*"));
+        List<String> regions = Arrays.asList(PropertyFactory.propertiesMap.get(PropertyFactory.S3_REGIONS_PROPERTY).split("\\s*,\\s*"));
         List<String> endpoints = Arrays.asList(propertyFactory.propertiesMap.get(PropertyFactory.S3_ENDPOINTS_PROPERTY).split("\\s*,\\s*"));
         List<String> s3Buckets = Arrays.asList(propertyFactory.propertiesMap.get(PropertyFactory.S3_BUCKETS_PROPERTY).split("\\s*,\\s*"));
         if (s3Buckets.size() != endpoints.size() || endpoints.size() != regions.size())
@@ -128,10 +128,10 @@ public class ECCacheClient extends ClientBlueprint {
     public void cleanup() throws ClientException {
         logger.error("Hits: " + cacheHits + " Misses: " + cacheMisses + " PartialHits: " + cachePartialHits);
         if (executor.isTerminated())
-            executor.shutdown();
+            executor.shutdownNow();
     }
 
-    private ECBlock readBlockParallel(String key, int blockId) {
+    private ECBlock readBlockParallel(String key, int blockId) throws InterruptedException {
         String blockKey = key + blockId;
         byte[] bytes = memConnection.read(blockKey);
 
@@ -147,7 +147,7 @@ public class ECCacheClient extends ClientBlueprint {
         return ecblock;
     }
 
-    private ECBlock readBlockBackend(String key, int blockId) {
+    private ECBlock readBlockBackend(String key, int blockId) throws InterruptedException {
         String blockKey = key + blockId;
         int s3ConnNum = blockId % s3Connections.size();
         S3Connection s3Connection = s3Connections.get(s3ConnNum);
@@ -163,18 +163,21 @@ public class ECCacheClient extends ClientBlueprint {
     }
 
     private List<ECBlock> readParallel(final String key) {
+        List<Future> tasks = new ArrayList<Future>();
+
         List<ECBlock> ecblocks = new ArrayList<ECBlock>();
 
         // read blocks in parallel from cache and backend
         CompletionService<ECBlock> completionService = new ExecutorCompletionService<ECBlock>(executor);
         for (int i = 0; i < LonghairLib.k + LonghairLib.m; i++) {
             final int blockNumFin = i;
-            completionService.submit(new Callable<ECBlock>() {
+            Future newTask = completionService.submit(new Callable<ECBlock>() {
                 @Override
                 public ECBlock call() throws Exception {
                     return readBlockParallel(key, blockNumFin);
                 }
             });
+            tasks.add(newTask);
         }
 
         int success = 0;
@@ -195,6 +198,10 @@ public class ECCacheClient extends ClientBlueprint {
             }
             if (errors > LonghairLib.m)
                 break;
+        }
+
+        for (Future f : tasks) {
+            f.cancel(true);
         }
 
         return ecblocks;

@@ -16,7 +16,7 @@
  * <p>
  * S3 storage client binding for YCSB.
  */
-package com.yahoo.ycsb.dual.connections;
+package com.yahoo.ycsb.common.s3;
 
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.Protocol;
@@ -31,8 +31,8 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.InputStream;
-import java.util.Properties;
 
 // TODO assumption: there is one bucket per AWS region!
 
@@ -59,14 +59,14 @@ import java.util.Properties;
 public class S3Connection {
     private static Logger logger = Logger.getLogger(S3Connection.class);
 
-    private static String sse;
+    private static String sse = "false";
     private static SSECustomerKey ssecKey;
-    private static String accessKeyId;
-    private static String secretKey;
-    private static String maxErrorRetry;
+    private static String accessKeyId = "AKIAJVYH2P5WGTGXVR2Q";
+    private static String secretKey = "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";
+    private static String maxErrorRetry = "10";
     private static String maxConnections;
-    private static String protocol;
-    private static boolean init = true;
+    private static String protocol = "HTTP";
+    //private static boolean init = true;
 
     private AmazonS3Client awsClient;
     private String bucket;
@@ -76,10 +76,10 @@ public class S3Connection {
         logger.debug("S3Client.establishConnection(" + region + "," + endPoint + ") bucket: " + bucket);
         org.apache.log4j.Logger.getLogger("com.amazonaws").setLevel(Level.OFF);
 
-        if (S3Connection.init == true) {
+        /*if (S3Connection.init == true) {
             init();
             S3Connection.init = false;
-        }
+        }*/
 
         this.bucket = bucket;
         this.region = region;
@@ -113,41 +113,41 @@ public class S3Connection {
         return region;
     }
 
-    public void init() {
-        try {
-            InputStream propFile = S3Connection.class.getClassLoader()
-                .getResourceAsStream("s3.properties");
-            Properties props = new Properties();//System.getProperties());
-            props.load(propFile);
+    //public void init() {
+    //try {
+    //InputStream propFile = S3Connection.class.getClassLoader()
+    //    .getResourceAsStream("s3.properties");
+    //Properties props = new Properties();//System.getProperties());
+    //props.load(propFile);
 
-            accessKeyId = props.getProperty("s3.accessKeyId");
+    //accessKeyId = props.getProperty("s3.accessKeyId");
             //DualClient.logger.debug("s3.accessKeyId: " + accessKeyId);
 
-            secretKey = props.getProperty("s3.secretKey");
+    //secretKey = props.getProperty("s3.secretKey");
             //DualClient.logger.debug("s3.secretKey: " + secretKey);
 
-            maxErrorRetry = props.getProperty("s3.maxErrorRetry");
+    //maxErrorRetry = props.getProperty("s3.maxErrorRetry");
             //DualClient.logger.debug("s3.maxErrorRetry: " + maxErrorRetry);
 
-            maxConnections = props.getProperty("s3.maxConnections");
+    //maxConnections = props.getProperty("s3.maxConnections");
             //DualClient.logger.debug("s3.maxConnections: " + maxConnections);
 
-            protocol = props.getProperty("s3.protocol");
+    //protocol = props.getProperty("s3.protocol");
             //DualClient.logger.debug("s3.protocol: " + protocol);
 
-            sse = props.getProperty("s3.sse");
+    //sse = props.getProperty("s3.sse");
             //DualClient.logger.debug("s3.sse: " + sse);
 
-            String ssec = props.getProperty("s3.ssec");
-            if (ssec != null) {
-                ssecKey = new SSECustomerKey(ssec);
+    //String ssec = props.getProperty("s3.ssec");
+    //if (ssec != null) {
+    //    ssecKey = new SSECustomerKey(ssec);
                 //DualClient.logger.debug("ssecKey: " + ssecKey);
-            }
-        } catch (Exception e) {
-            logger.error("The file properties doesn't exist " + e.toString());
-            e.printStackTrace();
-        }
-    }
+    //}
+    //} catch (Exception e) {
+    //logger.error("The file properties doesn't exist " + e.toString());
+    //e.printStackTrace();
+    //}
+    //}
 
     /**
      * Clean up any state for this storage.
@@ -228,7 +228,8 @@ public class S3Connection {
         return Status.OK;
     }
 
-    public byte[] read(String key) {
+    public byte[] read(String key) throws InterruptedException {
+        //long starttime = System.currentTimeMillis();
         byte[] bytes = null;
         try {
             GetObjectRequest getObjectRequest = null;
@@ -248,14 +249,26 @@ public class S3Connection {
             bytes = new byte[sizeOfFile];
             int offset = 0;
             while (offset < sizeOfFile) {
+                int chunk_size;
+
+                //read in 4k chunks
+                chunk_size = sizeOfFile - offset > 4096 ? 4096 : sizeOfFile - offset;
+
                 int nr_bytes_read = objectData.read(bytes, offset, sizeOfFile - offset);
                 offset = offset + nr_bytes_read;
+
+                if (Thread.interrupted()) {
+                    //System.out.println("interrupt " + key);
+                    throw new InterruptedException();
+                }
             }
             //int nr_bytes_read = objectData.read(bytes, 0, sizeOfFile);
             objectData.close();
-        } catch (Exception e) {
+        } catch (IOException e) {
             logger.warn("Not possible to get the object " + key);
         }
+        //long endtime = System.currentTimeMillis();
+        //System.out.println("ReadS3: " + key + " " + (endtime - starttime) + " " + region);
         return bytes;
     }
 }

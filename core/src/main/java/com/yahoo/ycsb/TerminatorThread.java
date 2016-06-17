@@ -17,7 +17,6 @@
 package com.yahoo.ycsb;
 
 import java.util.List;
-import java.util.Vector;
 
 /**
  * A thread that waits for the maximum specified time and then interrupts all the client
@@ -61,6 +60,7 @@ public class TerminatorThread extends Thread {
           if (t.isAlive()) {
             System.out.println("Still waiting for thread " + t.getName() + " to complete. " +
                 "Workload status: " + workload.isStopRequested());
+              t.interrupt(); // raluca's try to avoid hanging here
           }
         } catch (InterruptedException e) {
           // Do nothing. Don't know why I was interrupted.
