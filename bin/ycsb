@@ -63,6 +63,11 @@ CLIENTS = {
     "dummy" : "com.yahoo.ycsb.dual.clients.DummyClient"
 }
 
+CACHEMANAGERS = {
+    "dynamic" : "com.yahoo.ycsb.proxy.DynamicCacheManager",
+    "lfu" : "com.yahoo.ycsb.proxy.LFUCacheManager"
+}
+
 BINDING = "dual"
 
 OPTIONS = {
@@ -169,6 +174,7 @@ def main():
     p.add_argument("command", choices=sorted(COMMANDS),
                    help="""Command to run.""")
     p.add_argument("client",nargs="?",choices=sorted(CLIENTS),help="""Client to test.""")
+    p.add_argument("-cachemanager",nargs="?",choices=sorted(CACHEMANAGERS),help="""Cache manager to test.""")
 
     # get home dir
     ycsb_home = get_ycsb_home()
@@ -215,9 +221,11 @@ def main():
         classpath = os.pathsep.join([args.classpath, classpath])
 
     if command == "proxy":
+        cachemanager_classname = CACHEMANAGERS[args.cachemanager]
+        print("cachemanager: " + cachemanager_classname)
         ycsb_command = ([java] + args.jvm_args +
                     ["-cp", classpath,
-                     main_classname] + remaining)
+                     main_classname, "-cachemanager", cachemanager_classname] + remaining)
     else:
         client_classname = CLIENTS[args.client]
         ycsb_command = ([java] + args.jvm_args +

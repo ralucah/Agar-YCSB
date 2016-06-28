@@ -10,12 +10,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-public class DynamicCacheManager extends CacheManagerBlueprint {
-    public static Logger logger = Logger.getLogger(DynamicCacheManager.class);
+public class LFUCacheManager extends CacheManagerBlueprint {
+    public static Logger logger = Logger.getLogger(LFUCacheManager.class);
 
     private Map<String, Integer> frequency; // number of times each key was requested during the current period
-    private Map<String, Double> weightedPopularity; // weighted popularity for all keys seen since the proxy start
-    private double alpha; // coefficient for weighted popularity (between 0 and 1)
 
     private int cacheCapacity; // how many blocks fit in the cache
     private List<CachingOption> cache; // current cache configuration
@@ -31,8 +29,8 @@ public class DynamicCacheManager extends CacheManagerBlueprint {
     private Map<Integer, Double> maxValue; // max value for each weight computed based on the caching options
     private Map<Integer, List<CachingOption>> chosenOptions; // for each weight, list of caching options that result in max value
 
-    public DynamicCacheManager() {
-        System.out.println("DynamicCacheManager constructor!");
+    public LFUCacheManager() {
+        System.out.println("LFUCacheManager constructor!");
         // erasure-coding params
         k = Integer.valueOf(PropertyFactory.propertiesMap.get(PropertyFactory.LONGHAIR_K_PROPERTY));
         m = Integer.valueOf(PropertyFactory.propertiesMap.get(PropertyFactory.LONGHAIR_M_PROPERTY));
@@ -49,17 +47,15 @@ public class DynamicCacheManager extends CacheManagerBlueprint {
         // init cache, frequency, weighted popularity
         cache = Collections.synchronizedList(new ArrayList<>()); // thread that replies to client + thread that reconfigures cache
         frequency = Collections.synchronizedMap(new HashMap<>()); // thread that counts key acces + thread that reconfigures cache (resets)
-        weightedPopularity = new HashMap<>(); // only accessed from thead that reconfigures cache
 
         // init cache options, max values, and chosen options; only accessed from thead that reconfigures cache
         cachingOptions = new HashMap<>();
         maxValue = new HashMap<>();
         chosenOptions = new HashMap<>();
 
-        // init alpha, period
-        alpha = Double.parseDouble(PropertyFactory.propertiesMap.get(PropertyFactory.ALPHA_PROPERTY));
+        // init period
         int period = Integer.parseInt(PropertyFactory.propertiesMap.get(PropertyFactory.PERIOD_PROPERTY));
-        logger.debug("alpha: " + alpha + " period: " + period);
+        logger.debug("period: " + period);
 
         // periodic thread that reconfigures cache
         ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
@@ -70,20 +66,17 @@ public class DynamicCacheManager extends CacheManagerBlueprint {
     private void computeCache() {
         logger.info("computeCache BEGIN");
 
-        // adjust weighted popularity based on frequency, then reset frequency
+        // display frequency
         prettyPrintFrequency();
-        computeWeightedPopularity();
-        synchronized (frequency) {
-            frequency.clear();
-        }
-        prettyPrintWeightedPopularity();
+        // TODO create copy
+        //frequency.clear();
 
-        if (weightedPopularity.size() > 0) {
+        if (frequency.size() > 0) {
             // for each known key, compute caching options and build a total caching options set
             // compute known keys set: for each key add the value of the first caching option
             cachingOptions.clear();
             keys = new ArrayList<>();
-            for (Map.Entry<String, Double> entry : weightedPopularity.entrySet()) {
+            for (Map.Entry<String, Integer> entry : frequency.entrySet()) {
                 String key = entry.getKey();
                 Map<Integer, CachingOption> cachingOptionsKey = computeCachingOptionsForKey(key);
                 cachingOptions.put(key, cachingOptionsKey);
@@ -113,33 +106,6 @@ public class DynamicCacheManager extends CacheManagerBlueprint {
             prettyPrintCache();
         }
         logger.info("computeCache END");
-    }
-
-    // for all keys seen since proxy start, compute / adjust the weighted popularity based on the frequency
-    // values from the last period
-    private void computeWeightedPopularity() {
-
-        for (Map.Entry<String, Integer> entry : frequency.entrySet()) {
-            String key = entry.getKey();
-            int freq = entry.getValue();
-
-            double oldWeightedPopularity = 0;
-            if (weightedPopularity.containsKey(key)) {
-                oldWeightedPopularity = weightedPopularity.get(key);
-            }
-
-            double newWeightedPopularity = alpha * freq + (1 - alpha) * oldWeightedPopularity;
-            weightedPopularity.put(key, newWeightedPopularity);
-        }
-        // also update weighted popularity for keys that were not encountered over the last period
-        for (Map.Entry<String, Double> entry : weightedPopularity.entrySet()) {
-            String key = entry.getKey();
-            if (!frequency.containsKey(key)) {
-                double oldWeightedPopularity = entry.getValue();
-                double newWeightedPopularity = (1 - alpha) * oldWeightedPopularity; // + alpha * 0
-                weightedPopularity.put(key, newWeightedPopularity);
-            }
-        }
     }
 
     /**
@@ -177,8 +143,8 @@ public class DynamicCacheManager extends CacheManagerBlueprint {
             // value = latency save * weighted popularity
             // latency save = latency(most distant region that i avoid) - latency(most distant region that i contact)
             double value = regions.get(furthestCachedRegion).getLatency() - regions.get(crtRegionId - 1).getLatency();
-            if (weightedPopularity.containsKey(key)) {
-                value *= weightedPopularity.get(key);
+            if (frequency.containsKey(key)) {
+                value *= frequency.get(key);
             }
 
             // add caching option
@@ -192,8 +158,8 @@ public class DynamicCacheManager extends CacheManagerBlueprint {
         // final caching option: cache blocks from local region too
         regionNames.add(regions.get(myRegionId).getName());
         double value = regions.get(furthestCachedRegion).getLatency();// - regions.get(myRegionId).getLatency();
-        if (weightedPopularity.containsKey(key)) {
-            value *= weightedPopularity.get(key);
+        if (frequency.containsKey(key)) {
+            value *= frequency.get(key);
         }
         blocks += regions.get(myRegionId).getBlocks();
         CachingOption option = new CachingOption(key, blocks, value, new ArrayList<>(regionNames));
@@ -396,7 +362,6 @@ public class DynamicCacheManager extends CacheManagerBlueprint {
         return reply;
     }
 
-    // pretty prints //////////////////////////////////////////////////////////////
     private void prettyPrintFrequency() {
         logger.info("frequency {");
         for (Map.Entry<String, Integer> entry : frequency.entrySet()) {
@@ -405,19 +370,12 @@ public class DynamicCacheManager extends CacheManagerBlueprint {
         logger.info("}");
     }
 
-    private void prettyPrintWeightedPopularity() {
-        logger.info("weightedPopularity {");
-        for (Map.Entry<String, Double> entry : weightedPopularity.entrySet()) {
-            logger.info(entry.getKey() + " " + entry.getValue());
+    private void printMaxValue() {
+        logger.debug("maxValue {");
+        for (Map.Entry<Integer, Double> entry : maxValue.entrySet()) {
+            logger.debug(entry.getKey() + " " + entry.getValue().intValue());
         }
-        logger.info("}");
-    }
-
-    private void prettyPrintCache() {
-        logger.info("cache {");
-        for (CachingOption co : cache)
-            logger.info(co.prettyPrint());
-        logger.info("}");
+        logger.debug("}");
     }
 
     private void printChosenOptions() {
@@ -432,11 +390,10 @@ public class DynamicCacheManager extends CacheManagerBlueprint {
         logger.debug("}");
     }
 
-    private void printMaxValue() {
-        logger.debug("maxValue {");
-        for (Map.Entry<Integer, Double> entry : maxValue.entrySet()) {
-            logger.debug(entry.getKey() + " " + entry.getValue().intValue());
-        }
-        logger.debug("}");
+    private void prettyPrintCache() {
+        logger.info("cache {");
+        for (CachingOption co : cache)
+            logger.info(co.prettyPrint());
+        logger.info("}");
     }
 }

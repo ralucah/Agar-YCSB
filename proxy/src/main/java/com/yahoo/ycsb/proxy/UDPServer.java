@@ -24,8 +24,10 @@ public class UDPServer implements Runnable {
 
     protected ExecutorService executor;
     protected int packetSize;
-    private DynamicCacheManager cacheManager;
+    private CacheManagerBlueprint cacheManager;
     private DatagramSocket socket;
+
+    private String cacheManagerName;
 
     public UDPServer() {
         // threads
@@ -58,7 +60,8 @@ public class UDPServer implements Runnable {
         executor = Executors.newFixedThreadPool(executorThreads);
 
         // dynamic cache manager
-        cacheManager = new DynamicCacheManager();
+        String cacheManagerName = PropertyFactory.propertiesMap.get(PropertyFactory.CACHE_MANAGER_PROPERTY);
+        cacheManager = CacheManagerFactory.newCacheManager(cacheManagerName); //new LFUCacheManager(); //new DynamicCacheManager();
 
         logger.info("Proxy server running on " + proxyHost);
     }
@@ -128,6 +131,14 @@ public class UDPServer implements Runnable {
                 String value = args[argindex].substring(eq + 1);
                 props.put(name, value);
                 //System.out.println("["+name+"]=["+value+"]");
+                argindex++;
+            } else if (args[argindex].compareTo("-cachemanager") == 0) {
+                argindex++;
+                if (argindex >= args.length) {
+                    usageMessage();
+                    System.exit(0);
+                }
+                props.put(PropertyFactory.CACHE_MANAGER_PROPERTY, args[argindex]);
                 argindex++;
             } else {
                 logger.warn("Unknown option " + args[argindex]);

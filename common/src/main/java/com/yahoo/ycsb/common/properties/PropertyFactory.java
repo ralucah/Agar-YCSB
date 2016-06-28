@@ -5,6 +5,8 @@ import java.util.Map;
 import java.util.Properties;
 
 public class PropertyFactory {
+    /* which cache manager to use */
+    public static final String CACHE_MANAGER_PROPERTY = "cachemanager";
     /* ip:port e.g., 127.0.0.1:11000*/
     public static String PROXY_PROPERTY = "proxy";
     /* size of UDP packets exchanged with client e.g., 1024*/
@@ -15,7 +17,6 @@ public class PropertyFactory {
     public static String PERIOD_PROPERTY = "period";
     /* weighted popularity coefficient, between 0 and 1; controls impact of old popularity value*/
     public static String ALPHA_PROPERTY = "alpha";
-
     /* size of data record */
     public static String FIELD_LENGTH_PROPERTY = "fieldlength";
     /* ip:port of memcached server */
@@ -28,17 +29,12 @@ public class PropertyFactory {
     public static String S3_REGIONS_PROPERTY = "s3.regions";
     /* AWS S3 region endpoints */
     public static String S3_ENDPOINTS_PROPERTY = "s3.endpoints";
-
     /* number of processing threads in the proxy's executor pool */
     public static String EXECUTOR_THREADS_PROPERTY = "executor.threads";
-
     public static String S3_BUCKETS_PROPERTY = "s3.buckets";
-
     public static String MEMCACHED_SERVER_PROPERTY = "memcached.server";
-
     /* eccache client */
     public static String BLOCKS_IN_CACHE = "blocksincache";
-
     /* all known properties */
     public static Map<String, String> propertiesMap;
 
@@ -60,6 +56,7 @@ public class PropertyFactory {
             propertiesMap.put(PERIOD_PROPERTY, properties.getProperty(PERIOD_PROPERTY));
             propertiesMap.put(ALPHA_PROPERTY, properties.getProperty(ALPHA_PROPERTY));
             propertiesMap.put(BLOCKS_IN_CACHE, properties.getProperty(BLOCKS_IN_CACHE));
+            propertiesMap.put(CACHE_MANAGER_PROPERTY, properties.getProperty(CACHE_MANAGER_PROPERTY));
         }
     }
 }
