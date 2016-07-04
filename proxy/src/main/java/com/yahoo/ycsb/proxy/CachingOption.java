@@ -1,5 +1,6 @@
 package com.yahoo.ycsb.proxy;
 
+import java.util.ArrayList;
 import java.util.List;
 
 // a way of caching data and its implications: e.g., cache blocks from a set of regions => resulted weight and value
@@ -14,6 +15,13 @@ public class CachingOption implements Comparable<CachingOption> {
         this.weight = weight;
         this.value = value;
         this.regions = regions;
+    }
+
+    public CachingOption(String key, int weight, double value) {
+        this.key = key;
+        this.weight = weight;
+        this.value = value;
+        regions = new ArrayList<>();
     }
 
     public String getKey() {

@@ -10,7 +10,7 @@ public class CacheManagerFactory {
 
         try {
             Class cacheManagerClass = classLoader.loadClass(cacheManagerName);
-            System.out.println("cacheManagerClass.getName() = " + cacheManagerClass.getName());
+            //System.out.println("cacheManagerClass.getName() = " + cacheManagerClass.getName());
             ret = (CacheManagerBlueprint) cacheManagerClass.newInstance();
         } catch (Exception e) {
             e.printStackTrace();

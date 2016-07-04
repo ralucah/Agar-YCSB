@@ -9,10 +9,19 @@ public class ProxyReply implements Serializable {
 
     private List<String> backendRecipe; // fetch from backend blocks from these regions
     private List<String> cacheRecipe; // fetch from cache blocks from these regions
+    private int cachedBlocks;
+
+    public ProxyReply(int cachedBlocks) {
+        this.cachedBlocks = cachedBlocks;
+    }
 
     public ProxyReply() {
         backendRecipe = new ArrayList<String>();
         cacheRecipe = new ArrayList<String>();
+    }
+
+    public int getCachedBlocks() {
+        return cachedBlocks;
     }
 
     public void addToBackendRecipe(String region) {

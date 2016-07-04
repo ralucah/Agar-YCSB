@@ -151,7 +151,7 @@ public class DynamicCacheManager extends CacheManagerBlueprint {
     private Map<Integer, CachingOption> computeCachingOptionsForKey(String key) {
         Map<Integer, CachingOption> cachingOptionsKey = new HashMap<>();
 
-        // remember that regions are in increasing order of wget latency
+        // remember that regions are in increasing order of read latency
         // compute which region to start from when caching blocks
         // the client only needs k blocks to reconstruct the data, but the system stores k + m blocks
         // so regions storing the most distant m blocks do not need to be accessed at all

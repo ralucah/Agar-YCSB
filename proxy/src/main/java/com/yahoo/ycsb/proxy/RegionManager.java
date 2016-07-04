@@ -59,7 +59,7 @@ public class RegionManager {
                 logger.debug("S3 connection " + i + " " + bucket + " " + regionName + " " + endpoint);
 
                 Region region = new Region(regionName, endpoint);
-                double latency = read(endpoint, client);
+                double latency = readFake(endpoint, client);
                 region.setLatency(latency);
                 regions.add(region);
             } catch (ClientException e) {
@@ -93,6 +93,24 @@ public class RegionManager {
             }
             avgTime = System.currentTimeMillis() - start;
         }
+
+        return avgTime;
+    }
+
+    private double readFake(String host, S3Connection s3conn) {
+        double avgTime = Double.MIN_VALUE;
+        if (host.contains("sa-east-1"))  // sao
+            return 1594;
+        else if (host.contains("external-1")) // virginia
+            return 618;
+        else if (host.contains("eu-west-1")) // ireland
+            return 356;
+        else if (host.contains("eu-central-1")) // frankfurt
+            return 184;
+        else if (host.contains("ap-northeast-1")) // tokyo
+            return 1685;
+        else if (host.contains("ap-southeast-2")) // sydney
+            return 1633;
 
         return avgTime;
     }

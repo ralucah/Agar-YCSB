@@ -1,6 +1,6 @@
 fieldlength=1048576
 
-recordcount=100
+recordcount=3
 operationcount=1000000
 workload=com.yahoo.ycsb.workloads.CoreWorkload
 
@@ -40,7 +40,7 @@ packetsize=1024
 retries=3
 timeout=10000
 # in seconds
-period=40
+period=30
 alpha=0.8
 # in mb
 cachesize=44

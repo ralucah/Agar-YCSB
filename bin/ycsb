@@ -60,7 +60,8 @@ CLIENTS = {
     "fixcache" : "com.yahoo.ycsb.dual.clients.FixCacheClient",
     "eccache" : "com.yahoo.ycsb.dual.clients.ECCacheClient",
     "dynamic" : "com.yahoo.ycsb.dual.clients.DynamicCacheClient",
-    "dummy" : "com.yahoo.ycsb.dual.clients.DummyClient"
+    "dummy" : "com.yahoo.ycsb.dual.clients.DummyClient",
+    "lfu" : "com.yahoo.ycsb.dual.clients.LFUCacheClient"
 }
 
 CACHEMANAGERS = {
@@ -222,7 +223,7 @@ def main():
 
     if command == "proxy":
         cachemanager_classname = CACHEMANAGERS[args.cachemanager]
-        print("cachemanager: " + cachemanager_classname)
+        #print("cachemanager: " + cachemanager_classname)
         ycsb_command = ([java] + args.jvm_args +
                     ["-cp", classpath,
                      main_classname, "-cachemanager", cachemanager_classname] + remaining)

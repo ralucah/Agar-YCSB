@@ -177,7 +177,7 @@ public class UDPServer implements Runnable {
 
         // compute reply
         ProxyReply reply = cacheManager.buildReply(request.getKey());
-        logger.debug(reply.prettyPrint());// + " to " + clientAddress + ":" + clientPort);
+        //logger.debug(reply.prettyPrint());// + " to " + clientAddress + ":" + clientPort);
 
         // send reply to client
         byte[] sendData = Serializer.serializeReply(reply);
