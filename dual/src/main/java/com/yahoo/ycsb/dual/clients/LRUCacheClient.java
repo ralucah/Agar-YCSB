@@ -46,7 +46,6 @@ public class LRUCacheClient extends ClientBlueprint {
 
     private List<Future> cacheTasks;
     private CompletionService<Boolean> cacheCompletionService;
-    private int missingBlocks;
 
     // TODO Assumption: one bucket per region (num regions = num endpoints = num buckets)
     private void initS3() {
@@ -138,10 +137,10 @@ public class LRUCacheClient extends ClientBlueprint {
     @Override
     public void cleanupRead() {
         logger.debug("cleanup cache START");
-        if (missingBlocks > 0) {
+        if (cacheTasks.size() > 0) {
             int success = 0;
             int errors = 0;
-            while (success + errors < missingBlocks) {
+            while (success + errors < cacheTasks.size()) {
                 //logger.debug("success: " + success + " errors: " + errors + " missingBlocks: " + missingBlocks);
                 try {
                     Future<Boolean> resultFuture = cacheCompletionService.take();
@@ -253,6 +252,7 @@ public class LRUCacheClient extends ClientBlueprint {
     @Override
     public byte[] read(final String key, final int keyNum) {
         byte[] data = null;
+        cacheTasks.clear();
 
         // read from cache and backend in parallel
         final List<ECBlock> ecblocks = readParallel(key);
@@ -270,11 +270,9 @@ public class LRUCacheClient extends ClientBlueprint {
         }
 
         // make sure there are "blocksincache" blocks in cache
-        missingBlocks = blocksincache - fromCache;
+        int missingBlocks = blocksincache - fromCache;
         if (fromCache < blocksincache) {
-            cacheTasks.clear();
-            int missingBlocksTmp = missingBlocks;
-            if (missingBlocksTmp > 0) {
+            if (missingBlocks > 0) {
                 for (ECBlock ecblock : ecblocks) {
                     if (ecblock.getStorage() == Storage.BACKEND) {
                         // cache block in the background
@@ -290,9 +288,9 @@ public class LRUCacheClient extends ClientBlueprint {
                         } catch (RejectedExecutionException e) {
                             System.err.println("Exception thrown when caching blocks");
                         }
-                        missingBlocksTmp--;
+                        missingBlocks--;
                     }
-                    if (missingBlocksTmp == 0)
+                    if (missingBlocks == 0)
                         break;
                 }
             }

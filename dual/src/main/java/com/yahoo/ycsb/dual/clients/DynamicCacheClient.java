@@ -52,8 +52,6 @@ public class DynamicCacheClient extends ClientBlueprint {
 
     private List<Future> cacheTasks;
     private CompletionService<Boolean> cacheCompletionService;
-    //private int fromCache;
-    //private int blocksincache;
 
     private void initS3() {
         List<String> regions = Arrays.asList(PropertyFactory.propertiesMap.get(PropertyFactory.S3_REGIONS_PROPERTY).split("\\s*,\\s*"));
@@ -125,6 +123,7 @@ public class DynamicCacheClient extends ClientBlueprint {
         logger.debug("threads num: " + threadsNum);
         executorRead = Executors.newFixedThreadPool(threadsNum);
         executorCache = Executors.newFixedThreadPool(threadsNum);
+        cacheCompletionService = new ExecutorCompletionService<Boolean>(executorCache);
         cacheTasks = new ArrayList<Future>();
         logger.debug("DynamicCacheClient.init() end");
     }
@@ -139,25 +138,21 @@ public class DynamicCacheClient extends ClientBlueprint {
 
     @Override
     public void cleanupRead() {
-        System.out.println("cleanupRead " + cacheTasks.size());
+        logger.debug("cleanupRead START " + cacheTasks.size());
         if (cacheTasks.size() > 0) {
             int success = 0;
             int errors = 0;
             while (success + errors < cacheTasks.size()) {
                 try {
                     Future<Boolean> resultFuture = cacheCompletionService.take();
-
-                    System.out.println("Took one");
                     Boolean result = resultFuture.get();
                     if (result == true) {
                         success++;
-                        System.out.println("cached = " + success);
                     } else {
                         errors++;
-                        System.out.println("result was false for cacheBlock");
                     }
                 } catch (Exception e) {
-                    System.out.println("exception");
+                    logger.error("Exception caching block.");
                 }
             }
 
@@ -165,6 +160,7 @@ public class DynamicCacheClient extends ClientBlueprint {
                 f.cancel(true);
             }
         }
+        logger.debug("cleanupRead END " + cacheTasks.size());
     }
 
     /**
@@ -258,7 +254,7 @@ public class DynamicCacheClient extends ClientBlueprint {
         // wait to receive block num blocks
         int success = 0;
         int errors = 0;
-        while (success + errors < targetBlocksNum) {
+        while (success < LonghairLib.k && success + errors < targetBlocksNum) {
             try {
                 Future<ECBlock> resultFuture = completionService.take();
                 ECBlock ecblock = resultFuture.get();
@@ -396,20 +392,18 @@ public class DynamicCacheClient extends ClientBlueprint {
         if (reply == null)
             return null;
 
-        cacheCompletionService = new ExecutorCompletionService<Boolean>(executorCache);
-        cacheTasks.clear();
 
         logger.debug(reply.prettyPrint());
         final List<String> cacheRecipe = reply.getCacheRecipe();
         final List<String> backendRecipe = reply.getBackendRecipe();
 
-        List<Future> tasks = new ArrayList<Future>();
+        cacheTasks.clear();
 
         //t1 = System.currentTimeMillis();
         // read blocks in parallel according to cache and backend recipes from proxy
         List<ECBlock> ecblocks = new ArrayList<ECBlock>();
         CompletionService<List<ECBlock>> completionService = new ExecutorCompletionService<List<ECBlock>>(executorRead);
-
+        List<Future> readTasks = new ArrayList<Future>();
         // read blocks from cache (readCache will fall back to backend, if need be)
         if (cacheRecipe.size() > 0) {
             try {
@@ -419,16 +413,12 @@ public class DynamicCacheClient extends ClientBlueprint {
                         return readCache(key, cacheRecipe);
                     }
                 });
-                tasks.add(newTask);
+                readTasks.add(newTask);
             } catch (RejectedExecutionException e) {
-
             }
         }
-        //t2 = System.currentTimeMillis();
-        //System.out.println("cacheRecipe: " + (t2 - t1) + " " + cacheRecipe);
 
         // read blocks from backend
-        //t1 = System.currentTimeMillis();
         if (backendRecipe.size() > 0) {
             try {
                 Future newTask = completionService.submit(new Callable<List<ECBlock>>() {
@@ -437,16 +427,12 @@ public class DynamicCacheClient extends ClientBlueprint {
                         return readBackend(key, backendRecipe);
                     }
                 });
-                tasks.add(newTask);
+                readTasks.add(newTask);
             } catch (RejectedExecutionException e) {
-
             }
         }
-        //t2 = System.currentTimeMillis();
-        //System.out.println("backendRecipe: " + (t2 - t1) + " " + backendRecipe);
 
         // wait for k blocks (note: the proxy does not try to cache more than k blocks)
-        //t1 = System.currentTimeMillis();
         int success = 0;
         int errors = 0;
         while (success < LonghairLib.k) {
@@ -467,7 +453,7 @@ public class DynamicCacheClient extends ClientBlueprint {
         }
 
         // cancel unnecessary tasks
-        for (Future f : tasks) {
+        for (Future f : readTasks) {
             f.cancel(true);
         }
 

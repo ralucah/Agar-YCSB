@@ -32,7 +32,6 @@ public class LFUCacheClient extends ClientBlueprint {
     private List<String> s3Buckets;
     private ExecutorService executorRead, executorCache;
 
-    private int missingBlocks;
     private List<Future> cacheTasks;
     private CompletionService<Boolean> cacheCompletionService;
 
@@ -108,7 +107,6 @@ public class LFUCacheClient extends ClientBlueprint {
         executorCache = Executors.newFixedThreadPool(threadsNum);
         cacheTasks = new ArrayList<Future>();
         cacheCompletionService = new ExecutorCompletionService<Boolean>(executorCache);
-        missingBlocks = 0;
 
         logger.debug("LFUCacheClient.init() end");
     }
@@ -124,10 +122,10 @@ public class LFUCacheClient extends ClientBlueprint {
     @Override
     public void cleanupRead() {
         logger.debug("cleanupRead START");
-        if (missingBlocks > 0) {
+        if (cacheTasks.size() > 0) {
             int success = 0;
             int errors = 0;
-            while (success + errors < missingBlocks) {
+            while (success + errors < cacheTasks.size()) {
                 //logger.debug("cached: " + success + " errors: " + errors + " missingBlocks: " + missingBlocks);
                 try {
                     Future<Boolean> resultFuture = cacheCompletionService.take();
@@ -327,6 +325,7 @@ public class LFUCacheClient extends ClientBlueprint {
 
         int blocksincache = reply.getCachedBlocks();
         logger.debug("blocksincache: " + blocksincache);
+        cacheTasks.clear();
 
         List<ECBlock> ecblocks;
         if (blocksincache > 0) {
@@ -348,9 +347,8 @@ public class LFUCacheClient extends ClientBlueprint {
                 fromBackend++;
         }
 
-        missingBlocks = blocksincache - fromCache;
+        int missingBlocks = blocksincache - fromCache;
         if (missingBlocks > 0) {
-            cacheTasks.clear();
 
             int missingBlocksTmp = missingBlocks;
             if (missingBlocksTmp > 0) {

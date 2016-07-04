@@ -78,47 +78,48 @@ public class DynamicCacheManager extends CacheManagerBlueprint {
         }
         prettyPrintWeightedPopularity();
 
-        if (weightedPopularity.size() > 0) {
-            // for each known key, compute caching options and build a total caching options set
-            // compute known keys set: for each key add the value of the first caching option
-            cachingOptions.clear();
-            keys = new ArrayList<>();
-            for (Map.Entry<String, Double> entry : weightedPopularity.entrySet()) {
-                String key = entry.getKey();
-                Map<Integer, CachingOption> cachingOptionsKey = computeCachingOptionsForKey(key);
-                cachingOptions.put(key, cachingOptionsKey);
+        // for each known key, compute caching options and build a total caching options set
+        // compute known keys set: for each key add the value of the first caching option
+        cachingOptions.clear();
+        keys = new ArrayList<>();
+        for (Map.Entry<String, Double> entry : weightedPopularity.entrySet()) {
+            String key = entry.getKey();
+            Map<Integer, CachingOption> cachingOptionsKey = computeCachingOptionsForKey(key);
+            cachingOptions.put(key, cachingOptionsKey);
 
-                CachingOption first = cachingOptionsKey.entrySet().iterator().next().getValue();
-                keys.add(new Pair<>(key, first.getValue()));
-                logger.debug("keys.add(" + key + "," + first.getValue() + ")");
-            }
-
-            // sort keys decreasingly by value
-            Collections.sort(keys, (o1, o2) -> o1.getValue().compareTo(o2.getValue()));
-            Collections.reverse(keys);
-            logger.debug("Keys sorted decreasingly by value: " + keys);
-
-            // knapsack solution using dynamic programming
-            computeChosenOptions();
-
-            // compute cache
-            logger.debug("cachesize = " + cacheCapacity);
-            for (int i = cacheCapacity; i >= 0; i--) {
-                if (chosenOptions.get(i) != null) {
-                    cache = Collections.synchronizedList(chosenOptions.get(i));
-                    logger.debug("chosen cachesize = " + i);
-                    break;
-                }
-            }
-            prettyPrintCache();
+            CachingOption first = cachingOptionsKey.entrySet().iterator().next().getValue();
+            keys.add(new Pair<>(key, first.getValue()));
+            logger.debug("keys.add(" + key + "," + first.getValue() + ")");
         }
+
+        // sort keys decreasingly by value
+        Collections.sort(keys, (o1, o2) -> o1.getValue().compareTo(o2.getValue()));
+        Collections.reverse(keys);
+        logger.debug("Keys sorted decreasingly by value: " + keys);
+
+        // knapsack solution using dynamic programming
+        computeChosenOptions();
+
+        // compute cache
+        synchronized (cache) {
+            cache.clear();
+        }
+        logger.debug("cachesize = " + cacheCapacity);
+        for (int i = cacheCapacity; i >= 0; i--) {
+            if (chosenOptions.get(i) != null) {
+                cache = Collections.synchronizedList(chosenOptions.get(i));
+                logger.debug("chosen cachesize = " + i);
+                break;
+            }
+        }
+        prettyPrintCache();
+
         logger.info("computeCache END");
     }
 
     // for all keys seen since proxy start, compute / adjust the weighted popularity based on the frequency
     // values from the last period
     private void computeWeightedPopularity() {
-
         for (Map.Entry<String, Integer> entry : frequency.entrySet()) {
             String key = entry.getKey();
             int freq = entry.getValue();
