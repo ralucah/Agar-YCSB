@@ -27,7 +27,7 @@ import java.util.concurrent.atomic.AtomicInteger;
    Command line:
    cd YCSB
    mvn clean package
-   bin/ycsb run localcache -threads 2 -p fieldlength=4194304 -P workloads/myworkload
+   bin/ycsb run localcache -threads 1 -p fieldlength=1048576 -P workloads/myworkload
 */
 
 public class LocalCacheClient extends ClientBlueprint {
@@ -41,6 +41,8 @@ public class LocalCacheClient extends ClientBlueprint {
     private List<S3Connection> s3Connections;
     private MemcachedConnection memConnection;
     private ExecutorService executorRead, executorCache;
+
+    private Future cacheTask;
 
     // TODO Assumption: one bucket per region (num regions = num endpoints = num buckets)
     private void initS3() {
@@ -96,7 +98,6 @@ public class LocalCacheClient extends ClientBlueprint {
     @Override
     public void init() throws ClientException {
         logger.debug("LocalCacheClient.init() BEGIN");
-
         if (cacheHits == null)
             cacheHits = new AtomicInteger(0);
         if (cacheMisses == null)
@@ -113,8 +114,7 @@ public class LocalCacheClient extends ClientBlueprint {
         logger.debug("threads num: " + threadsNum);
         executorRead = Executors.newFixedThreadPool(threadsNum);
         executorCache = Executors.newFixedThreadPool(threadsNum);
-
-        logger.debug("AllCachesClient.init() END");
+        logger.debug("LocalCacheClient.init() END");
     }
 
     @Override
@@ -126,7 +126,10 @@ public class LocalCacheClient extends ClientBlueprint {
 
     @Override
     public void cleanupRead() {
-
+        System.out.println("cleanup cache!");
+        if (cacheTask != null) {
+            while (cacheTask.isDone() == false) ;
+        }
     }
 
     private byte[] readBlock(String baseKey, int blockNum) throws InterruptedException {
@@ -198,6 +201,7 @@ public class LocalCacheClient extends ClientBlueprint {
 
     @Override
     public byte[] read(final String key, final int keyNum) {
+        cacheTask = null;
         byte[] data = readFromCache(key);
         if (data == null) {
             data = readFromBackend(key);
@@ -206,7 +210,7 @@ public class LocalCacheClient extends ClientBlueprint {
                 cacheMisses.incrementAndGet();
 
                 final byte[] dataFin = data;
-                executorCache.submit(new Runnable() {
+                cacheTask = executorCache.submit(new Runnable() {
                     @Override
                     public void run() {
                         cacheData(key, dataFin);

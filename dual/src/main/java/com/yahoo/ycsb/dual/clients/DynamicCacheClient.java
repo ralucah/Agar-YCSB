@@ -48,8 +48,12 @@ public class DynamicCacheClient extends ClientBlueprint {
     private MemcachedConnection memConnection;
     private ProxyConnection proxyConnection;
     private List<String> s3Buckets;
-    private ExecutorService executorRead; // one executorRead per client thread
-    private ExecutorService executorCache;
+    private ExecutorService executorRead, executorCache;
+
+    private List<Future> cacheTasks;
+    private CompletionService<Boolean> cacheCompletionService;
+    //private int fromCache;
+    //private int blocksincache;
 
     private void initS3() {
         List<String> regions = Arrays.asList(PropertyFactory.propertiesMap.get(PropertyFactory.S3_REGIONS_PROPERTY).split("\\s*,\\s*"));
@@ -102,7 +106,7 @@ public class DynamicCacheClient extends ClientBlueprint {
     }
 
     public void init() throws ClientException {
-        logger.debug("SmartCacheClient.init() start");
+        logger.debug("DynamicCacheClient.init() start");
 
         // init counters for stats
         if (cacheHits == null)
@@ -121,7 +125,8 @@ public class DynamicCacheClient extends ClientBlueprint {
         logger.debug("threads num: " + threadsNum);
         executorRead = Executors.newFixedThreadPool(threadsNum);
         executorCache = Executors.newFixedThreadPool(threadsNum);
-        logger.debug("SmartCacheClient.init() end");
+        cacheTasks = new ArrayList<Future>();
+        logger.debug("DynamicCacheClient.init() end");
     }
 
 
@@ -134,7 +139,32 @@ public class DynamicCacheClient extends ClientBlueprint {
 
     @Override
     public void cleanupRead() {
+        System.out.println("cleanupRead " + cacheTasks.size());
+        if (cacheTasks.size() > 0) {
+            int success = 0;
+            int errors = 0;
+            while (success + errors < cacheTasks.size()) {
+                try {
+                    Future<Boolean> resultFuture = cacheCompletionService.take();
 
+                    System.out.println("Took one");
+                    Boolean result = resultFuture.get();
+                    if (result == true) {
+                        success++;
+                        System.out.println("cached = " + success);
+                    } else {
+                        errors++;
+                        System.out.println("result was false for cacheBlock");
+                    }
+                } catch (Exception e) {
+                    System.out.println("exception");
+                }
+            }
+
+            for (Future f : cacheTasks) {
+                f.cancel(true);
+            }
+        }
     }
 
     /**
@@ -252,16 +282,15 @@ public class DynamicCacheClient extends ClientBlueprint {
      *
      * @param ecblock block to be cached
      */
-    private void cacheBlock(ECBlock ecblock) {
-        long starttime = System.currentTimeMillis();
+    private Boolean cacheBlock(ECBlock ecblock) {
         String key = ecblock.getBaseKey();
         Status status = memConnection.insert(ecblock.getBaseKey(), ecblock.getBytes());
-        if (status == Status.OK)
+        if (status == Status.OK) {
             logger.debug("Cache  " + key + " block " + ecblock.getId() + " at " + memConnection.getHost());
-        else
-            logger.debug("[Error] Cache  " + key + " block " + ecblock.getId() + " at " + memConnection.getHost());
-        long endtime = System.currentTimeMillis();
-        //System.out.print(" cacheBlock:" + (endtime - starttime));
+            return true;
+        }
+        logger.debug("[Error] Cache  " + key + " block " + ecblock.getId() + " at " + memConnection.getHost());
+        return false;
     }
 
     /**
@@ -287,12 +316,13 @@ public class DynamicCacheClient extends ClientBlueprint {
 
             // cache block in the background
             final ECBlock ecblockFin = ecblock;
-            executorCache.submit(new Runnable() {
+            Future newTask = cacheCompletionService.submit(new Callable<Boolean>() {
                 @Override
-                public void run() {
-                    cacheBlock(ecblockFin);
+                public Boolean call() throws Exception {
+                    return cacheBlock(ecblockFin);
                 }
             });
+            cacheTasks.add(newTask);
         }
         long endtime = System.currentTimeMillis();
         //System.out.print("readCacheBlock:" + (endtime - starttime));
@@ -315,6 +345,7 @@ public class DynamicCacheClient extends ClientBlueprint {
         for (final String region : cacheRecipe) {
             // compute block ids
             List<Integer> blockIds = getBlockIdsByRegion(region);
+            //blocksincache += blockIds.size();
             targetBlocksNum += blockIds.size();
 
             // try to read each block from cache; if not possible, readCache falls back to backend
@@ -359,16 +390,14 @@ public class DynamicCacheClient extends ClientBlueprint {
      */
     @Override
     public byte[] read(final String key, final int keyNum) {
-        //long t1, t2;
-        //long starttime = System.currentTimeMillis();
-
         // request info from proxy
         final ProxyReply reply = proxyConnection.requestRecipe(key);
-        //t1 = System.currentTimeMillis();
-        //System.out.println("proxyReplyT:" + (t1 - starttime));
 
         if (reply == null)
             return null;
+
+        cacheCompletionService = new ExecutorCompletionService<Boolean>(executorCache);
+        cacheTasks.clear();
 
         logger.debug(reply.prettyPrint());
         final List<String> cacheRecipe = reply.getCacheRecipe();
@@ -436,8 +465,6 @@ public class DynamicCacheClient extends ClientBlueprint {
             if (errors > LonghairLib.m)
                 break;
         }
-        //t2 = System.currentTimeMillis();
-        //System.out.println("wait for res: " + (t2 - t1));
 
         // cancel unnecessary tasks
         for (Future f : tasks) {
@@ -471,20 +498,12 @@ public class DynamicCacheClient extends ClientBlueprint {
         }
 
         // decode data + return it
-        //t1 = System.currentTimeMillis()
         byte[] data = null;
-        //System.out.println(blockBytes.size() + " " + LonghairLib.k);
         if (blockBytes.size() >= LonghairLib.k) ;
         data = LonghairLib.decode(blockBytes);
 
-        //t2 = System.currentTimeMillis();
-        //System.out.println("decode: " + (t2 - t1));
         if (data != null)
             logger.info("Read " + key + " " + data.length + " bytes Cache: " + fromCache + " Backend: " + fromBackend);
-
-        //endtime = System.currentTimeMillis();
-        //System.out.println("Read: " + key + " " + starttime + ":" + endtime + " " + (endtime - starttime));
-        //System.exit(1);
 
         return data;
     }

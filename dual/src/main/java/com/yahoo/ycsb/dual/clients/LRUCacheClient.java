@@ -255,6 +255,7 @@ public class LRUCacheClient extends ClientBlueprint {
     @Override
     public byte[] read(final String key, final int keyNum) {
         byte[] data = null;
+        cacheCompletionService = null;
 
         // read from cache and backend in parallel
         final List<ECBlock> ecblocks = readParallel(key);
