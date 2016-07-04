@@ -1,7 +1,7 @@
 fieldlength=1048576
 
 recordcount=3
-operationcount=20
+operationcount=10
 workload=com.yahoo.ycsb.workloads.CoreWorkload
 
 insertstart=0

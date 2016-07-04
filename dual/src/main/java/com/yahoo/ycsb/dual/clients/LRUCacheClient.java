@@ -46,7 +46,7 @@ public class LRUCacheClient extends ClientBlueprint {
 
     private List<Future> cacheTasks;
     private CompletionService<Boolean> cacheCompletionService;
-    private int fromCache;
+    private int missingBlocks;
 
     // TODO Assumption: one bucket per region (num regions = num endpoints = num buckets)
     private void initS3() {
@@ -123,6 +123,8 @@ public class LRUCacheClient extends ClientBlueprint {
         logger.debug("threads num: " + threadsNum);
         executorRead = Executors.newFixedThreadPool(threadsNum);
         executorCache = Executors.newFixedThreadPool(threadsNum);
+        cacheCompletionService = new ExecutorCompletionService<Boolean>(executorCache);
+        cacheTasks = new ArrayList<Future>();
 
         logger.debug("LRUCacheClient.init() end");
     }
@@ -135,33 +137,29 @@ public class LRUCacheClient extends ClientBlueprint {
 
     @Override
     public void cleanupRead() {
-        System.out.println("cleanup cache!");
-        if (cacheCompletionService != null) {
+        logger.debug("cleanup cache START");
+        if (missingBlocks > 0) {
             int success = 0;
             int errors = 0;
-            while (success + errors + fromCache < blocksincache) {
-                logger.debug("cached: " + success + " errors: " + errors + " fromCache: " + fromCache + " blocksincache: " + blocksincache);
+            while (success + errors < missingBlocks) {
+                //logger.debug("success: " + success + " errors: " + errors + " missingBlocks: " + missingBlocks);
                 try {
                     Future<Boolean> resultFuture = cacheCompletionService.take();
-
-                    System.out.println("Took one");
                     Boolean result = resultFuture.get();
                     if (result == true) {
                         success++;
-                        System.out.println("cached = " + success);
                     } else {
                         errors++;
-                        System.out.println("result was false for cacheBlock");
                     }
                 } catch (Exception e) {
-                    System.out.println("exception");
+                    logger.error("Exception while caching block.");
                 }
             }
-
             for (Future f : cacheTasks) {
                 f.cancel(true);
             }
         }
+        logger.debug("cleanup cache END");
     }
 
     // read a block from backend
@@ -255,7 +253,6 @@ public class LRUCacheClient extends ClientBlueprint {
     @Override
     public byte[] read(final String key, final int keyNum) {
         byte[] data = null;
-        cacheCompletionService = null;
 
         // read from cache and backend in parallel
         final List<ECBlock> ecblocks = readParallel(key);
@@ -263,7 +260,7 @@ public class LRUCacheClient extends ClientBlueprint {
         // extract bytes from read blocks and compute stats (how many blocks read from cache and how many from backend)
         Set<byte[]> blockBytes = new HashSet<byte[]>();
         int fromBackend = 0;
-        fromCache = 0;
+        int fromCache = 0;
         for (ECBlock ecblock : ecblocks) {
             blockBytes.add(ecblock.getBytes());
             if (ecblock.getStorage() == Storage.CACHE)
@@ -273,11 +270,11 @@ public class LRUCacheClient extends ClientBlueprint {
         }
 
         // make sure there are "blocksincache" blocks in cache
+        missingBlocks = blocksincache - fromCache;
         if (fromCache < blocksincache) {
-            cacheTasks = new ArrayList<Future>();
-            cacheCompletionService = new ExecutorCompletionService<Boolean>(executorCache);
-            int missing = blocksincache - fromCache;
-            if (missing > 0) {
+            cacheTasks.clear();
+            int missingBlocksTmp = missingBlocks;
+            if (missingBlocksTmp > 0) {
                 for (ECBlock ecblock : ecblocks) {
                     if (ecblock.getStorage() == Storage.BACKEND) {
                         // cache block in the background
@@ -286,19 +283,16 @@ public class LRUCacheClient extends ClientBlueprint {
                             Future newTask = cacheCompletionService.submit(new Callable<Boolean>() {
                                 @Override
                                 public Boolean call() throws Exception {
-                                    Boolean toRet = cacheBlock(ecblockFin);
-                                    System.out.println("Returning " + toRet);
-                                    return toRet;
+                                    return cacheBlock(ecblockFin);
                                 }
                             });
                             cacheTasks.add(newTask);
                         } catch (RejectedExecutionException e) {
                             System.err.println("Exception thrown when caching blocks");
                         }
-                        missing--;
-                        System.out.println("missing: " + missing);
+                        missingBlocksTmp--;
                     }
-                    if (missing == 0)
+                    if (missingBlocksTmp == 0)
                         break;
                 }
             }
