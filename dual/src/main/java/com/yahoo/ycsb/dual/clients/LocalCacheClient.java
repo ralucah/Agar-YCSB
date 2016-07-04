@@ -126,10 +126,11 @@ public class LocalCacheClient extends ClientBlueprint {
 
     @Override
     public void cleanupRead() {
-        System.out.println("cleanup cache!");
+        logger.debug("cleanup cache START");
         if (cacheTask != null) {
             while (cacheTask.isDone() == false) ;
         }
+        logger.debug("cleanup cache END");
     }
 
     private byte[] readBlock(String baseKey, int blockNum) throws InterruptedException {
@@ -201,7 +202,7 @@ public class LocalCacheClient extends ClientBlueprint {
 
     @Override
     public byte[] read(final String key, final int keyNum) {
-        cacheTask = null;
+        cacheTask = null; // wipe cache task
         byte[] data = readFromCache(key);
         if (data == null) {
             data = readFromBackend(key);

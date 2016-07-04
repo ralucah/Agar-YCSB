@@ -32,10 +32,9 @@ public class LFUCacheClient extends ClientBlueprint {
     private List<String> s3Buckets;
     private ExecutorService executorRead, executorCache;
 
-    private int blocksincache;
+    private int missingBlocks;
     private List<Future> cacheTasks;
     private CompletionService<Boolean> cacheCompletionService;
-    private int fromCache;
 
     private void initS3() {
         List<String> regions = Arrays.asList(PropertyFactory.propertiesMap.get(PropertyFactory.S3_REGIONS_PROPERTY).split("\\s*,\\s*"));
@@ -107,6 +106,10 @@ public class LFUCacheClient extends ClientBlueprint {
         logger.debug("threads num: " + threadsNum);
         executorRead = Executors.newFixedThreadPool(threadsNum);
         executorCache = Executors.newFixedThreadPool(threadsNum);
+        cacheTasks = new ArrayList<Future>();
+        cacheCompletionService = new ExecutorCompletionService<Boolean>(executorCache);
+        missingBlocks = 0;
+
         logger.debug("LFUCacheClient.init() end");
     }
 
@@ -120,23 +123,19 @@ public class LFUCacheClient extends ClientBlueprint {
 
     @Override
     public void cleanupRead() {
-        System.out.println("cleanupRead");
-        if (cacheCompletionService != null) {
+        logger.debug("cleanupRead START");
+        if (missingBlocks > 0) {
             int success = 0;
             int errors = 0;
-            System.out.println("cached: " + success + " errors: " + errors + " fromCache: " + fromCache + " cachedBlocks: " + blocksincache);
-            while (success + errors + fromCache < blocksincache) {
-                System.out.println("cached: " + success + " errors: " + errors + " fromCache: " + fromCache + " cachedBlocks: " + blocksincache);
+            while (success + errors < missingBlocks) {
+                //logger.debug("cached: " + success + " errors: " + errors + " missingBlocks: " + missingBlocks);
                 try {
                     Future<Boolean> resultFuture = cacheCompletionService.take();
-                    System.out.println("Took one");
                     Boolean result = resultFuture.get();
                     if (result == true) {
                         success++;
-                        System.out.println("cached = " + success);
                     } else {
                         errors++;
-                        System.out.println("result was false for cacheBlock");
                     }
                 } catch (Exception e) {
                     System.out.println("exception");
@@ -147,6 +146,7 @@ public class LFUCacheClient extends ClientBlueprint {
                 f.cancel(true);
             }
         }
+        logger.debug("cleanupRead END");
     }
 
     // Store a block in cache
@@ -218,7 +218,7 @@ public class LFUCacheClient extends ClientBlueprint {
         // wait for an answer for each block (success / error)
         int success = 0;
         int errors = 0;
-        while (success + errors < LonghairLib.k + LonghairLib.m) {
+        while (success < LonghairLib.k && errors < LonghairLib.m) {
             try {
                 Future<ECBlock> resultFuture = completionService.take();
                 ECBlock ecblock = resultFuture.get();
@@ -325,9 +325,8 @@ public class LFUCacheClient extends ClientBlueprint {
         if (reply == null)
             return null;
 
-        blocksincache = reply.getCachedBlocks();
+        int blocksincache = reply.getCachedBlocks();
         logger.debug("blocksincache: " + blocksincache);
-        cacheCompletionService = null;
 
         List<ECBlock> ecblocks;
         if (blocksincache > 0) {
@@ -349,12 +348,12 @@ public class LFUCacheClient extends ClientBlueprint {
                 fromBackend++;
         }
 
-        if (fromCache < blocksincache) {
-            cacheTasks = new ArrayList<Future>();
-            cacheCompletionService = new ExecutorCompletionService<Boolean>(executorCache);
+        missingBlocks = blocksincache - fromCache;
+        if (missingBlocks > 0) {
+            cacheTasks.clear();
 
-            int missing = blocksincache - fromCache;
-            if (missing > 0) {
+            int missingBlocksTmp = missingBlocks;
+            if (missingBlocksTmp > 0) {
                 for (ECBlock ecblock : ecblocks) {
                     if (ecblock.getStorage() == Storage.BACKEND) {
                         // cache block in the background
@@ -363,19 +362,17 @@ public class LFUCacheClient extends ClientBlueprint {
                             Future newTask = cacheCompletionService.submit(new Callable<Boolean>() {
                                 @Override
                                 public Boolean call() throws Exception {
-                                    Boolean toRet = cacheBlock(ecblockFin);
-                                    System.out.println("Returning " + toRet);
-                                    return toRet;
+                                    return cacheBlock(ecblockFin);
                                 }
                             });
                             cacheTasks.add(newTask);
                         } catch (RejectedExecutionException e) {
                             System.err.println("Exception thrown when caching blocks");
                         }
-                        missing--;
-                        System.out.println("missing: " + missing);
+                        missingBlocksTmp--;
+                        //System.out.println("missing: " + missingBlocksTmp);
                     }
-                    if (missing == 0)
+                    if (missingBlocksTmp == 0)
                         break;
                 }
             }
