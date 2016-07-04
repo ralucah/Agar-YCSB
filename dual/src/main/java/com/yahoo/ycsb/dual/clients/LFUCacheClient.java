@@ -114,6 +114,11 @@ public class LFUCacheClient extends ClientBlueprint {
         executorCache.shutdownNow();
     }
 
+    @Override
+    public void cleanupRead() {
+
+    }
+
     /**
      * Store a block in cache
      *

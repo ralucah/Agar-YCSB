@@ -4,7 +4,7 @@ package com.yahoo.ycsb.dual.clients;
   IntelliJ
   Main: com.yahoo.ycsb.Client
   VM options: -Xmx3g
-  Program arguments: -client com.yahoo.ycsb.dual.clients.ECCacheClient -p fieldlength=4194304 -P workloads/myworkload
+  Program arguments: -client com.yahoo.ycsb.dual.clients.LRUCacheClient -p fieldlength=1048576 -P workloads/myworkload
   Working directory: /home/ubuntu/work/repos/YCSB
   Use classpath of module: root
   JRE: 1.8
@@ -14,7 +14,7 @@ package com.yahoo.ycsb.dual.clients;
    Command line:
    cd YCSB
    mvn clean package
-   bin/ycsb run eccache -threads 2 -p fieldlength=4194304 -P workloads/myworkload
+   bin/ycsb run lru -threads 1 -p fieldlength=1048576 -P workloads/myworkload
 */
 
 import com.yahoo.ycsb.ClientBlueprint;
@@ -32,17 +32,21 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class ECCacheClient extends ClientBlueprint {
+public class LRUCacheClient extends ClientBlueprint {
     public static AtomicInteger cacheHits;
     public static AtomicInteger cachePartialHits;
     public static AtomicInteger cacheMisses;
     public static PropertyFactory propertyFactory;
 
-    private static Logger logger = Logger.getLogger(ECCacheClient.class);
+    private static Logger logger = Logger.getLogger(LRUCacheClient.class);
     private List<S3Connection> s3Connections;
     private MemcachedConnection memConnection;
     private int blocksincache;
     private ExecutorService executorRead, executorCache;
+
+    private List<Future> cacheTasks;
+    private CompletionService<Boolean> cacheCompletionService;
+    private int fromCache;
 
     // TODO Assumption: one bucket per region (num regions = num endpoints = num buckets)
     private void initS3() {
@@ -99,7 +103,7 @@ public class ECCacheClient extends ClientBlueprint {
 
     @Override
     public void init() throws ClientException {
-        logger.debug("DualClient.init() start");
+        logger.debug("LRUCacheClient.init() start");
 
         if (cacheHits == null)
             cacheHits = new AtomicInteger(0);
@@ -120,16 +124,63 @@ public class ECCacheClient extends ClientBlueprint {
         executorRead = Executors.newFixedThreadPool(threadsNum);
         executorCache = Executors.newFixedThreadPool(threadsNum);
 
-        logger.debug("DualClient.init() end");
+        logger.debug("LRUCacheClient.init() end");
     }
 
     @Override
     public void cleanup() throws ClientException {
-        logger.error("Hits: " + cacheHits + " Misses: " + cacheMisses + " PartialHits: " + cachePartialHits);
-        executorRead.shutdownNow();
         executorCache.shutdownNow();
+        executorRead.shutdownNow();
     }
 
+    @Override
+    public void cleanupRead() {
+        System.out.println("cleanup cache!");
+        if (cacheCompletionService != null) {
+            int success = 0;
+            int errors = 0;
+            while (success + errors + fromCache < blocksincache) {
+                logger.debug("cached: " + success + " errors: " + errors + " fromCache: " + fromCache + " blocksincache: " + blocksincache);
+                try {
+                    Future<Boolean> resultFuture = cacheCompletionService.take();
+
+                    System.out.println("Took one");
+                    Boolean result = resultFuture.get();
+                    if (result == true) {
+                        success++;
+                        System.out.println("cached = " + success);
+                    } else {
+                        errors++;
+                        System.out.println("result was false for cacheBlock");
+                    }
+                } catch (Exception e) {
+                    System.out.println("exception");
+                }
+            }
+
+            for (Future f : cacheTasks) {
+                f.cancel(true);
+            }
+        }
+    }
+
+    // read a block from backend
+    private ECBlock readBlockBackend(String key, int blockId) throws InterruptedException {
+        String blockKey = key + blockId;
+        int s3ConnNum = blockId % s3Connections.size();
+        S3Connection s3Connection = s3Connections.get(s3ConnNum);
+        byte[] bytes = s3Connection.read(blockKey);
+
+        ECBlock ecblock = null;
+        if (bytes != null)
+            ecblock = new ECBlock(key, blockId, bytes, Storage.BACKEND);
+        else
+            logger.error("[Error] ReadBlockBackend " + key + " block" + blockId + " from bucket" + s3ConnNum);
+
+        return ecblock;
+    }
+
+    // try to read block from cache; on a miss, fall back to backend
     private ECBlock readBlockParallel(String key, int blockId) throws InterruptedException {
         String blockKey = key + blockId;
         byte[] bytes = memConnection.read(blockKey);
@@ -146,27 +197,12 @@ public class ECCacheClient extends ClientBlueprint {
         return ecblock;
     }
 
-    private ECBlock readBlockBackend(String key, int blockId) throws InterruptedException {
-        String blockKey = key + blockId;
-        int s3ConnNum = blockId % s3Connections.size();
-        S3Connection s3Connection = s3Connections.get(s3ConnNum);
-        byte[] bytes = s3Connection.read(blockKey);
-
-        ECBlock ecblock = null;
-        if (bytes != null)
-            ecblock = new ECBlock(key, blockId, bytes, Storage.BACKEND);
-        else
-            logger.error("[Error] ReadBlockBackend " + key + " block" + blockId + " from bucket" + s3ConnNum);
-
-        return ecblock;
-    }
-
+    // send requests for k+m blocks in parallel, wait for the first k to arrive and cancel the other unnecessary requests
     private List<ECBlock> readParallel(final String key) {
-        List<Future> tasks = new ArrayList<Future>();
-
         List<ECBlock> ecblocks = new ArrayList<ECBlock>();
 
-        // read blocks in parallel from cache and backend
+        // read k+m blocks in parallel from cache and backend
+        List<Future> tasks = new ArrayList<Future>();
         CompletionService<ECBlock> completionService = new ExecutorCompletionService<ECBlock>(executorRead);
         for (int i = 0; i < LonghairLib.k + LonghairLib.m; i++) {
             final int blockNumFin = i;
@@ -179,10 +215,11 @@ public class ECCacheClient extends ClientBlueprint {
             tasks.add(newTask);
         }
 
+        // wait for k blocks to be retrieved
         int success = 0;
         int errors = 0;
         Set<byte[]> blocks = new HashSet<byte[]>();
-        while (success < LonghairLib.k) {
+        while (success < LonghairLib.k && errors < LonghairLib.m) {
             try {
                 Future<ECBlock> resultFuture = completionService.take();
                 ECBlock ecblock = resultFuture.get();
@@ -195,15 +232,24 @@ public class ECCacheClient extends ClientBlueprint {
                 errors++;
                 logger.debug("Exception reading block.");
             }
-            if (errors > LonghairLib.m)
-                break;
         }
 
+        // cancel unnecessary requests
         for (Future f : tasks) {
             f.cancel(true);
         }
 
         return ecblocks;
+    }
+
+    private Boolean cacheBlock(ECBlock ecblock) {
+        Status status = memConnection.insert(ecblock.getBaseKey(), ecblock.getBytes());
+        if (status == Status.OK) {
+            logger.debug("Cache  " + ecblock.getBaseKey() + " block " + ecblock.getId() + " at " + memConnection.getHost());
+            return true;
+        }
+        logger.debug("[Error] Cache  " + ecblock.getBaseKey() + " block " + ecblock.getId() + " at " + memConnection.getHost());
+        return false;
     }
 
     @Override
@@ -215,8 +261,8 @@ public class ECCacheClient extends ClientBlueprint {
 
         // extract bytes from read blocks and compute stats (how many blocks read from cache and how many from backend)
         Set<byte[]> blockBytes = new HashSet<byte[]>();
-        int fromCache = 0;
         int fromBackend = 0;
+        fromCache = 0;
         for (ECBlock ecblock : ecblocks) {
             blockBytes.add(ecblock.getBytes());
             if (ecblock.getStorage() == Storage.CACHE)
@@ -225,21 +271,36 @@ public class ECCacheClient extends ClientBlueprint {
                 fromBackend++;
         }
 
-        // cache in background
-        if (fromCache == 0 && fromBackend > 0) {
-            executorCache.submit(new Runnable() {
-                @Override
-                public void run() {
-                    int counter = 0;
-                    for (int i = ecblocks.size() - 1; i >= 0; i--) {
-                        ECBlock ecblock = ecblocks.get(i);
-                        cacheBlock(key, ecblock);
-                        counter++;
-                        if (counter == blocksincache)
-                            break;
+        // make sure there are "blocksincache" blocks in cache
+        if (fromCache < blocksincache) {
+            cacheTasks = new ArrayList<Future>();
+            cacheCompletionService = new ExecutorCompletionService<Boolean>(executorCache);
+            int missing = blocksincache - fromCache;
+            if (missing > 0) {
+                for (ECBlock ecblock : ecblocks) {
+                    if (ecblock.getStorage() == Storage.BACKEND) {
+                        // cache block in the background
+                        final ECBlock ecblockFin = ecblock;
+                        try {
+                            Future newTask = cacheCompletionService.submit(new Callable<Boolean>() {
+                                @Override
+                                public Boolean call() throws Exception {
+                                    Boolean toRet = cacheBlock(ecblockFin);
+                                    System.out.println("Returning " + toRet);
+                                    return toRet;
+                                }
+                            });
+                            cacheTasks.add(newTask);
+                        } catch (RejectedExecutionException e) {
+                            System.err.println("Exception thrown when caching blocks");
+                        }
+                        missing--;
+                        System.out.println("missing: " + missing);
                     }
+                    if (missing == 0)
+                        break;
                 }
-            });
+            }
         }
 
         // update stats: if data was entirely read from cache, backend or a mix
@@ -257,26 +318,21 @@ public class ECCacheClient extends ClientBlueprint {
         return data;
     }
 
-    private void cacheBlock(String key, ECBlock ecblock) {
-        Status status = memConnection.insert(ecblock.getBaseKey(), ecblock.getBytes());
-        if (status == Status.OK)
-            logger.debug("Cache  " + key + " block " + ecblock.getId() + " at " + memConnection.getHost());
-        else
-            logger.debug("[Error] Cache  " + key + " block " + ecblock.getId() + " at " + memConnection.getHost());
-    }
-
     @Override
     public Status update(String key, byte[] value) {
+        logger.warn("update not implemented");
         return null;
     }
 
     @Override
     public Status insert(String key, byte[] value) {
+        logger.warn("insert not implemented");
         return null;
     }
 
     @Override
     public Status delete(String key) {
+        logger.warn("delete not implemented");
         return null;
     }
 }

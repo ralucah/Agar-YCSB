@@ -5,6 +5,11 @@ import com.yahoo.ycsb.Status;
 
 public class DummyClient extends ClientBlueprint {
     @Override
+    public void cleanupRead() {
+
+    }
+
+    @Override
     public byte[] read(String key, int keyNum) {
         System.out.println("Read " + keyNum + " " + key);
         return new byte[0];

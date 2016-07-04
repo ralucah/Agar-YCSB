@@ -132,6 +132,11 @@ public class DynamicCacheClient extends ClientBlueprint {
         executorCache.shutdownNow();
     }
 
+    @Override
+    public void cleanupRead() {
+
+    }
+
     /**
      * Compute which blocks are stored in the given region
      *

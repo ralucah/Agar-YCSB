@@ -117,6 +117,11 @@ public class ECCacheClient2 extends ClientBlueprint {
         logger.error("Hits: " + cacheHits + " Misses: " + cacheMisses + " PartialHits: " + cachePartialHits);
     }
 
+    @Override
+    public void cleanupRead() {
+
+    }
+
     private ECBlock readBlockCache(String key, int blockId) {
         String blockKey = key + blockId;
         int memConnId = (blockId + 1) % memConnections.size();

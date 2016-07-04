@@ -58,7 +58,7 @@ CLIENTS = {
     "backend" : "com.yahoo.ycsb.dual.clients.BackendClient",
     "localcache" : "com.yahoo.ycsb.dual.clients.LocalCacheClient",
     "fixcache" : "com.yahoo.ycsb.dual.clients.FixCacheClient",
-    "eccache" : "com.yahoo.ycsb.dual.clients.ECCacheClient",
+    "lru" : "com.yahoo.ycsb.dual.clients.LRUCacheClient",
     "dynamic" : "com.yahoo.ycsb.dual.clients.DynamicCacheClient",
     "dummy" : "com.yahoo.ycsb.dual.clients.DummyClient",
     "lfu" : "com.yahoo.ycsb.dual.clients.LFUCacheClient"

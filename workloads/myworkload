@@ -1,7 +1,7 @@
 fieldlength=1048576
 
 recordcount=3
-operationcount=1000000
+operationcount=20
 workload=com.yahoo.ycsb.workloads.CoreWorkload
 
 insertstart=0
@@ -11,7 +11,7 @@ readproportion=1
 updateproportion=0
 scanproportion=0
 insertproportion=0
-maxexecutiontime=300
+#maxexecutiontime=300
 
 #requestdistribution=zipfian
 #requestdistribution=uniform

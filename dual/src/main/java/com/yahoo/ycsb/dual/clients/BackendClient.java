@@ -109,8 +109,12 @@ public class BackendClient extends ClientBlueprint {
     @Override
     public void cleanup() throws ClientException {
         logger.debug("Cleaning up.");
-        if (executor.isTerminated())
-            executor.shutdownNow();
+        //if (executor.isTerminated())
+        executor.shutdownNow();
+    }
+
+    @Override
+    public void cleanupRead() {
     }
 
 
@@ -124,16 +128,20 @@ public class BackendClient extends ClientBlueprint {
         return block;
     }
 
+    /**
+     * Send k + m read requests, wait to get at least k blocks
+     *
+     * @param key
+     * @param keyNum
+     * @return
+     */
     @Override
     public byte[] read(final String key, final int keyNum) {
-
-        //long starttime = System.currentTimeMillis();
         List<Future> tasks = new ArrayList<Future>();
 
-        // read blocks in parallel
+        // read k+m blocks in parallel
         CompletionService<byte[]> completionService = new ExecutorCompletionService<byte[]>(executor);
         for (int i = 0; i < LonghairLib.k + LonghairLib.m; i++) {
-            //try {
             final int blockNumFin = i;
             Future newTask = completionService.submit(new Callable<byte[]>() {
                 @Override
@@ -148,15 +156,14 @@ public class BackendClient extends ClientBlueprint {
                     return toRet;
                 }
             });
-
             tasks.add(newTask);
-            //} catch(RejectedExecutionException e) {}
         }
 
+        // wait for at least k blocks
         int success = 0;
         int errors = 0;
         Set<byte[]> blocks = new HashSet<byte[]>();
-        while (success < LonghairLib.k) {
+        while (success < LonghairLib.k && errors < LonghairLib.m) {
             try {
                 Future<byte[]> resultFuture = completionService.take();
                 byte[] block = resultFuture.get();
@@ -169,14 +176,14 @@ public class BackendClient extends ClientBlueprint {
                 errors++;
                 logger.debug("Exception reading block.");
             }
-            if (errors > LonghairLib.m)
-                break;
         }
 
+        // cancel the unnecessary read requests
         for (Future f : tasks) {
             f.cancel(true);
         }
 
+        // decode data
         byte[] data = null;
         if (success >= LonghairLib.k) {
             data = LonghairLib.decode(blocks);
@@ -186,9 +193,6 @@ public class BackendClient extends ClientBlueprint {
             logger.info("Read " + key + " " + data.length + "B"); // + ClientUtils.bytesToHash(data));
         else
             logger.error("Error reading " + key);
-
-        //long endtime = System.currentTimeMillis();
-        //System.out.println("Read: " + key + " " + starttime + ":" + endtime + " " + (endtime - starttime));
 
         return data;
     }
@@ -207,32 +211,40 @@ public class BackendClient extends ClientBlueprint {
         return status;
     }
 
-    /* insert data (encoded or full) in S3 buckets */
+    /**
+     * Insert k_+m blocks in s3 buckets
+     * @param key
+     * @param value
+     * @return
+     */
     @Override
     public Status insert(String key, byte[] value) {
         Status status = Status.OK;
 
-        // encode data
+        // encode data into k+m blocks
         Set<byte[]> encodedBlocks = LonghairLib.encode(value);
 
-        // insert encoded blocks in parallel
+        // insert k+m encoded blocks in parallel
+        List<Future> tasks = new ArrayList<Future>();
         final String keyFin = key;
         CompletionService<Status> completionService = new ExecutorCompletionService<Status>(executor);
         int counter = 0;
         for (final byte[] block : encodedBlocks) {
             final int blockNumFin = counter;
             counter++;
-            completionService.submit(new Callable<Status>() {
+            Future newTask = completionService.submit(new Callable<Status>() {
                 @Override
                 public Status call() throws Exception {
                     return insertBlock(keyFin, blockNumFin, block);
                 }
             });
+            tasks.add(newTask);
         }
 
+        // wait for all k+m blocks to be stored successfully or for m errors to occur
         int success = 0;
         int errors = 0;
-        while (success < encodedBlocks.size()) {
+        while (success < encodedBlocks.size() && errors < LonghairLib.m) {
             Future<Status> statusFuture = null;
             try {
                 statusFuture = completionService.take();
@@ -256,9 +268,11 @@ public class BackendClient extends ClientBlueprint {
                 else
                     errors++;
             }
+        }
 
-            if (errors > LonghairLib.m)
-                break;
+        // make sure all parallel storage threads are stopped
+        for (Future f : tasks) {
+            f.cancel(true);
         }
 
         // set status

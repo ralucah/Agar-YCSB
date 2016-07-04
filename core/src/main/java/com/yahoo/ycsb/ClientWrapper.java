@@ -95,6 +95,11 @@ public class ClientWrapper extends ClientBlueprint {
         measure("CLEANUP", Status.OK, ist, st, en);
     }
 
+    @Override
+    public void cleanupRead() {
+        _clientBlueprint.cleanupRead();
+    }
+
     /**
      * Read a record from the database. Each field/value pair from the result
      * will be stored in a HashMap.
@@ -107,6 +112,7 @@ public class ClientWrapper extends ClientBlueprint {
         long st = System.nanoTime();
         byte[] res = _clientBlueprint.read(key, keyNum);
         long en = System.nanoTime();
+        cleanupRead();
         Status status = Status.OK;
         if (res == null)
             status = Status.ERROR;

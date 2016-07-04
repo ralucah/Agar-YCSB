@@ -134,6 +134,10 @@ public class FixCacheClient extends ClientBlueprint {
         }
     }
 
+    @Override
+    public void cleanupRead() {
+
+    }
 
     private byte[] readBlock(String baseKey, int blockNum) throws InterruptedException {
         String blockKey = baseKey + blockNum;

@@ -124,6 +124,11 @@ public class LocalCacheClient extends ClientBlueprint {
         executorCache.shutdownNow();
     }
 
+    @Override
+    public void cleanupRead() {
+
+    }
+
     private byte[] readBlock(String baseKey, int blockNum) throws InterruptedException {
         String blockKey = baseKey + blockNum;
         int s3ConnNum = blockNum % s3Connections.size();
