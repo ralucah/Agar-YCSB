@@ -93,23 +93,25 @@ public class DynamicCacheManager extends CacheManagerBlueprint {
         }
 
         // sort keys decreasingly by value
-        Collections.sort(keys, (o1, o2) -> o1.getValue().compareTo(o2.getValue()));
-        Collections.reverse(keys);
-        logger.debug("Keys sorted decreasingly by value: " + keys);
+        if (keys.size() > 0) {
+            Collections.sort(keys, (o1, o2) -> o1.getValue().compareTo(o2.getValue()));
+            Collections.reverse(keys);
+            logger.debug("Keys sorted decreasingly by value: " + keys);
 
-        // knapsack solution using dynamic programming
-        computeChosenOptions();
+            // knapsack solution using dynamic programming
+            computeChosenOptions();
 
-        // compute cache
-        synchronized (cache) {
-            cache.clear();
-        }
-        logger.debug("cachesize = " + cacheCapacity);
-        for (int i = cacheCapacity; i >= 0; i--) {
-            if (chosenOptions.get(i) != null) {
-                cache = Collections.synchronizedList(chosenOptions.get(i));
-                logger.debug("chosen cachesize = " + i);
-                break;
+            // compute cache
+            synchronized (cache) {
+                cache.clear();
+            }
+            logger.debug("cachesize = " + cacheCapacity);
+            for (int i = cacheCapacity; i >= 0; i--) {
+                if (chosenOptions.get(i) != null) {
+                    cache = Collections.synchronizedList(chosenOptions.get(i));
+                    logger.debug("chosen cachesize = " + i);
+                    break;
+                }
             }
         }
         prettyPrintCache();

@@ -38,7 +38,6 @@ public class ECCacheClient2 extends ClientBlueprint {
     // for concurrent processing
     private ExecutorService executor;
     private List<MemcachedConnection> memConnections;
-    ;
 
     // TODO Assumption: one bucket per region (num regions = num endpoints = num buckets)
     private void initS3() {

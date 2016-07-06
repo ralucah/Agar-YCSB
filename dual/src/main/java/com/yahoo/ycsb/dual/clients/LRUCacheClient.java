@@ -50,8 +50,8 @@ public class LRUCacheClient extends ClientBlueprint {
     // TODO Assumption: one bucket per region (num regions = num endpoints = num buckets)
     private void initS3() {
         List<String> regions = Arrays.asList(PropertyFactory.propertiesMap.get(PropertyFactory.S3_REGIONS_PROPERTY).split("\\s*,\\s*"));
-        List<String> endpoints = Arrays.asList(propertyFactory.propertiesMap.get(PropertyFactory.S3_ENDPOINTS_PROPERTY).split("\\s*,\\s*"));
-        List<String> s3Buckets = Arrays.asList(propertyFactory.propertiesMap.get(PropertyFactory.S3_BUCKETS_PROPERTY).split("\\s*,\\s*"));
+        List<String> endpoints = Arrays.asList(PropertyFactory.propertiesMap.get(PropertyFactory.S3_ENDPOINTS_PROPERTY).split("\\s*,\\s*"));
+        List<String> s3Buckets = Arrays.asList(PropertyFactory.propertiesMap.get(PropertyFactory.S3_BUCKETS_PROPERTY).split("\\s*,\\s*"));
         if (s3Buckets.size() != endpoints.size() || endpoints.size() != regions.size())
             logger.error("Configuration error: #buckets = #regions = #endpoints");
 
@@ -73,8 +73,8 @@ public class LRUCacheClient extends ClientBlueprint {
 
     private void initLonghair() {
         // erasure coding-related configuration
-        LonghairLib.k = Integer.valueOf(propertyFactory.propertiesMap.get(PropertyFactory.LONGHAIR_K_PROPERTY));
-        LonghairLib.m = Integer.valueOf(propertyFactory.propertiesMap.get(PropertyFactory.LONGHAIR_M_PROPERTY));
+        LonghairLib.k = Integer.valueOf(PropertyFactory.propertiesMap.get(PropertyFactory.LONGHAIR_K_PROPERTY));
+        LonghairLib.m = Integer.valueOf(PropertyFactory.propertiesMap.get(PropertyFactory.LONGHAIR_M_PROPERTY));
         logger.debug("k: " + LonghairLib.k + " m: " + LonghairLib.m);
 
         // check k >= 0 and k < 256
@@ -93,10 +93,10 @@ public class LRUCacheClient extends ClientBlueprint {
     }
 
     private void initCache() throws ClientException {
-        String memHost = propertyFactory.propertiesMap.get(PropertyFactory.MEMCACHED_SERVER_PROPERTY);
+        String memHost = PropertyFactory.propertiesMap.get(PropertyFactory.MEMCACHED_SERVER_PROPERTY);
         memConnection = new MemcachedConnection(memHost);
         logger.debug("Memcached connection " + memHost);
-        blocksincache = Integer.valueOf(propertyFactory.propertiesMap.get(PropertyFactory.BLOCKS_IN_CACHE));
+        blocksincache = Integer.valueOf(PropertyFactory.propertiesMap.get(PropertyFactory.BLOCKS_IN_CACHE));
         logger.debug("blocksincache: " + blocksincache);
     }
 
@@ -118,7 +118,7 @@ public class LRUCacheClient extends ClientBlueprint {
         initCache();
 
         // init executor service
-        final int threadsNum = Integer.valueOf(propertyFactory.propertiesMap.get(PropertyFactory.EXECUTOR_THREADS_PROPERTY));
+        final int threadsNum = Integer.valueOf(PropertyFactory.propertiesMap.get(PropertyFactory.EXECUTOR_THREADS_PROPERTY));
         logger.debug("threads num: " + threadsNum);
         executorRead = Executors.newFixedThreadPool(threadsNum);
         executorCache = Executors.newFixedThreadPool(threadsNum);

@@ -31,15 +31,11 @@ public class StorageItem {
     }
 
     public boolean isEncodedInBackend() {
-        if (backend.size() > 1)
-            return true;
-        return false;
+        return backend.size() > 1;
     }
 
     public boolean isEncodedInCache() {
-        if (cache.size() > 1)
-            return true;
-        return false;
+        return cache.size() > 1;
     }
 
     public void addToCache(String itemKey, String host) {
@@ -90,9 +86,7 @@ public class StorageItem {
     }
 
     public boolean isEncodedInStrategy() {
-        if (strategy.size() > 1)
-            return true;
-        return false;
+        return strategy.size() > 1;
     }
 
     public void removeFromStrategy(StorageSubitem storageSubitem) {

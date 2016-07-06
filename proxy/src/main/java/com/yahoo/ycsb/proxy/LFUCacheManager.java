@@ -17,6 +17,7 @@ public class LFUCacheManager extends CacheManagerBlueprint {
 
     private int cacheCapacity; // how many blocks fit in the cache
     private List<CachingOption> cache; // current cache configuration
+    private int cachesize;
 
     private int k; // number of data chunks
     private int m; // number of redundant chunks
@@ -64,6 +65,7 @@ public class LFUCacheManager extends CacheManagerBlueprint {
 
         synchronized (cache) {
             cache.clear();
+            cachesize = 0;
         }
 
         // iterate Map<String, Integer> frequency
@@ -90,8 +92,9 @@ public class LFUCacheManager extends CacheManagerBlueprint {
 
             for (Pair<String, Integer> pair : keys) {
                 String key = pair.getKey();
-                if (cache.size() < cacheCapacity) {
+                if (cachesize < cacheCapacity) {
                     cache.add(cachingOptions.get(key));
+                    cachesize += weight;
                 } else {
                     break;
                 }

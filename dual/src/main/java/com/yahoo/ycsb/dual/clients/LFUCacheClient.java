@@ -80,7 +80,7 @@ public class LFUCacheClient extends ClientBlueprint {
         proxyConnection = new ProxyConnection(getProperties());
 
         // connection to closest memcached server
-        String memHost = propertyFactory.propertiesMap.get(propertyFactory.MEMCACHED_SERVER_PROPERTY);
+        String memHost = PropertyFactory.propertiesMap.get(PropertyFactory.MEMCACHED_SERVER_PROPERTY);
         memConnection = new MemcachedConnection(memHost);
         logger.debug("Memcached connection " + memHost);
     }
@@ -101,7 +101,7 @@ public class LFUCacheClient extends ClientBlueprint {
         initLonghair();
         initCache();
 
-        final int threadsNum = Integer.valueOf(propertyFactory.propertiesMap.get(propertyFactory.EXECUTOR_THREADS_PROPERTY));
+        final int threadsNum = Integer.valueOf(PropertyFactory.propertiesMap.get(PropertyFactory.EXECUTOR_THREADS_PROPERTY));
         logger.debug("threads num: " + threadsNum);
         executorRead = Executors.newFixedThreadPool(threadsNum);
         executorCache = Executors.newFixedThreadPool(threadsNum);
