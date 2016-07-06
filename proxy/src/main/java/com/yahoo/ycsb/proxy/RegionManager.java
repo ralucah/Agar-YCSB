@@ -59,7 +59,7 @@ public class RegionManager {
                 logger.debug("S3 connection " + i + " " + bucket + " " + regionName + " " + endpoint);
 
                 Region region = new Region(regionName, endpoint);
-                double latency = readFake(endpoint, client);
+                double latency = read(endpoint, client);
                 region.setLatency(latency);
                 regions.add(region);
             } catch (ClientException e) {
