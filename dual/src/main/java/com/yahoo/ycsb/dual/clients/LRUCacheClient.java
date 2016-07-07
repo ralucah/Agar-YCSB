@@ -130,6 +130,7 @@ public class LRUCacheClient extends ClientBlueprint {
 
     @Override
     public void cleanup() throws ClientException {
+        logger.error("Hits: " + cacheHits + " Misses: " + cacheMisses + " PartialHits: " + cachePartialHits);
         executorCache.shutdownNow();
         executorRead.shutdownNow();
     }
