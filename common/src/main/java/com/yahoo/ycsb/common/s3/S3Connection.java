@@ -241,8 +241,10 @@ public class S3Connection {
                 getObjectRequest = new GetObjectRequest(bucket, key);
                 getObjectMetadataRequest = new GetObjectMetadataRequest(bucket, key);
             }
+            //System.out.println("Get object " + key + " from " + bucket);
             S3Object object = awsClient.getObject(getObjectRequest);
             ObjectMetadata objectMetadata = awsClient.getObjectMetadata(getObjectMetadataRequest);
+            //System.out.println("Get object " + key + " from " + bucket + " OK");
             InputStream objectData = object.getObjectContent(); //consuming the stream
             // writing the stream to bytes and to results
             int sizeOfFile = (int) objectMetadata.getContentLength();
@@ -259,6 +261,7 @@ public class S3Connection {
 
                 if (Thread.interrupted()) {
                     //System.out.println("interrupt " + key);
+                    objectData.close();
                     throw new InterruptedException();
                 }
             }

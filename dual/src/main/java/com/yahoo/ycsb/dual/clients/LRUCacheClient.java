@@ -305,9 +305,10 @@ public class LRUCacheClient extends ClientBlueprint {
             cacheMisses.incrementAndGet();
 
         // decode data
-        data = LonghairLib.decode(blockBytes);
-        logger.info("Read " + key + " " + data.length + " bytes Cache: " + fromCache + " Backend: " + fromBackend);
-
+        if (blockBytes.size() >= LonghairLib.k) {
+            data = LonghairLib.decode(blockBytes);
+            logger.info("Read " + key + " " + data.length + " bytes Cache: " + fromCache + " Backend: " + fromBackend);
+        }
         return data;
     }
 

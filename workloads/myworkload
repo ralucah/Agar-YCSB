@@ -1,13 +1,12 @@
 fieldlength=1048576
 
-recordcount=3
-operationcount=10
+recordcount=300
+operationcount=1000
 workload=com.yahoo.ycsb.workloads.CoreWorkload
 
 insertstart=0
-insertcount=100
+insertcount=300
 
-readproportion=1
 updateproportion=0
 scanproportion=0
 insertproportion=0
@@ -16,7 +15,7 @@ insertproportion=0
 #requestdistribution=zipfian
 #requestdistribution=uniform
 requestdistribution=slashdot
-slashdot.skew=1.2
+slashdot.skew=0.8
 slashdot.delay=-1
 
 # sao paulo, north virginia, ireland, frankfurt, tokyo, sydney
@@ -43,4 +42,4 @@ timeout=10000
 period=30
 alpha=0.8
 # in number of blocks
-cachesize=30
+cachesize=89

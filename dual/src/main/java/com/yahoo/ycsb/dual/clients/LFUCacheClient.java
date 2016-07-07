@@ -392,7 +392,6 @@ public class LFUCacheClient extends ClientBlueprint {
 
         // decode data + return it
         byte[] data = null;
-        System.out.println("blockBytes.size: " + blockBytes.size());
         if (blockBytes.size() >= LonghairLib.k)
             data = LonghairLib.decode(blockBytes);
 

@@ -130,6 +130,7 @@ public class LocalCacheClient extends ClientBlueprint {
         if (cacheTask != null) {
             while (cacheTask.isDone() == false) ;
         }
+
         logger.debug("cleanup cache END");
     }
 
