@@ -7,9 +7,11 @@ workload=com.yahoo.ycsb.workloads.CoreWorkload
 insertstart=0
 insertcount=300
 
+readproportion=1
 updateproportion=0
 scanproportion=0
 insertproportion=0
+
 #maxexecutiontime=300
 
 #requestdistribution=zipfian

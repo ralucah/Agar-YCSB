@@ -298,7 +298,7 @@ public class LRUCacheClient extends ClientBlueprint {
         }
 
         // update stats: if data was entirely read from cache, backend or a mix
-        if (fromCache == blocksincache)
+        if (fromCache >= LonghairLib.k)
             cacheHits.incrementAndGet();
         else if (fromCache > 0 && fromBackend > 0)
             cachePartialHits.incrementAndGet();
