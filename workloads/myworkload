@@ -17,7 +17,7 @@ insertproportion=0
 #requestdistribution=zipfian
 #requestdistribution=uniform
 requestdistribution=slashdot
-slashdot.skew=0.8
+slashdot.skew=1.4
 slashdot.delay=-1
 
 # sao paulo, north virginia, ireland, frankfurt, tokyo, sydney
