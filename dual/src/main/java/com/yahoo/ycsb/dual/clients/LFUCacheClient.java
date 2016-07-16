@@ -352,7 +352,9 @@ public class LFUCacheClient extends ClientBlueprint {
 
             int missingBlocksTmp = missingBlocks;
             if (missingBlocksTmp > 0) {
-                for (ECBlock ecblock : ecblocks) {
+                int ecblocksSize = ecblocks.size();
+                for (int i = ecblocksSize - 1; i >= 0; i--) {
+                    ECBlock ecblock = ecblocks.get(i);
                     if (ecblock.getStorage() == Storage.BACKEND) {
                         // cache block in the background
                         final ECBlock ecblockFin = ecblock;
