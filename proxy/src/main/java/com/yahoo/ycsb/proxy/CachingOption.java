@@ -33,7 +33,7 @@ public class CachingOption implements Comparable<CachingOption> {
     }
 
     public String prettyPrint() {
-        return key + " weight:" + weight + " value:" + (int) value; // + " regions: " + regions;
+        return key + " weight:" + weight + " value:" + value; // + " regions: " + regions;
     }
 
     public double getValue() {

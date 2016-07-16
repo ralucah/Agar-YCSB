@@ -243,7 +243,7 @@ public class LRUCacheClient extends ClientBlueprint {
     private Boolean cacheBlock(ECBlock ecblock) {
         Status status = memConnection.insert(ecblock.getBaseKey(), ecblock.getBytes());
         if (status == Status.OK) {
-            logger.debug("Cache  " + ecblock.getBaseKey() + " block " + ecblock.getId() + " at " + memConnection.getHost());
+            logger.error("Cache  " + ecblock.getBaseKey() + " block " + ecblock.getId() + " at " + memConnection.getHost());
             return true;
         }
         logger.debug("[Error] Cache  " + ecblock.getBaseKey() + " block " + ecblock.getId() + " at " + memConnection.getHost());

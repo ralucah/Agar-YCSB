@@ -13,6 +13,8 @@ public class ProxyReply implements Serializable {
 
     public ProxyReply(int cachedBlocks) {
         this.cachedBlocks = cachedBlocks;
+        backendRecipe = new ArrayList<String>();
+        cacheRecipe = new ArrayList<String>();
     }
 
     public ProxyReply() {

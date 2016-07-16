@@ -17,7 +17,7 @@ insertproportion=0
 #requestdistribution=zipfian
 #requestdistribution=uniform
 requestdistribution=slashdot
-slashdot.skew=1.4
+slashdot.skew=1.1
 slashdot.delay=-1
 
 # sao paulo, north virginia, ireland, frankfurt, tokyo, sydney
@@ -26,7 +26,6 @@ s3.regions=sa-east-1,us-east-1,eu-west-1,eu-central-1,ap-northeast-1,ap-southeas
 s3.buckets=sao101,virginia101,patrick101,frank101,tokyo101,sydney101
 
 memcached.server=127.0.0.1:11211
-#memcached.servers=127.0.0.1:11211,127.0.0.1:11212,127.0.0.1:11213
 
 longhair.k=9
 longhair.m=3
@@ -44,4 +43,4 @@ timeout=10000
 period=30
 alpha=0.8
 # in number of blocks
-cachesize=89
+cachesize=3000

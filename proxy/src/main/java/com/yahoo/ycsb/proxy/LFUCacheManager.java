@@ -14,6 +14,8 @@ public class LFUCacheManager extends CacheManagerBlueprint {
     public static Logger logger = Logger.getLogger(LFUCacheManager.class);
 
     private Map<String, Integer> frequency; // number of times each key was requested during the current period
+    private Map<String, Double> weightedPopularity; // weighted popularity for all keys seen since the proxy start
+    private double alpha; // coefficient for weighted popularity (between 0 and 1)
 
     private int cacheCapacity; // how many blocks fit in the cache
     private List<CachingOption> cache; // current cache configuration
@@ -22,7 +24,7 @@ public class LFUCacheManager extends CacheManagerBlueprint {
     private int k; // number of data chunks
     private int m; // number of redundant chunks
 
-    private List<Pair<String, Integer>> keys; // all keys seen since proxy start, sorted by value
+    private List<Pair<String, Double>> keys; // all keys seen since proxy start, sorted by popularity
     private int weight;
 
     private Map<String, CachingOption> cachingOptions; // (key, list of cache options) for all seen keys
@@ -43,13 +45,15 @@ public class LFUCacheManager extends CacheManagerBlueprint {
         // init cache, frequency, weighted popularity
         cache = Collections.synchronizedList(new ArrayList<>()); // thread that replies to client + thread that reconfigures cache
         frequency = Collections.synchronizedMap(new HashMap<>()); // thread that counts key acces + thread that reconfigures cache (resets)
+        weightedPopularity = new HashMap<>(); // only accessed from thead that reconfigures cache
 
         // init cache options, max values, and chosen options; only accessed from thead that reconfigures cache
         cachingOptions = new HashMap<>();
 
-        // init period
+        // init alpha, period
+        alpha = Double.parseDouble(PropertyFactory.propertiesMap.get(PropertyFactory.ALPHA_PROPERTY));
         int period = Integer.parseInt(PropertyFactory.propertiesMap.get(PropertyFactory.PERIOD_PROPERTY));
-        logger.debug("period: " + period);
+        logger.debug("alpha: " + alpha + " period: " + period);
 
         // periodic thread that reconfigures cache
         ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
@@ -60,37 +64,48 @@ public class LFUCacheManager extends CacheManagerBlueprint {
     private void computeCache() {
         logger.info("computeCache BEGIN");
 
-        // display frequency
+        // adjust weighted popularity based on frequency, then reset frequency
         prettyPrintFrequency();
+        computeWeightedPopularity();
+        synchronized (frequency) {
+            frequency.clear();
+        }
+        prettyPrintWeightedPopularity();
 
-        synchronized (cache) {
-            cache.clear();
-            cachesize = 0;
+        keys = new ArrayList<>();
+        for (Map.Entry<String, Double> entry : weightedPopularity.entrySet()) {
+            String key = entry.getKey();
+            double weightedPop = entry.getValue();
+            keys.add(new Pair<>(key, weightedPop));
+            //logger.debug("keys.add(" + key + "," + weightedPop + ")");
         }
 
-        // iterate Map<String, Integer> frequency
-        //for (Map.Entry<String, Integer> freqEntry : frequency.entrySet()) {
-        // for each key seen over the last period, compute a caching option and add it to the total caching options set
-        //    String key = freqEntry.getKey();
-        //}
-        if (frequency.size() > 0) {
-            // sort keys and compute caching options
-            cachingOptions.clear();
-            keys = new ArrayList<Pair<String, Integer>>();
-            for (Map.Entry<String, Integer> entry : frequency.entrySet()) {
-                String key = entry.getKey();
-                int freq = entry.getValue();
-                keys.add(new Pair<>(key, freq));
-                CachingOption coKey = new CachingOption(key, weight, freq);
-                cachingOptions.put(key, coKey);
-            }
-
-            // sort keys decreasingly by value
+        if (keys.size() > 0) {
             Collections.sort(keys, (o1, o2) -> o1.getValue().compareTo(o2.getValue()));
             Collections.reverse(keys);
             logger.debug("Keys sorted decreasingly by value: " + keys);
+        }
+        //logger.debug("keys.size() = " + keys.size());
 
-            for (Pair<String, Integer> pair : keys) {
+        cachingOptions.clear();
+
+        if (keys.size() > 0) {
+            // compute caching options
+            for (Pair<String, Double> entry : keys) {
+                String key = entry.getKey();
+                double weightedPop = entry.getValue();
+                CachingOption coKey = new CachingOption(key, weight, weightedPop);
+                cachingOptions.put(key, coKey);
+            }
+
+            // compute cache
+            synchronized (cache) {
+                cache.clear();
+            }
+
+            logger.debug("cachesize = " + cacheCapacity);
+
+            for (Pair<String, Double> pair : keys) {
                 String key = pair.getKey();
                 if (cachesize < cacheCapacity) {
                     cache.add(cachingOptions.get(key));
@@ -100,11 +115,7 @@ public class LFUCacheManager extends CacheManagerBlueprint {
                 }
             }
         }
-
         prettyPrintCache();
-
-        // clear frequency
-        frequency.clear();
 
         logger.info("computeCache END");
     }
@@ -119,6 +130,33 @@ public class LFUCacheManager extends CacheManagerBlueprint {
             }
         }
     }
+
+    // for all keys seen since proxy start, compute / adjust the weighted popularity based on the frequency
+    // values from the last period
+    private void computeWeightedPopularity() {
+        for (Map.Entry<String, Integer> entry : frequency.entrySet()) {
+            String key = entry.getKey();
+            int freq = entry.getValue();
+
+            double oldWeightedPopularity = 0;
+            if (weightedPopularity.containsKey(key)) {
+                oldWeightedPopularity = weightedPopularity.get(key);
+            }
+
+            double newWeightedPopularity = alpha * freq + (1 - alpha) * oldWeightedPopularity;
+            weightedPopularity.put(key, newWeightedPopularity);
+        }
+        // also update weighted popularity for keys that were not encountered over the last period
+        for (Map.Entry<String, Double> entry : weightedPopularity.entrySet()) {
+            String key = entry.getKey();
+            if (!frequency.containsKey(key)) {
+                double oldWeightedPopularity = entry.getValue();
+                double newWeightedPopularity = (1 - alpha) * oldWeightedPopularity; // + alpha * 0
+                weightedPopularity.put(key, newWeightedPopularity);
+            }
+        }
+    }
+
 
     private boolean cacheContains(String key) {
         for (CachingOption cachingOption : cache) {
@@ -143,6 +181,14 @@ public class LFUCacheManager extends CacheManagerBlueprint {
     private void prettyPrintFrequency() {
         logger.info("frequency {");
         for (Map.Entry<String, Integer> entry : frequency.entrySet()) {
+            logger.info(entry.getKey() + " " + entry.getValue());
+        }
+        logger.info("}");
+    }
+
+    private void prettyPrintWeightedPopularity() {
+        logger.info("weightedPopularity {");
+        for (Map.Entry<String, Double> entry : weightedPopularity.entrySet()) {
             logger.info(entry.getKey() + " " + entry.getValue());
         }
         logger.info("}");
