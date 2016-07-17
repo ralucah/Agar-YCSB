@@ -43,4 +43,4 @@ timeout=10000
 period=30
 alpha=0.8
 # in number of blocks
-cachesize=3000
+cachesize=90

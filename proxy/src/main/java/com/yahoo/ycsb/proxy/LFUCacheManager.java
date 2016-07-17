@@ -84,12 +84,9 @@ public class LFUCacheManager extends CacheManagerBlueprint {
             Collections.sort(keys, (o1, o2) -> o1.getValue().compareTo(o2.getValue()));
             Collections.reverse(keys);
             logger.debug("Keys sorted decreasingly by value: " + keys);
-        }
-        //logger.debug("keys.size() = " + keys.size());
 
-        cachingOptions.clear();
+            cachingOptions.clear();
 
-        if (keys.size() > 0) {
             // compute caching options
             for (Pair<String, Double> entry : keys) {
                 String key = entry.getKey();
@@ -97,16 +94,19 @@ public class LFUCacheManager extends CacheManagerBlueprint {
                 CachingOption coKey = new CachingOption(key, weight, weightedPop);
                 cachingOptions.put(key, coKey);
             }
+            logger.debug("cachingoptions.size(): " + cachingOptions.size());
 
             // compute cache
             synchronized (cache) {
                 cache.clear();
+                cachesize = 0;
             }
 
             logger.debug("cachesize = " + cacheCapacity);
 
             for (Pair<String, Double> pair : keys) {
                 String key = pair.getKey();
+
                 if (cachesize < cacheCapacity) {
                     cache.add(cachingOptions.get(key));
                     cachesize += weight;
