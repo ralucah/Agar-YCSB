@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-// Agar's Requests Monitor + Cache Manager
+// Logic for Agar's Requests Monitor + Cache Manager
 
 package com.yahoo.ycsb.proxy;
 
