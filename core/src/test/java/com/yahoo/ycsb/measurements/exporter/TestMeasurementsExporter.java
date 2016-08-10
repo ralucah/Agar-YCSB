@@ -49,7 +49,7 @@ public class TestMeasurementsExporter {
         export.close();
 
         ObjectMapper mapper = new ObjectMapper();
-        JsonNode  json = mapper.readTree(out.toString("UTF-8"));
+        JsonNode json = mapper.readTree(out.toString("UTF-8"));
         assertTrue(json.isArray());
         assertEquals(json.get(0).get("measurement").asText(), "Operations");
         assertEquals(json.get(4).get("measurement").asText(), "MaxLatency(us)");

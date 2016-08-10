@@ -1,0 +1,6 @@
+s3.accessKeyId=AKIAJVYH2P5WGTGXVR2Q
+s3.secretKey=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
+s3.sse=false
+s3.protocol=HTTP
+#s3.maxConnections=
+s3.maxErrorRetry=0

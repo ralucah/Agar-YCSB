@@ -25,17 +25,17 @@ import java.util.Properties;
  * This class should be constructed using a no-argument constructor, so we can
  * load it dynamically. Any argument-based initialization should be
  * done by init().
- *
+ * <p>
  * Note that YCSB does not make any use of the return codes returned by this class.
  * Instead, it keeps a count of the return values and presents them to the user.
- *
+ * <p>
  * The semantics of methods such as insert, update and delete vary from database
  * to database.  In particular, operations may or may not be durable once these
  * methods commit, and some systems may return 'success' regardless of whether
  * or not a tuple with a matching key existed before the call.  Rather than dictate
  * the exact semantics of these methods, we recommend you either implement them
- * to match the database's default semantics, or the semantics of your 
- * target application.  For the sake of comparison between experiments we also 
+ * to match the database's default semantics, or the semantics of your
+ * target application.  For the sake of comparison between experiments we also
  * recommend you explain the semantics you chose when presenting performance results.
  */
 public abstract class ClientBlueprint {

@@ -29,27 +29,20 @@ except ImportError:
     print >> sys.stderr, '[ERROR] argparse not found. Try installing it via "pip".'
     raise
 
-BASE_URL = "https://github.com/brianfrankcooper/YCSB/tree/master/"
 COMMANDS = {
-    # i dont need this!
-    #"shell" : {
-    #    "command"     : "",
-    #    "description" : "Interactive mode",
-    #    "main"        : "com.yahoo.ycsb.CommandLine",
-    #},
     "load" : {
         "command"     : "-load",
-        "description" : "Execute the load phase",
+        "description" : "Execute the load phase to populate the store.",
         "main"        : "com.yahoo.ycsb.Client",
     },
     "run" : {
         "command"     : "-t",
-        "description" : "Execute the transaction phase",
+        "description" : "Execute the transaction phase (only reads).",
         "main"        : "com.yahoo.ycsb.Client",
     },
     "proxy" : {
         "command"     : "proxy",
-        "description" : "Start the Cache Proxy",
+        "description" : "Start the Agar Proxy.",
         "main"        : "com.yahoo.ycsb.proxy.UDPServer"
     },
 }
@@ -58,14 +51,14 @@ CLIENTS = {
     "backend" : "com.yahoo.ycsb.dual.clients.BackendClient",
     "localcache" : "com.yahoo.ycsb.dual.clients.LocalCacheClient",
     "fixcache" : "com.yahoo.ycsb.dual.clients.FixCacheClient",
-    "lru" : "com.yahoo.ycsb.dual.clients.LRUCacheClient",
-    "dynamic" : "com.yahoo.ycsb.dual.clients.DynamicCacheClient",
+    "lru" : "com.yahoo.ycsb.dual.clients.LRUClient",
+    "agar" : "com.yahoo.ycsb.dual.clients.AgarClient",
     "dummy" : "com.yahoo.ycsb.dual.clients.DummyClient",
-    "lfu" : "com.yahoo.ycsb.dual.clients.LFUCacheClient"
+    "lfu" : "com.yahoo.ycsb.dual.clients.LFUClient"
 }
 
 CACHEMANAGERS = {
-    "dynamic" : "com.yahoo.ycsb.proxy.DynamicCacheManager",
+    "agar" : "com.yahoo.ycsb.proxy.AgarCacheManager",
     "lfu" : "com.yahoo.ycsb.proxy.LFUCacheManager"
 }
 
@@ -125,14 +118,9 @@ def find_jars(dir, glob='*.jar'):
     return jars
 
 def get_ycsb_home():
-    #dir = os.path.abspath(os.path.dirname(sys.argv[0]))
-    #print("dir: " + dir)
-    #print(os.path.abspath(dir))
-    #return os.path.abspath(dir)
     return os.getcwd()
 
 def is_distribution():
-    # If there's a top level pom, we're a source checkout. otherwise a dist artifact
     return "pom.xml" not in os.listdir(get_ycsb_home())
 
 # Run the maven dependency plugin to get the local jar paths.
@@ -141,17 +129,12 @@ def is_distribution():
 # presumes maven properly handles system-specific path separators
 # Given module is full module name eg. 'core' or 'couchbase-BINDING'
 def get_classpath_from_maven(module):
-    #print("get_classpath_from_module: " + module)
     try:
-        #debug("Running 'mvn -pl com.yahoo.ycsb:" + module + " -am package -DskipTests "
-        #      "dependency:build-classpath -DincludeScope=compile -Dmdep.outputFilterFile=true'")
         mvn_output = check_output(["mvn", "-pl", "com.yahoo.ycsb:" + module,
                                    "-am", "package", "-DskipTests",
                                    "dependency:build-classpath",
                                    "-DincludeScope=compile",
                                    "-Dmdep.outputFilterFile=true"])
-        # the above outputs a "classpath=/path/tojar:/path/to/other/jar" for each module
-        # the last module will be the datastore BINDING
         line = [x for x in mvn_output.splitlines() if x.startswith("classpath=")][-1:]
         return line[0][len("classpath="):]
     except subprocess.CalledProcessError, err:
@@ -160,7 +143,6 @@ def get_classpath_from_maven(module):
               "Maven follows, try running "
               "'mvn -DskipTests package dependency:build=classpath' on your "
               "own and correct errors." + os.linesep + os.linesep + "mvn output:" + os.linesep)
-              #+ err.output)
         sys.exit(err.returncode)
 
 def main():
@@ -179,22 +161,17 @@ def main():
 
     # get home dir
     ycsb_home = get_ycsb_home()
-    #print("ycsb_home: " + ycsb_home)
 
     # java setup
     java = "java"
     java_home = os.getenv("JAVA_HOME")
     if java_home:
         java = os.path.join(java_home, "bin", "java")
-    #print("java: " + java)
 
     # get args
     args, remaining = p.parse_known_args()
     command = COMMANDS[args.command]["command"]
     main_classname = COMMANDS[args.command]["main"]
-    
-    #print("command: " + command)
-    #print("main_classname: " + main_classname)
 
     if command == "proxy":
         client_location = "proxy"
@@ -205,13 +182,8 @@ def main():
         project = BINDING + "-binding"
         client_dir = os.path.join(ycsb_home, client_location)
 
-    #print("client_location: " + client_location)
-    #print("project: " + project)
-    #print("client_dir: " + client_dir)
-
     # goes first so we can rely on side-effect of package
     maven_says = get_classpath_from_maven(project)
-    #print("maven_says: " + maven_says)
 
     # classpath
     cp = find_jars(os.path.join(client_dir, "target"), project + "*.jar")
@@ -223,7 +195,6 @@ def main():
 
     if command == "proxy":
         cachemanager_classname = CACHEMANAGERS[args.cachemanager]
-        #print("cachemanager: " + cachemanager_classname)
         ycsb_command = ([java] + args.jvm_args +
                     ["-cp", classpath,
                      main_classname, "-cachemanager", cachemanager_classname] + remaining)
@@ -232,7 +203,6 @@ def main():
         ycsb_command = ([java] + args.jvm_args +
                     ["-cp", classpath,
                      main_classname, "-client", client_classname] + remaining)
-    #print(ycsb_command)
 
     ycsb_command.append(command)
 

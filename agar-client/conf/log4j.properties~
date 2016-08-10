@@ -1,0 +1,18 @@
+log4j.rootLogger=off
+
+log4j.logger.com.yahoo.ycsb.dual.clients.BackendClient=info,stdout
+log4j.logger.com.yahoo.ycsb.dual.clients.LocalCacheClient=info,stdout
+log4j.logger.com.yahoo.ycsb.dual.clients.FixCacheClient=error,stdout
+log4j.logger.com.yahoo.ycsb.dual.clients.LRUCacheClient=debug,stdout
+log4j.logger.com.yahoo.ycsb.dual.clients.DynamicCacheClient=info,stdout
+log4j.logger.com.yahoo.ycsb.dual.clients.LFUCacheClient=info,stdout
+log4j.logger.com.yahoo.ycsb.dual.connections.ProxyConnection=error,stdout
+
+log4j.appender.stderr=org.apache.log4j.ConsoleAppender
+log4j.appender.stderr.target=System.err
+log4j.appender.stderr.layout=org.apache.log4j.PatternLayout
+
+log4j.appender.stdout=org.apache.log4j.ConsoleAppender
+log4j.appender.stdout.target=System.out
+log4j.appender.stdout.layout=org.apache.log4j.PatternLayout
+log4j.appender.stdout.layout.ConversionPattern=[%C{1}]: %m%n

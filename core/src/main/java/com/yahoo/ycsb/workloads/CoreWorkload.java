@@ -12,7 +12,7 @@ import java.util.Random;
  * The core benchmark scenario. Represents a set of clients doing simple CRUD operations. The
  * relative proportion of different kinds of operations, and other properties of the workload,
  * are controlled by parameters specified at runtime.
-
+ * <p>
  * Properties to control the client:
  * - fieldlength: the size of each field (default: 100)
  * - readproportion: what proportion of operations should be reads (default: 0.95)

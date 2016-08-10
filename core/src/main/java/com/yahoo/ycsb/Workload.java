@@ -26,8 +26,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * should be constructed using a no-argument constructor, so we can
  * load it dynamically. Any argument-based initialization should be
  * done by init().
- *
- * If you extend this class, you should support the "insertstart" property. This 
+ * <p>
+ * If you extend this class, you should support the "insertstart" property. This
  * allows the load phase to proceed from multiple clients on different machines, in case
  * the client is the bottleneck. For example, if we want to load 1 million records from
  * 2 machines, the first machine should have insertstart=0 and the second insertstart=500000. Additionally,

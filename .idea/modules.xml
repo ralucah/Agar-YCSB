@@ -2,12 +2,12 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
+      <module fileurl="file://$PROJECT_DIR$/agar-client/agar-client.iml" filepath="$PROJECT_DIR$/agar-client/agar-client.iml" />
+      <module fileurl="file://$PROJECT_DIR$/agar-proxy/proxy.iml" filepath="$PROJECT_DIR$/agar-proxy/proxy.iml" />
+      <module fileurl="file://$PROJECT_DIR$/agar-utils/agar-utils.iml" filepath="$PROJECT_DIR$/agar-utils/agar-utils.iml" />
       <module fileurl="file://$PROJECT_DIR$/binding-parent/binding-parent.iml" filepath="$PROJECT_DIR$/binding-parent/binding-parent.iml" />
-      <module fileurl="file://$PROJECT_DIR$/common/common.iml" filepath="$PROJECT_DIR$/common/common.iml" />
       <module fileurl="file://$PROJECT_DIR$/core/core.iml" filepath="$PROJECT_DIR$/core/core.iml" />
       <module fileurl="file://$PROJECT_DIR$/binding-parent/datastore-specific-descriptor/datastore-specific-descriptor.iml" filepath="$PROJECT_DIR$/binding-parent/datastore-specific-descriptor/datastore-specific-descriptor.iml" />
-      <module fileurl="file://$PROJECT_DIR$/dual/dual-binding.iml" filepath="$PROJECT_DIR$/dual/dual-binding.iml" />
-      <module fileurl="file://$PROJECT_DIR$/proxy/proxy.iml" filepath="$PROJECT_DIR$/proxy/proxy.iml" />
       <module fileurl="file://$PROJECT_DIR$/root.iml" filepath="$PROJECT_DIR$/root.iml" />
     </modules>
   </component>

@@ -1,12 +1,12 @@
 /**
  * Copyright (c) 2012 YCSB contributors. All rights reserved.
- *
+ * <p>
  * Licensed under the Apache License, Version 2.0 (the "License"); you
  * may not use this file except in compliance with the License. You
  * may obtain a copy of the License at
- *
+ * <p>
  * http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
@@ -18,22 +18,23 @@
 package com.yahoo.ycsb;
 
 import org.testng.annotations.Test;
+
 import static org.testng.AssertJUnit.*;
 
 public class TestByteIterator {
-  @Test
-  public void testRandomByteIterator() {
-    int size = 100;
-    ByteIterator itor = new RandomByteIterator(size);
-    assertTrue(itor.hasNext());
-    assertEquals(size, itor.bytesLeft());
-    assertEquals(size, itor.toString().getBytes().length);
-    assertFalse(itor.hasNext());
-    assertEquals(0, itor.bytesLeft());
+    @Test
+    public void testRandomByteIterator() {
+        int size = 100;
+        ByteIterator itor = new RandomByteIterator(size);
+        assertTrue(itor.hasNext());
+        assertEquals(size, itor.bytesLeft());
+        assertEquals(size, itor.toString().getBytes().length);
+        assertFalse(itor.hasNext());
+        assertEquals(0, itor.bytesLeft());
 
-    itor = new RandomByteIterator(size);
-    assertEquals(size, itor.toArray().length);
-    assertFalse(itor.hasNext());
-    assertEquals(0, itor.bytesLeft());
-  }
+        itor = new RandomByteIterator(size);
+        assertEquals(size, itor.toArray().length);
+        assertFalse(itor.hasNext());
+        assertEquals(0, itor.bytesLeft());
+    }
 }

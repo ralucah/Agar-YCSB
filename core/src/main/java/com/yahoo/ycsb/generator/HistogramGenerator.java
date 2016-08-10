@@ -29,13 +29,12 @@ import java.util.ArrayList;
  * Therefore, instead of drawing sizes uniformly at random within each
  * bucket, we always draw the largest value in the current bucket, so the value
  * drawn is always a multiple of block_size.
- *
+ * <p>
  * The minimum value this distribution returns is block_size (not zero).
- *
+ * <p>
  * Modified Nov 19 2010 by sears
  *
  * @author snjones
- *
  */
 public class HistogramGenerator extends IntegerGenerator {
 
