@@ -28,7 +28,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * Collects latency measurements, and reports them when requested.
  *
  * @author cooperb
- *
  */
 public class Measurements {
     public static final String MEASUREMENT_TYPE_PROPERTY = "measurementtype";
@@ -49,6 +48,7 @@ public class Measurements {
         ;
     };
     private Properties _props;
+
     /**
      * Create a new object with the specified properties.
      */
@@ -240,7 +240,6 @@ public class Measurements {
 
     /**
      * All supported measurement types are defined in this enum.
-     *
      */
     public enum MeasurementType {
         HISTOGRAM,

@@ -27,6 +27,7 @@ import java.util.Vector;
 class SeriesUnit {
     public long time;
     public double average;
+
     /**
      * @param time
      * @param average

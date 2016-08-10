@@ -29,7 +29,6 @@ import java.util.Random;
  * the cold set are chose using a uniform distribution.
  *
  * @author sudipto
- *
  */
 public class HotspotIntegerGenerator extends IntegerGenerator {
 
@@ -43,8 +42,8 @@ public class HotspotIntegerGenerator extends IntegerGenerator {
     /**
      * Create a generator for Hotspot distributions.
      *
-     * @param lowerBound lower bound of the distribution.
-     * @param upperBound upper bound of the distribution.
+     * @param lowerBound     lower bound of the distribution.
+     * @param upperBound     upper bound of the distribution.
      * @param hotsetFraction percentage of data item
      * @param hotOpnFraction percentage of operations accessing the hot set.
      */

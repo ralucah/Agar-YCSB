@@ -72,6 +72,7 @@ public class ExponentialGenerator extends IntegerGenerator {
     /**
      * Generate the next item. this distribution will be skewed toward lower integers; e.g. 0 will
      * be the most popular, 1 the next most popular, etc.
+     *
      * @param itemcount The number of items in the distribution.
      * @return The next item in the sequence.
      */

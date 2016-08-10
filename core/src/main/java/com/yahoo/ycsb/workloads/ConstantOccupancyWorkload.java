@@ -31,18 +31,16 @@ import java.util.Properties;
  * <LI><b>disksize</b>: how many bytes of storage can the disk store? (default 100,000,000)
  * <LI><b>occupancy</b>: what fraction of the available storage should be used? (default 0.9)
  * <LI><b>requestdistribution</b>: what distribution should be used to select the records to operate on - uniform, zipfian or latest (default: histogram)
- * </ul> 
- *
- *
+ * </ul>
+ * <p>
+ * <p>
  * <p> See also:
  * Russell Sears, Catharine van Ingen.
  * <a href='https://database.cs.wisc.edu/cidr/cidr2007/papers/cidr07p34.pdf'>Fragmentation in Large Object Repositories</a>,
  * CIDR 2006. [<a href='https://database.cs.wisc.edu/cidr/cidr2007/slides/p34-sears.ppt'>Presentation</a>]
  * </p>
  *
- *
  * @author sears
- *
  */
 public class ConstantOccupancyWorkload extends CoreWorkload {
     public static final String STORAGE_AGE_PROPERTY = "storageages";

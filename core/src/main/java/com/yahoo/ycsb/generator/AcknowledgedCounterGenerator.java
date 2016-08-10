@@ -23,10 +23,14 @@ import java.util.concurrent.locks.ReentrantLock;
  * only after they have been acknowledged.
  */
 public class AcknowledgedCounterGenerator extends CounterGenerator {
-    /** The size of the window of pending id ack's. 2^20 = {@value} */
+    /**
+     * The size of the window of pending id ack's. 2^20 = {@value}
+     */
     static final int WINDOW_SIZE = Integer.rotateLeft(1, 20);
 
-    /** The mask to use to turn an id into a slot in {@link #window}. */
+    /**
+     * The mask to use to turn an id into a slot in {@link #window}.
+     */
     private static final int WINDOW_MASK = WINDOW_SIZE - 1;
 
     private final ReentrantLock lock;

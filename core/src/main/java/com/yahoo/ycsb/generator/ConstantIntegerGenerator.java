@@ -20,7 +20,6 @@ package com.yahoo.ycsb.generator;
  * A trivial integer generator that always returns the same value.
  *
  * @author sears
- *
  */
 public class ConstantIntegerGenerator extends IntegerGenerator {
     private final int i;

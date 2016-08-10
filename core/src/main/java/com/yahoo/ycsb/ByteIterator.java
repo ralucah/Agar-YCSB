@@ -58,7 +58,9 @@ public abstract class ByteIterator implements Iterator<Byte> {
 
     public abstract byte nextByte();
 
-    /** @return byte offset immediately after the last valid byte */
+    /**
+     * @return byte offset immediately after the last valid byte
+     */
     public int nextBuf(byte[] buf, int buf_off) {
         int sz = buf_off;
         while (sz < buf.length && hasNext()) {
@@ -75,14 +77,18 @@ public abstract class ByteIterator implements Iterator<Byte> {
         throw new UnsupportedOperationException();
     }
 
-    /** Consumes remaining contents of this object, and returns them as a string. */
+    /**
+     * Consumes remaining contents of this object, and returns them as a string.
+     */
     public String toString() {
         Charset cset = Charset.forName("UTF-8");
         CharBuffer cb = cset.decode(ByteBuffer.wrap(this.toArray()));
         return cb.toString();
     }
 
-    /** Consumes remaining contents of this object, and returns them as a byte array. */
+    /**
+     * Consumes remaining contents of this object, and returns them as a byte array.
+     */
     public byte[] toArray() {
         long left = bytesLeft();
         if (left != (int) left) {

@@ -30,7 +30,7 @@ public class Status {
     private final String description;
 
     /**
-     * @param name A short name for the status.
+     * @param name        A short name for the status.
      * @param description A description of the status.
      */
     public Status(String name, String description) {

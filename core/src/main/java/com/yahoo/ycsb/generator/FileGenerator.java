@@ -27,6 +27,7 @@ public class FileGenerator extends Generator {
 
     /**
      * Create a FileGenerator with the given file.
+     *
      * @param _filename The file to read lines from.
      */
     public FileGenerator(String _filename) {

@@ -21,11 +21,10 @@ import java.util.List;
 /**
  * A thread that waits for the maximum specified time and then interrupts all the client
  * threads passed as the Vector at initialization of this thread.
- *
+ * <p>
  * The maximum execution time passed is assumed to be in seconds.
  *
  * @author sudipto
- *
  */
 public class TerminatorThread extends Thread {
 

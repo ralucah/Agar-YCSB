@@ -36,7 +36,6 @@ import java.util.Properties;
  * LATENCY.
  *
  * @author nitsanw
- *
  */
 public class OneMeasurementHdrHistogram extends OneMeasurement {
 
@@ -178,6 +177,7 @@ public class OneMeasurementHdrHistogram extends OneMeasurement {
 
     /**
      * Helper method to find the ordinal of any number. eg 1 -> 1st
+     *
      * @param i
      * @return ordinal string
      */

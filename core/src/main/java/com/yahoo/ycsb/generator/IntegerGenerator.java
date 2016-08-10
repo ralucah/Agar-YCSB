@@ -21,7 +21,6 @@ package com.yahoo.ycsb.generator;
  * A generator that is capable of generating ints as well as strings
  *
  * @author cooperb
- *
  */
 public abstract class IntegerGenerator extends Generator {
     int lastint;

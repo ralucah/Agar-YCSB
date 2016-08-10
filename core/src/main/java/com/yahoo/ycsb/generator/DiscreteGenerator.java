@@ -28,6 +28,7 @@ import java.util.Vector;
 public class DiscreteGenerator extends Generator {
     Vector<Pair> _values;
     String _lastvalue;
+
     public DiscreteGenerator() {
         _values = new Vector<Pair>();
         _lastvalue = null;

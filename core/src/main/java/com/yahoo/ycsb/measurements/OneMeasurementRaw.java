@@ -33,13 +33,11 @@ import java.util.Properties;
  * optionally write to an output file when configured.
  *
  * @author stfeng
- *
  */
 public class OneMeasurementRaw extends OneMeasurement {
     /**
      * Optionally, user can configure an output file to save the raw data points.
      * Default is none, raw results will be written to stdout.
-     *
      */
     public static final String OUTPUT_FILE_PATH = "measurement.raw.output_file";
     public static final String OUTPUT_FILE_PATH_DEFAULT = "";

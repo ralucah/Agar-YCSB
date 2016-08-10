@@ -17,7 +17,7 @@
 package com.yahoo.ycsb;
 
 /**
- *  A ByteIterator that generates a random sequence of bytes.
+ * A ByteIterator that generates a random sequence of bytes.
  */
 public class RandomByteIterator extends ByteIterator {
     private long len;
