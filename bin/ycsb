@@ -48,13 +48,13 @@ COMMANDS = {
 }
 
 CLIENTS = {
-    "backend" : "com.yahoo.ycsb.dual.clients.BackendClient",
-    "localcache" : "com.yahoo.ycsb.dual.clients.LocalCacheClient",
-    "fixcache" : "com.yahoo.ycsb.dual.clients.FixCacheClient",
-    "lru" : "com.yahoo.ycsb.dual.clients.LRUClient",
-    "agar" : "com.yahoo.ycsb.dual.clients.AgarClient",
-    "dummy" : "com.yahoo.ycsb.dual.clients.DummyClient",
-    "lfu" : "com.yahoo.ycsb.dual.clients.LFUClient"
+    "backend" : "com.yahoo.ycsb.client.BackendClient",
+    "localcache" : "com.yahoo.ycsb.client.LocalCacheClient",
+    "fixcache" : "com.yahoo.ycsb.client.FixCacheClient",
+    "lru" : "com.yahoo.ycsb.client.LRUClient",
+    "agar" : "com.yahoo.ycsb.client.AgarClient",
+    "dummy" : "com.yahoo.ycsb.client.DummyClient",
+    "lfu" : "com.yahoo.ycsb.client.LFUClient"
 }
 
 CACHEMANAGERS = {
@@ -62,7 +62,7 @@ CACHEMANAGERS = {
     "lfu" : "com.yahoo.ycsb.proxy.LFUCacheManager"
 }
 
-BINDING = "dual"
+BINDING = "agar-client"
 
 OPTIONS = {
     "-P file"        : "Specify workload file",
@@ -129,6 +129,7 @@ def is_distribution():
 # presumes maven properly handles system-specific path separators
 # Given module is full module name eg. 'core' or 'couchbase-BINDING'
 def get_classpath_from_maven(module):
+    #print(module)
     try:
         mvn_output = check_output(["mvn", "-pl", "com.yahoo.ycsb:" + module,
                                    "-am", "package", "-DskipTests",
@@ -174,12 +175,12 @@ def main():
     main_classname = COMMANDS[args.command]["main"]
 
     if command == "proxy":
-        client_location = "proxy"
-        project = "proxy"
+        client_location = "agar-proxy"
+        project = "agar-proxy"
         client_dir = os.path.join(ycsb_home, client_location)
     else:
         client_location = BINDING
-        project = BINDING + "-binding"
+        project = BINDING #+ "-binding"
         client_dir = os.path.join(ycsb_home, client_location)
 
     # goes first so we can rely on side-effect of package

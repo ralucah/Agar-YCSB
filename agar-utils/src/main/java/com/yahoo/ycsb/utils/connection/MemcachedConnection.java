@@ -15,7 +15,7 @@
  * LICENSE file.
  */
 
-package com.yahoo.ycsb.utils.memcached;
+package com.yahoo.ycsb.utils.connection;
 
 import com.yahoo.ycsb.ClientException;
 import com.yahoo.ycsb.Status;

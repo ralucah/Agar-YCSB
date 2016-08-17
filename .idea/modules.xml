@@ -3,7 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/agar-client/agar-client.iml" filepath="$PROJECT_DIR$/agar-client/agar-client.iml" />
-      <module fileurl="file://$PROJECT_DIR$/agar-proxy/proxy.iml" filepath="$PROJECT_DIR$/agar-proxy/proxy.iml" />
+      <module fileurl="file://$PROJECT_DIR$/agar-proxy/agar-proxy.iml" filepath="$PROJECT_DIR$/agar-proxy/agar-proxy.iml" />
       <module fileurl="file://$PROJECT_DIR$/agar-utils/agar-utils.iml" filepath="$PROJECT_DIR$/agar-utils/agar-utils.iml" />
       <module fileurl="file://$PROJECT_DIR$/binding-parent/binding-parent.iml" filepath="$PROJECT_DIR$/binding-parent/binding-parent.iml" />
       <module fileurl="file://$PROJECT_DIR$/core/core.iml" filepath="$PROJECT_DIR$/core/core.iml" />

@@ -397,6 +397,7 @@ public class Client {
         System.out.println("-s:  show status during run (default: no status)");
         System.out.println("-l label:  use label for status (e.g. to label one experiment out of a whole batch)");
         System.out.println("-flush-cache:  flush cache after running a test");
+        System.out.println("-demo: run Agar in demo mode");
         System.out.println("");
         System.out.println("Required properties:");
         System.out.println(WORKLOAD_PROPERTY + ": the name of the workload class to use (e.g. com.yahoo.ycsb.workloads.CoreWorkload)");
@@ -493,6 +494,9 @@ public class Client {
                 }
                 int ttarget = Integer.parseInt(args[argindex]);
                 props.setProperty(TARGET_PROPERTY, ttarget + "");
+                argindex++;
+            } else if (args[argindex].compareTo("-demo") == 0) {
+                props.setProperty("demo", "true");
                 argindex++;
             } else if (args[argindex].compareTo("-load") == 0) {
                 dotransactions = false;

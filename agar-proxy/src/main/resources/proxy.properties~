@@ -1,4 +1,0 @@
-ip=127.0.0.1
-port=6789
-threads=5
-packet_length=100

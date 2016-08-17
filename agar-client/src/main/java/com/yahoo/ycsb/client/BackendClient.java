@@ -26,9 +26,11 @@ import com.yahoo.ycsb.ClientBlueprint;
 import com.yahoo.ycsb.ClientException;
 import com.yahoo.ycsb.Status;
 import com.yahoo.ycsb.client.utils.ClientUtils;
+import com.yahoo.ycsb.utils.connection.BackendConnection;
+import com.yahoo.ycsb.utils.connection.LocalFSConnection;
 import com.yahoo.ycsb.utils.liberasure.LonghairLib;
 import com.yahoo.ycsb.utils.properties.PropertyFactory;
-import com.yahoo.ycsb.utils.s3.S3Connection;
+import com.yahoo.ycsb.utils.connection.S3Connection;
 import org.apache.log4j.Logger;
 
 import java.util.*;
@@ -39,7 +41,7 @@ public class BackendClient extends ClientBlueprint {
     public static PropertyFactory propertyFactory;
 
     // S3 bucket names mapped to connections to AWS S3 buckets
-    private List<S3Connection> s3Connections;
+    private List<BackendConnection> s3Connections;
     private ExecutorService executor;
     private List<String> s3Buckets;
 
@@ -51,13 +53,18 @@ public class BackendClient extends ClientBlueprint {
             logger.error("Configuration error: #buckets = #regions = #endpoints");
 
         // establish S3 connections
-        s3Connections = new ArrayList<S3Connection>();
+        s3Connections = new ArrayList<BackendConnection>();
         for (int i = 0; i < s3Buckets.size(); i++) {
             String bucket = s3Buckets.get(i);
             String region = regions.get(i);
             String endpoint = endpoints.get(i);
             try {
-                S3Connection client = new S3Connection(s3Buckets.get(i), regions.get(i), endpoints.get(i));
+                BackendConnection client;
+                if (PropertyFactory.DEMO == false) {
+                    client = new S3Connection(s3Buckets.get(i), regions.get(i), endpoints.get(i));
+                } else {
+                    client = new LocalFSConnection(s3Buckets.get(i), regions.get(i), endpoints.get(i));
+                }
                 s3Connections.add(client);
                 logger.debug("S3 connection " + i + " " + bucket + " " + region + " " + endpoint);
             } catch (ClientException e) {
@@ -89,7 +96,7 @@ public class BackendClient extends ClientBlueprint {
 
     @Override
     public void init() throws ClientException {
-        logger.debug("BackendClient.init() start");
+        //logger.debug("BackendClient.init() start");
         propertyFactory = new PropertyFactory(getProperties());
 
         initS3();
@@ -101,7 +108,7 @@ public class BackendClient extends ClientBlueprint {
             logger.debug("threads num: " + threadsNum);
             executor = Executors.newFixedThreadPool(threadsNum);
         }
-        logger.debug("BackendClient.init() end");
+        //logger.debug("BackendClient.init() end");
     }
 
     @Override
@@ -120,7 +127,7 @@ public class BackendClient extends ClientBlueprint {
     private byte[] readBlock(String baseKey, int blockNum) throws InterruptedException {
         String blockKey = baseKey + blockNum;
         int s3ConnNum = blockNum % s3Connections.size();
-        S3Connection s3Connection = s3Connections.get(s3ConnNum);
+        BackendConnection s3Connection = s3Connections.get(s3ConnNum);
         byte[] block = s3Connection.read(blockKey);
         //logger.debug("ReadBlock " + blockNum + " " + blockKey + " " + ClientUtils.bytesToHash(block));
         logger.debug("ReadBlock " + baseKey + " " + blockNum + " " + s3Buckets.get(s3ConnNum));
@@ -204,9 +211,9 @@ public class BackendClient extends ClientBlueprint {
     private Status insertBlock(String baseKey, int blockNum, byte[] block) {
         String blockKey = baseKey + blockNum;
         int s3ConnNum = blockNum % s3Connections.size();
-        S3Connection s3Connection = s3Connections.get(s3ConnNum);
+        BackendConnection s3Connection = s3Connections.get(s3ConnNum);
         Status status = s3Connection.insert(blockKey, block);
-        logger.info("InsertBlock " + baseKey + " " + blockNum + " " + s3Buckets.get(s3ConnNum));
+        logger.info("Insert\t" +  baseKey +  "\tblock" + blockNum + "\t" + block.length + "bytes\tinto bucket\t" + s3Buckets.get(s3ConnNum));
         return status;
     }
 
@@ -219,6 +226,7 @@ public class BackendClient extends ClientBlueprint {
      */
     @Override
     public Status insert(String key, byte[] value) {
+        logger.info("Insert\t" + key);
         Status status = Status.OK;
 
         // encode data into k+m blocks
@@ -279,7 +287,7 @@ public class BackendClient extends ClientBlueprint {
         if (success < LonghairLib.k)
             status = Status.ERROR;
 
-        logger.info("Insert " + key + " " + value.length + "B " + ClientUtils.bytesToHash(value));
+        logger.info("Insert\t" + key + "\t" + value.length + "bytes\t" + status.getName()); // + " " + value.length + "B " + ClientUtils.bytesToHash(value));
         return status;
     }
 

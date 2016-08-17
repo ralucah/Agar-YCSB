@@ -23,10 +23,12 @@ import com.yahoo.ycsb.client.utils.AgarProxyConnection;
 import com.yahoo.ycsb.client.utils.ECBlock;
 import com.yahoo.ycsb.client.utils.Storage;
 import com.yahoo.ycsb.utils.communication.ProxyReply;
+import com.yahoo.ycsb.utils.connection.BackendConnection;
+import com.yahoo.ycsb.utils.connection.LocalFSConnection;
 import com.yahoo.ycsb.utils.liberasure.LonghairLib;
-import com.yahoo.ycsb.utils.memcached.MemcachedConnection;
+import com.yahoo.ycsb.utils.connection.MemcachedConnection;
 import com.yahoo.ycsb.utils.properties.PropertyFactory;
-import com.yahoo.ycsb.utils.s3.S3Connection;
+import com.yahoo.ycsb.utils.connection.S3Connection;
 import org.apache.log4j.Logger;
 
 import java.util.*;
@@ -42,7 +44,7 @@ public class AgarClient extends ClientBlueprint {
 
     public static PropertyFactory propertyFactory;
 
-    private List<S3Connection> s3Connections;
+    private List<BackendConnection> s3Connections;
     private MemcachedConnection memConnection;
     private AgarProxyConnection proxyConnection;
     private List<String> s3Buckets;
@@ -63,8 +65,12 @@ public class AgarClient extends ClientBlueprint {
             String bucket = s3Buckets.get(i);
             String region = regions.get(i);
             String endpoint = endpoints.get(i);
-            try {
-                S3Connection client = new S3Connection(s3Buckets.get(i), regions.get(i), endpoints.get(i));
+            try {BackendConnection client;
+                if (PropertyFactory.DEMO == false) {
+                    client = new S3Connection(s3Buckets.get(i), regions.get(i), endpoints.get(i));
+                } else {
+                    client = new LocalFSConnection(s3Buckets.get(i), regions.get(i), endpoints.get(i));
+                }
                 s3Connections.add(client);
                 logger.debug("S3 connection " + i + " " + bucket + " " + region + " " + endpoint);
             } catch (ClientException e) {
@@ -205,7 +211,7 @@ public class AgarClient extends ClientBlueprint {
         String blockKey = key + blockId;
         //return new ECBlock(blockId, blockKey, new byte[699072], Storage.BACKEND);
         int s3ConnNum = blockId % s3Connections.size();
-        S3Connection s3Connection = s3Connections.get(s3ConnNum);
+        BackendConnection s3Connection = s3Connections.get(s3ConnNum);
         byte[] bytes = s3Connection.read(blockKey);
 
         ECBlock ecblock = null;

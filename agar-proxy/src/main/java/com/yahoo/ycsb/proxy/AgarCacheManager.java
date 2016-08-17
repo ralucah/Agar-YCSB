@@ -50,7 +50,6 @@ public class AgarCacheManager extends CacheManagerBlueprint {
     private Map<Integer, List<CachingOption>> chosenOptions; // for each weight, list of caching options that result in max value
 
     public AgarCacheManager() {
-        System.out.println("DynamicCacheManager constructor!");
         // erasure-coding params
         k = Integer.valueOf(PropertyFactory.propertiesMap.get(PropertyFactory.LONGHAIR_K_PROPERTY));
         m = Integer.valueOf(PropertyFactory.propertiesMap.get(PropertyFactory.LONGHAIR_M_PROPERTY));

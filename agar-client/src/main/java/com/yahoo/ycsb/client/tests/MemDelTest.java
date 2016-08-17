@@ -17,7 +17,7 @@
 package com.yahoo.ycsb.client.tests;
 
 import com.yahoo.ycsb.ClientException;
-import com.yahoo.ycsb.utils.memcached.MemcachedConnection;
+import com.yahoo.ycsb.utils.connection.MemcachedConnection;
 
 import java.io.UnsupportedEncodingException;
 

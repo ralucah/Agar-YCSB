@@ -1,8 +1,0 @@
-memcached.shutdownTimeoutMillis = 30000
-memcached.objectExpirationTime = 2147483647
-memcached.checkOperationStatus = true
-memcached.readBufferSize = 3000000
-# default 60000
-memcached.opTimeoutMillis = 60000
-# `Redistribute`, `Retry`, or `Cancel`.
-memcached.failureMode = Redistribute

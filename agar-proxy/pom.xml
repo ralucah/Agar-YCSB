@@ -9,8 +9,8 @@
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>proxy</artifactId>
-    <name>Proxy</name>
+    <artifactId>agar-proxy</artifactId>
+    <name>Agar Proxy</name>
     <packaging>jar</packaging>
 
     <dependencies>
@@ -21,7 +21,7 @@
         </dependency>
         <dependency>
             <groupId>com.yahoo.ycsb</groupId>
-            <artifactId>common</artifactId>
+            <artifactId>agar-utils</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

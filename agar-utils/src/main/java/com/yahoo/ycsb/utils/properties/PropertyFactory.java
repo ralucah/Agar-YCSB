@@ -59,6 +59,9 @@ public class PropertyFactory {
     /* packet size in bytes */
     public static String REQUEST_PACKETSIZE = "packetsize";
 
+    /* demo mode */
+    public static boolean DEMO = false;
+
     /* all known properties */
     public static Map<String, String> propertiesMap;
 
@@ -84,6 +87,10 @@ public class PropertyFactory {
             propertiesMap.put(REQUEST_RETRIES, properties.getProperty(REQUEST_RETRIES));
             propertiesMap.put(REQUEST_TIMEOUT, properties.getProperty(REQUEST_TIMEOUT));
             propertiesMap.put(REQUEST_PACKETSIZE, properties.getProperty(REQUEST_PACKETSIZE));
+            if (properties.getProperty("demo") != null)
+                DEMO = true;
+            else
+                DEMO = false;
         }
     }
 }

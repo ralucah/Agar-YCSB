@@ -17,8 +17,8 @@
 package com.yahoo.ycsb.proxy;
 
 import com.yahoo.ycsb.ClientException;
+import com.yahoo.ycsb.utils.connection.S3Connection;
 import com.yahoo.ycsb.utils.properties.PropertyFactory;
-import com.yahoo.ycsb.utils.s3.S3Connection;
 import org.apache.log4j.Logger;
 
 import java.util.ArrayList;
@@ -75,7 +75,11 @@ public class AgarRegionManager {
                 logger.debug("S3 connection " + i + " " + bucket + " " + regionName + " " + endpoint);
 
                 Region region = new Region(regionName, endpoint);
-                double latency = read(endpoint, client);
+                double latency;
+                if (PropertyFactory.DEMO == false)
+                    latency = read(endpoint, client);
+                else
+                    latency = readFake(endpoint, client);
                 region.setLatency(latency);
                 regions.add(region);
             } catch (ClientException e) {

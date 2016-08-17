@@ -14,24 +14,24 @@
  * limitations under the License.
  */
 
-package com.yahoo.ycsb.proxy;
+package com.yahoo.ycsb.utils.connection;
 
-public class CacheManagerException extends Exception {
+public class BackendConnectionException extends Exception {
     private static final long serialVersionUID = 6646883591588721476L;
 
-    public CacheManagerException(String message) {
+    public BackendConnectionException(String message) {
         super(message);
     }
 
-    public CacheManagerException() {
+    public BackendConnectionException() {
         super();
     }
 
-    public CacheManagerException(String message, Throwable cause) {
+    public BackendConnectionException(String message, Throwable cause) {
         super(message, cause);
     }
 
-    public CacheManagerException(Throwable cause) {
+    public BackendConnectionException(Throwable cause) {
         super(cause);
     }
 }

@@ -1,0 +1,46 @@
+fieldlength=1048576
+
+recordcount=10
+operationcount=5000
+workload=com.yahoo.ycsb.workloads.CoreWorkload
+
+insertstart=0
+insertcount=10
+
+readproportion=1
+updateproportion=0
+scanproportion=0
+insertproportion=0
+
+#maxexecutiontime=300
+
+#requestdistribution=zipfian
+#requestdistribution=uniform
+requestdistribution=slashdot
+slashdot.skew=0.5
+slashdot.delay=-1
+
+# sao paulo, north virginia, ireland, frankfurt, tokyo, sydney
+s3.endpoints=s3-sa-east-1.amazonaws.com,s3-external-1.amazonaws.com,s3-eu-west-1.amazonaws.com,s3-eu-central-1.amazonaws.com,s3-ap-northeast-1.amazonaws.com,s3-ap-southeast-2.amazonaws.com
+s3.regions=sa-east-1,us-east-1,eu-west-1,eu-central-1,ap-northeast-1,ap-southeast-2
+s3.buckets=sao,virginia,ireland,frankfurt,tokyo,sydney
+
+memcached.server=127.0.0.1:11211
+
+longhair.k=9
+longhair.m=3
+executor.threads=20
+
+# eccache client
+blocksincache=5
+
+# proxy
+proxy=0.0.0.0:11000
+packetsize=1024
+retries=3
+timeout=10000
+# in seconds
+period=5
+alpha=0.8
+# in number of blocks
+cachesize=90

@@ -19,9 +19,9 @@ import com.yahoo.ycsb.ClientBlueprint;
 import com.yahoo.ycsb.ClientException;
 import com.yahoo.ycsb.Status;
 import com.yahoo.ycsb.utils.liberasure.LonghairLib;
-import com.yahoo.ycsb.utils.memcached.MemcachedConnection;
+import com.yahoo.ycsb.utils.connection.MemcachedConnection;
 import com.yahoo.ycsb.utils.properties.PropertyFactory;
-import com.yahoo.ycsb.utils.s3.S3Connection;
+import com.yahoo.ycsb.utils.connection.S3Connection;
 import org.apache.log4j.Logger;
 
 import java.util.*;

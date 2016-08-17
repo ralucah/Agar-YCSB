@@ -114,7 +114,6 @@ public class UDPServer implements Runnable {
                     System.exit(0);
                 }
                 String propfile = args[argindex];
-                argindex++;
 
                 //Properties myfileprops = new Properties();
                 try {
@@ -146,7 +145,6 @@ public class UDPServer implements Runnable {
                 String value = args[argindex].substring(eq + 1);
                 props.put(name, value);
                 //System.out.println("["+name+"]=["+value+"]");
-                argindex++;
             } else if (args[argindex].compareTo("-cachemanager") == 0) {
                 argindex++;
                 if (argindex >= args.length) {
@@ -154,12 +152,14 @@ public class UDPServer implements Runnable {
                     System.exit(0);
                 }
                 props.put(PropertyFactory.CACHE_MANAGER_PROPERTY, args[argindex]);
-                argindex++;
+            } else if (args[argindex].compareTo("-demo") == 0) {
+                props.setProperty("demo", "true");
             } else {
                 logger.warn("Unknown option " + args[argindex]);
                 usageMessage();
                 System.exit(0);
             }
+            argindex++;
             if (argindex >= args.length) {
                 break;
             }
