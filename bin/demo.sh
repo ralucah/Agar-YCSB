@@ -1,4 +1,8 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+repo_root="$DIR/.."
+pushd "$repo_root" >/dev/null
 
 WORKLOAD="workloads/demowork"
 
@@ -40,5 +44,7 @@ echo "*****************"
 
 echo "6. Starting Agar client..."
 ./bin/ycsb run agar -P $WORKLOAD -demo
+
+popd >/dev/null
 
 exit 0
